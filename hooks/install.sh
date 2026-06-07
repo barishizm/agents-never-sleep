@@ -41,7 +41,7 @@ case "$PLATFORM" in
   gemini)   SRC="gemini/settings.json";              DEFAULT_TARGET="$HOME/.gemini/settings.json" ;;
   codex)    SRC="codex/hooks.json";                  DEFAULT_TARGET="$HOME/.codex/hooks.json" ;;
   windsurf) SRC="windsurf/hooks.json";               DEFAULT_TARGET="$HOME/.codeium/windsurf/hooks.json" ;;
-  copilot)  SRC="copilot/unattended-execution.json"; DEFAULT_TARGET="" ;;  # repo .github/hooks/ — needs --target
+  copilot)  SRC="copilot/agents-never-sleep.json";   DEFAULT_TARGET="" ;;  # repo .github/hooks/ — needs --target
   cursor)   SRC="cursor/hooks.json";                 DEFAULT_TARGET="" ;;  # project .cursor/ — needs --target
   *) die "unknown platform '$PLATFORM' (use: gemini | codex | copilot | cursor | windsurf)" ;;
 esac
