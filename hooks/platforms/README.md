@@ -25,19 +25,33 @@ never silent.
 
 ## Install (per platform — all opt-in, all env-gated)
 
-1. `chmod +x <SKILL_DIR>/hooks/enforce.sh` (once).
-2. Copy the matching config into that platform's hooks location and **replace `<SKILL_DIR>`** with the
-   absolute path to this skill:
-   - **Gemini CLI** → merge `gemini/settings.json` into `~/.gemini/settings.json`
-   - **Codex CLI** → `codex/hooks.json` → `~/.codex/hooks.json` (or `config.toml [hooks]`)
-   - **Copilot CLI** → `copilot/agents-never-sleep.json` → `<repo>/.github/hooks/`
-   - **Cursor** → `cursor/hooks.json` → `<project>/.cursor/hooks.json`
-   - **Windsurf** → `windsurf/hooks.json` → `~/.codeium/windsurf/hooks.json`
-3. The dispatcher is inert unless `UE_UNATTENDED=1` (or `CLAUDE_UNATTENDED=1`) is set — so once wired,
-   it does nothing during your normal interactive sessions. Set it (and optionally `UE_PLATFORM=<id>`
-   for accurate degradation reporting) only for real unattended runs.
-4. For `never-stop` to work, the platform must see the run-incomplete sentinel — export
-   `UE_RUN_INCOMPLETE=<repo>/.unattended/run-incomplete` (the driver writes that path).
+**One command** (`hooks/install.sh`) renders the snippet with `<SKILL_DIR>` resolved and writes it to
+the platform's hooks location. Default is a DRY RUN — add `--apply` to write:
+
+```bash
+hooks/install.sh gemini             # dry-run: prints what it would write
+hooks/install.sh gemini --apply     # writes ~/.gemini/settings.json (fragment if it already exists)
+```
+
+| Platform | command | default target |
+|---|---|---|
+| **Gemini CLI** | `hooks/install.sh gemini --apply` | `~/.gemini/settings.json` |
+| **Codex CLI** | `hooks/install.sh codex --apply` | `~/.codex/hooks.json` (or `config.toml [hooks]`) |
+| **Copilot CLI** | `hooks/install.sh copilot --apply --target <repo>/.github/hooks/agents-never-sleep.json` | — (`--target` required) |
+| **Cursor** | `hooks/install.sh cursor --apply --target <project>/.cursor/hooks.json` | — (`--target` required) |
+| **Windsurf** | `hooks/install.sh windsurf --apply` | `~/.codeium/windsurf/hooks.json` |
+
+Safety: if the target already exists it is **never overwritten** — the rendered snippet is written to
+`<target>.ans-fragment` for you to merge (these are merge targets like `settings.json`). The script
+also `chmod +x`'s `enforce.sh`. (Manual alternative: copy the matching `platforms/<id>/*` file and
+replace `<SKILL_DIR>` by hand — the script just does this deterministically.)
+
+Then:
+- The dispatcher is inert unless `UE_UNATTENDED=1` (or `CLAUDE_UNATTENDED=1`) is set — so once wired,
+  it does nothing during your normal interactive sessions. Set it (and optionally `UE_PLATFORM=<id>`
+  for accurate degradation reporting) only for real unattended runs.
+- For `never-stop` to work, the platform must see the run-incomplete sentinel — export
+  `UE_RUN_INCOMPLETE=<repo>/.unattended/run-incomplete` (the driver writes that path).
 
 ## Verification status
 
