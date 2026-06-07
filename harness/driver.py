@@ -591,24 +591,21 @@ class StepDriver:
                     "error": "no ticket in flight — call `next` to get a PROCEED ticket first"}
         ticket = self._ticket_by_id(pending.ticket_id)
         if ticket is None:
-            # INT-1675 #1 (data-loss fix): distinguish "ticket genuinely deleted" from
-            # "ticket source was never loaded". A revert here destroys already-completed
-            # work, so it must require POSITIVE evidence the ticket vanished — i.e. the
-            # source WAS loaded (self.tickets non-empty) yet this id is absent. When the
-            # source was not loaded at all (e.g. `complete` run without --tickets and no
-            # Paperclip source), do NOT revert: preserve the working tree + the in-flight
-            # pending record so the operator can re-run `complete` with the source.
-            if not self.tickets:
-                return {"status": "ERROR",
-                        "error": (f"ticket {pending.ticket_id} could not be resolved: no ticket "
-                                  f"source was loaded. Pass --tickets <dir> (or enable Paperclip) "
-                                  f"and re-run `complete`. Working tree and in-flight ticket left "
-                                  f"INTACT — nothing was reverted.")}
-            # Source loaded but this id is genuinely absent → the file vanished mid-flight.
-            self.orch.git.revert_to(pending.snapshot)
-            self._clear_pending()
+            # INT-1675 #1 + INT-1734 (data-loss fix): a ticket that can't be resolved at
+            # complete-time is ALWAYS ambiguous. The loaded source may simply DIFFER from the one
+            # `next` used — `complete` run without --tickets defaults to a `tickets/` dir that can
+            # hold OTHER tickets (non-empty), or no source was loaded at all. Neither is positive
+            # evidence the ticket was deleted, and reverting would destroy the agent's already-
+            # completed work on a mere source mismatch. So NEVER revert here: preserve the working
+            # tree + the in-flight pending record and tell the operator to re-run `complete` with the
+            # SAME ticket source `next` used. A red deterministic gate is the only thing that reverts.
+            hint = ("no ticket source was loaded — pass --tickets <dir> (or enable Paperclip)"
+                    if not self.tickets else
+                    f"the loaded ticket source does not contain {pending.ticket_id} — re-run "
+                    f"`complete` with the SAME --tickets source that `next` used")
             return {"status": "ERROR",
-                    "error": f"ticket {pending.ticket_id} no longer present; reverted and skipped"}
+                    "error": (f"ticket {pending.ticket_id} could not be resolved: {hint}. Working "
+                              f"tree and in-flight ticket left INTACT — nothing was reverted.")}
 
         # In degrade mode (policy B), councils are skipped: floor DONE to DONE_LOW_CONFIDENCE so
         # the trust-gating fires even on low-risk (LIGHT) diffs that the council never reviewed.
