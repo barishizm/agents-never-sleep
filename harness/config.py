@@ -90,8 +90,25 @@ def default_config(profile) -> dict:
             "prices_cents_per_mtok": {
                 "claude-opus-4-8": [500, 2500], "gpt-5.4": [250, 1500],
                 "gemini-2.5-pro": [125, 1000], "deepseek/deepseek-v3.2": [25, 38],
-                "meta-llama/llama-4-maverick": [15, 60], "claude-sonnet-4-6": [300, 1500]},
+                "meta-llama/llama-4-maverick": [15, 60], "claude-sonnet-4-6": [300, 1500],
+                "gemini-3.1-pro": [125, 1000], "deepseek/deepseek-v4": [28, 42],
+                "gpt-5.4-mini": [50, 200]},
             "est_prompt_tokens": 3000,
+            # Opt-in rotated test/fix/review loop (INT-1729). rotate=False by default — nobody is
+            # pushed into consensus cost they did not enable. When rotate=true, the two panels must
+            # have ZERO shared model slug (the harness validates this; the verify panel confirms the
+            # propose panel's work independently). Slugs drift — pull fresh from tokonomix_list_models.
+            "review": {
+                "rotate": False,
+                "max_rounds": 3,
+                "panels": {
+                    "propose": {"proposers": ["claude-opus-4-8", "gemini-2.5-pro",
+                                              "deepseek/deepseek-v3.2"],
+                                "judges": ["claude-sonnet-4-6"]},
+                    "verify": {"proposers": ["gpt-5.4", "gemini-3.1-pro", "deepseek/deepseek-v4"],
+                               "judges": ["gpt-5.4-mini"]},
+                },
+            },
         },
         # Specialist review lenses (architect + security default; conditional ones added per-diff).
         # The agent runs each via tokonomix; a security/architect/tenant concern -> daylight review.

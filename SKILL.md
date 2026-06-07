@@ -168,6 +168,47 @@ HEAVY-risk diff whose council raised **concerns**, **errored**, or **was never r
 `DONE_LOW_CONFIDENCE` and flagged **NEEDS DAYLIGHT REVIEW** in the morning report — done, but not
 trusted to merge blind. Deterministic gates remain the only HARD gate; the council never reverts.
 
+### Rotated review loop (when `council.review.rotate` is on) — INT-1729
+
+A single panel that confirms its OWN prior review shares its blind spots (proven 2026-06-07: an
+independent panel caught a silent-wrong-JSON bug the first panel missed). When the config opts in with
+`council.review.rotate: true`, run the council as a **rotated test/fix/review loop** with two
+zero-model-overlap panels — a **propose** panel and an independent **verify** panel
+(`council.review.panels.{propose,verify}`).
+
+**Opt-in only.** This whole loop is contingent on `council.enabled` AND `review.rotate`. With the
+council off you get the deterministic gate only (no spend). With the council on but `rotate` off you
+get today's single-panel advisory review. Nobody is pushed into rotation cost they did not enable.
+
+Per PROCEED ticket, when the loop is on:
+1. **implement → gate(tests)** — deterministic tests are the ONLY hard gate, unchanged.
+2. **review(propose panel)** — run `tokonomix_consensus_ask` with the propose panel's models.
+3. **If it raises concerns → fix → re-gate.**
+4. **review(verify panel, ROTATED)** — run the *independent* panel (zero shared model slug). This is
+   the confirmation step. Alternate panels each round (propose → verify → propose → …).
+5. **Loop until a ROTATED panel confirms with no new material issue.** Convergence = a panel *rotated
+   relative to the previous round* returns a clean PASS — NOT the same panel saying "ok" twice, and
+   NOT a single panel's first pass. Cap at `review.max_rounds` (default 3).
+6. **On cap-exhaustion** (max_rounds reached without a rotated confirmation) → the harness records
+   `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT REVIEW**. Done, but flagged for a human — never blocked.
+
+**Cost & degrade ladder.** Each round is one council call, bounded by the existing
+`per_night_euro_cap` + `max_council_calls_per_night` AND the per-ticket `review.max_rounds`. Rotation
+diversifies the panels; it does not multiply per-round cost. Honor `tokonomix_get_balance` and the
+budget brake: **ROTATE → SINGLE → DETERMINISTIC**. If the balance is below
+`budget.balance_threshold_euro`, the gateway returns HTTP 402, or no council call is affordable → drop
+to deterministic-only. If budget allows only one more call (a rotated pair needs two) → drop to a
+single advisory panel. The deterministic gate is always the floor.
+
+**Re-check the budget BEFORE EVERY round — not once per ticket.** The rotated loop runs multiple
+council calls *between* `next` calls, so a mid-loop balance drop or €-cap crossing is invisible to the
+harness until the next ticket boundary. Before starting each round, re-run `tokonomix_get_balance` and
+re-evaluate the brake: if the balance is below `budget.balance_threshold_euro`, a 402 occurred, or the
+remaining €/call headroom can't fund the next round, **stop the loop immediately** and record the
+ticket `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT REVIEW** — do not start another round. This is what
+keeps `per_night_euro_cap` a hard ceiling within a ticket, not just across tickets. Always report the
+real charged cost via `--council-cost` so the per-night brake stays accurate.
+
 ### Specialist reviewers (when `specialists` is enabled)
 
 A finer-grained companion to the whole-diff council: distinct review **lenses**. A `PROCEED` payload
