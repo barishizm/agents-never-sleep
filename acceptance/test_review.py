@@ -190,6 +190,28 @@ def test_review_disposition(failures):
         failures.append("[disp] CAP_EXHAUSTED coverage must carry the daylight tag")
 
 
+def test_review_payload(failures):
+    # rotation off -> no review block (caller leaves the council payload unchanged)
+    if council.review_payload(_cfg(rotate=False), {}, balance_eur=1000.0) is not None:
+        failures.append("[payload] rotate off -> review_payload None")
+    # rotation on + healthy budget -> ROTATE block carrying both disjoint panels + protocol
+    pay = council.review_payload(_cfg(), {}, balance_eur=1000.0)
+    if not pay or pay.get("mode") != ReviewMode.ROTATE.value:
+        failures.append(f"[payload] rotate on + budget ok -> mode=rotate, got {pay}")
+        return
+    if pay.get("max_rounds") != 3:
+        failures.append("[payload] payload should carry max_rounds")
+    panels = pay.get("panels") or {}
+    if not panels.get("propose") or not panels.get("verify"):
+        failures.append("[payload] ROTATE payload must carry both panels")
+    if not pay.get("protocol"):
+        failures.append("[payload] payload must carry an agent protocol string")
+    # below balance threshold -> DETERMINISTIC block, no panels handed out
+    det = council.review_payload(_cfg(), {}, balance_eur=0.05)
+    if not det or det.get("mode") != ReviewMode.DETERMINISTIC.value or det.get("panels"):
+        failures.append(f"[payload] below threshold -> DETERMINISTIC, no panels, got {det}")
+
+
 def test_round_cost_estimate(failures):
     p, v = council.build_panels(_cfg())
     c = council.estimate_review_round_eur(_cfg(), p)
@@ -225,6 +247,7 @@ def main() -> int:
     test_evaluate_convergence(failures)
     test_review_mode_ladder(failures)
     test_review_disposition(failures)
+    test_review_payload(failures)
     test_round_cost_estimate(failures)
     test_default_config_has_disjoint_review_block(failures)
     print("=" * 60)

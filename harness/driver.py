@@ -503,6 +503,11 @@ class StepDriver:
                          "council errors/times out, log the blind-spot and PROCEED. Then pass "
                          "--council-verdict pass|concerns|error and --council-coverage to `complete`."),
         }
+        # Opt-in rotated review loop (INT-1729): when council.review.rotate is on, enrich the council
+        # block with the rotation panels + protocol (honoring the same per-round budget brake).
+        review = council.review_payload(self.config, progress, balance_eur=balance_eur)
+        if review is not None:
+            payload["council"]["review"] = review
 
     def _attach_specialist_hint(self, payload: dict, ticket) -> None:
         """Non-binding pre-work hint so the agent can line up the right specialist lenses BEFORE

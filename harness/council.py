@@ -508,6 +508,47 @@ def estimate_review_round_eur(config: dict, panel: Panel) -> float:
     return _estimate_models_eur(config, panel.proposers, panel.judges, out_tok)
 
 
+_ROTATE_PROTOCOL = (
+    "ROTATED review loop (council.review.rotate on). Run the council as test/fix/review with TWO "
+    "zero-overlap panels: review with the PROPOSE panel, fix any concerns, then confirm with the "
+    "independent VERIFY panel (alternate each round). Converge only when a ROTATED panel returns a "
+    "clean PASS with no new material issue — NOT the same panel saying ok. Cap at max_rounds, then "
+    "DONE_LOW_CONFIDENCE + daylight. Re-check tokonomix_get_balance BEFORE every round; stop on "
+    "below-threshold/402/insufficient headroom. Report each round's real --council-cost.")
+_SINGLE_PROTOCOL = (
+    "Budget allows a SINGLE advisory panel only (no rotated pair) — run one council, no rotation. "
+    "A high-risk diff stays flagged for daylight review if it raises concerns.")
+_DETERMINISTIC_PROTOCOL = (
+    "Credits exhausted / balance below threshold — do NOT convene councils. The deterministic gate "
+    "is the floor; high-risk diffs are still flagged DONE_LOW_CONFIDENCE.")
+
+
+def review_payload(config: dict, progress: dict, *,
+                   balance_eur: float | None = None, http_402: bool = False) -> dict | None:
+    """Build the rotation block for the PROCEED payload, or None when the rotated loop is not enabled
+    (the caller then leaves the single-panel council block untouched). Honors the degrade ladder: a
+    ROTATE block hands out both panels + per-round estimate; SINGLE/DETERMINISTIC carry only the
+    protocol so the agent degrades without panels."""
+    if not review_enabled(config):
+        return None
+    mode = review_mode(config, progress, balance_eur=balance_eur, http_402=http_402)
+    block = {"mode": mode.value, "max_rounds": review_max_rounds(config)}
+    if mode == ReviewMode.ROTATE:
+        propose, verify = build_panels(config)
+        block["panels"] = {
+            "propose": {"proposers": propose.proposers, "judges": propose.judges},
+            "verify": {"proposers": verify.proposers, "judges": verify.judges},
+        }
+        block["est_round_eur"] = max(estimate_review_round_eur(config, propose),
+                                     estimate_review_round_eur(config, verify))
+        block["protocol"] = _ROTATE_PROTOCOL
+    elif mode == ReviewMode.SINGLE:
+        block["protocol"] = _SINGLE_PROTOCOL
+    else:
+        block["protocol"] = _DETERMINISTIC_PROTOCOL
+    return block
+
+
 def review_disposition(outcome: ReviewOutcome, *, ticket_title: str) -> Disposition:
     """Final disposition for a rotated review. CONVERGED = an independent panel confirmed -> DONE.
     CAP_EXHAUSTED = the loop ran out of rounds without a rotated confirmation -> DONE_LOW_CONFIDENCE +
