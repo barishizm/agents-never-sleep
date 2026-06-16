@@ -82,6 +82,15 @@ class AttemptLedger:
     def over_cap(self, ticket_id: str, cap: int) -> bool:
         return self.attempts(ticket_id) >= cap
 
+    def reset_attempts(self, ticket_id: str) -> int:
+        # INT-1675 P3: a first-class operator escape hatch for the documented "kill+resume / tooling
+        # round-trip inflated the attempt counter -> healthy ticket force-parked at the cap" case, so
+        # operators stop hand-editing ledger.json. Returns the prior count (0 if it had none).
+        prior = self._data["attempts"].pop(ticket_id, 0)
+        if prior:
+            self._flush()
+        return prior
+
     def record_failure(self, ticket_id: str, signature: str) -> int:
         key = f"{ticket_id}:{signature}"
         n = self._data["signatures"].get(key, 0) + 1

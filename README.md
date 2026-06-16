@@ -1,13 +1,16 @@
 # Agents Never Sleep (ANS)
 
-Run a backlog to completion **overnight, unattended** — without the run ever soft-halting on a
-question. A portable [Agent Skill](https://www.agensi.io/learn/agent-skills-open-standard)
+Run a backlog to completion **unattended** — without the run ever soft-halting on a question.
+Overnight is the obvious case, but it works just as well **during the day**: hand off the backlog
+and carry on with other work while it runs, without watching the process or approving every step. A
+portable [Agent Skill](https://www.agensi.io/learn/agent-skills-open-standard)
 (`SKILL.md`) plus a small stdlib-Python harness that gives a coding agent: durable per-ticket state,
-a concrete **ASK / PARK / HALT** autonomy contract (never block the whole night on one ticket),
+a concrete **ASK / PARK / HALT** autonomy contract (never block the whole run on one ticket),
 deterministic test-gates with a failure taxonomy, git-backed reversibility, attempt/loop caps, an
-optional multi-model review council, secret redaction on every write, and a morning report.
+optional multi-model review council, secret redaction on every write, and a run report.
 
-> The pain it solves: *"the agent stops at 2am with a dumb question and wastes the whole night."*
+> The pain it solves: *"the agent stalls on a dumb question and wastes the stretch you weren't
+> watching"* — whether that's overnight or the hour you stepped away to do something else.
 
 ## The autonomy contract
 
@@ -16,7 +19,7 @@ Three responses to uncertainty — never collapsed:
 - **PROCEED** — assume + log + continue (low blast-radius, reversible).
 - **PARK** — defer *this* ticket/decision, keep moving to the next. Normal and healthy.
 - **HALT** — stop the whole run (only on irreversible danger with no safety net).
-- **ASK is forbidden unattended** — there is nobody to answer at 2am.
+- **ASK is forbidden unattended** — there is nobody watching to answer.
 
 This is enforced structurally (not by agent discipline) via opt-in, env-gated hooks.
 
@@ -32,8 +35,10 @@ python3 -m harness.run complete --repo <project> --attempted "what you did"
 ```
 
 `next` hands you exactly one ready ticket (auto-parking ambiguous / high-blast-radius ones) and owns
-the never-stop sentinel; `complete` gates + records the outcome. See `SKILL.md` for the full loop,
-the council/specialist review flow, and the cost brakes.
+the never-stop sentinel; `complete` gates + records the outcome. Both echo the resolved repo + tickets
+paths so a mis-target is obvious. Operator escapes when a resume gets confused: `reset-attempts <id>`
+(clear one ticket's attempt counter) and `reset-spend` (zero the per-night spend accounting). See
+`SKILL.md` for the full loop, the council/specialist review flow, and the cost brakes.
 
 ## Cross-platform
 
@@ -51,7 +56,7 @@ never-stop) is wired per platform from one shared decision core (`harness/enforc
 | Windsurf | ✅ | ⚠️ degraded | ⚠️ degraded |
 
 **Best-effort + graceful degradation:** ⚠️ guarantees with no native hook fall back to the SKILL.md
-prose contract AND are surfaced as a morning-report BLIND SPOT — never silent. Install snippets per
+prose contract AND are surfaced as a run-report BLIND SPOT — never silent. Install snippets per
 platform live in `hooks/platforms/`.
 
 ## Layout

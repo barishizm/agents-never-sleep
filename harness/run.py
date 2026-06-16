@@ -276,6 +276,10 @@ def cmd_next(args) -> int:
         summary = _push_paperclip(ctx)
         if summary is not None:
             result["paperclip"] = summary
+    # INT-1675 P2: echo the resolved absolute repo/tickets paths so a stray `cd` + `--repo .`
+    # mis-target (empty backlog -> spurious DRAINED in the wrong dir) is visible at a glance.
+    result.setdefault("repo_abs", ctx.repo)
+    result.setdefault("tickets_abs", getattr(ctx, "tickets_dir", None))
     return _emit(result)
 
 
@@ -283,11 +287,40 @@ def cmd_complete(args) -> int:
     ctx = _Context(args)
     concerns = [s for s in (args.specialist_concerns or "").split(",") if s.strip()]
     http_status = getattr(args, "council_http_status", None)
-    return _emit(ctx.driver.complete_ticket(
+    out = ctx.driver.complete_ticket(
         attempted=args.attempted, cannot_implement=args.cannot_implement,
         review_coverage=args.review_coverage, council_verdict=args.council_verdict,
         council_cost_eur=args.council_cost, council_http_status=http_status,
-        specialist_concerns=concerns, specialist_cost_eur=args.specialist_cost))
+        specialist_concerns=concerns, specialist_cost_eur=args.specialist_cost)
+    # INT-1675 P2: surface the resolved source so a `complete` run against the wrong --tickets dir
+    # (the silent-revert foot-gun, now a refuse) is diagnosable from the result alone.
+    if isinstance(out, dict):
+        out.setdefault("repo_abs", ctx.repo)
+        out.setdefault("tickets_abs", getattr(ctx, "tickets_dir", None))
+    return _emit(out)
+
+
+def cmd_reset_attempts(args) -> int:
+    # INT-1675 P3: first-class operator escape for the documented "kill+resume / tooling round-trip
+    # inflated the attempt counter -> healthy ticket force-parked at the cap" case. Replaces the rough
+    # "hand-edit ledger.json" workaround.
+    ctx = _Context(args)
+    prior = ctx.ledger.reset_attempts(args.ticket_id)
+    return _emit({"status": "ATTEMPTS_RESET", "ticket_id": args.ticket_id,
+                  "cleared_attempts": prior,
+                  "note": ("attempt counter cleared" if prior else
+                           "no attempts were recorded for this ticket")})
+
+
+def cmd_reset_spend(args) -> int:
+    # INT-1675 P4 follow-on: operator escape to zero the per-night spend accounting when a resume /
+    # abnormal exit left the €-cap or council-call cap accounting wrong. Symmetric to reset-attempts.
+    ctx = _Context(args)
+    prior = ctx.driver.reset_spend()
+    return _emit({"status": "SPEND_RESET",
+                  "cleared_council_cost_eur": prior["council_cost_eur"],
+                  "cleared_council_calls": prior["council_calls"],
+                  "note": "per-night spend accounting zeroed; breaker counters (processed/bad) untouched"})
 
 
 def cmd_report(args) -> int:
@@ -360,6 +393,17 @@ def main(argv=None) -> int:
     pr = sub.add_parser("report", help="(re)write the morning report from the store")
     _add_common(pr)
     pr.set_defaults(func=cmd_report)
+
+    pra = sub.add_parser("reset-attempts",
+                         help="clear a ticket's attempt counter (operator escape for cap inflation)")
+    _add_common(pra)
+    pra.add_argument("ticket_id", help="ticket id whose attempt counter to clear")
+    pra.set_defaults(func=cmd_reset_attempts)
+
+    prs = sub.add_parser("reset-spend",
+                         help="zero the per-night council spend accounting (operator escape)")
+    _add_common(prs)
+    prs.set_defaults(func=cmd_reset_spend)
 
     prun = sub.add_parser("run", help="legacy in-process loop (needs a wired Worker)")
     _add_common(prun)

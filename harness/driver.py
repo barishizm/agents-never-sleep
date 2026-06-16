@@ -232,6 +232,34 @@ class StepDriver:
                            {"processed": 0, "bad": 0, "council_cost_eur": 0.0, "council_calls": 0,
                             "credits_exhausted_degrade": False, "credits_stop_requested": None})
 
+    def _reset_run_counters(self) -> None:
+        # INT-1675 P4: a fresh-run ENTRY must reset the low-yield breaker counters (processed/bad)
+        # so a resume over a backlog with prior parks does not trip LOW_YIELD before doing any new
+        # work — but it must NOT wipe the cumulative per-night spend accounting (council_cost_eur +
+        # council_calls). The fresh-run branch keys off sentinel-absence, which a mid-run resume can
+        # also hit (sentinel lost/abnormal death); zeroing spend there silently re-opens the €-cap
+        # and the per-night council-call cap. So reset the breaker, PRESERVE the spend accounting.
+        # The full zero (incl. spend) still happens at a clean _terminate(), so a genuinely fresh run
+        # after a clean prior run already starts at 0 — this only changes the sentinel-absent-resume
+        # case, in the safe (conservative, cap-preserving) direction.
+        p = self._load_progress()
+        _atomic_write_json(self.progress_path,
+                           {"processed": 0, "bad": 0,
+                            "council_cost_eur": p["council_cost_eur"], "council_calls": p["council_calls"],
+                            "credits_exhausted_degrade": False, "credits_stop_requested": None})
+
+    def reset_spend(self) -> dict:
+        # INT-1675 P4 follow-on: operator escape to zero the per-night spend accounting
+        # (council_cost_eur + council_calls) WITHOUT touching the low-yield breaker counters —
+        # symmetric to `reset-attempts`. For when a resume / abnormal exit left the €-cap or the
+        # per-night council-call cap accounting wrong and the operator wants a clean spend slate.
+        p = self._load_progress()
+        prior = {"council_cost_eur": p["council_cost_eur"], "council_calls": p["council_calls"]}
+        p["council_cost_eur"] = 0.0
+        p["council_calls"] = 0
+        _atomic_write_json(self.progress_path, p)
+        return prior
+
     def _set_degrade_flag(self) -> None:
         """Persist the B-policy (degrade) flag so subsequent `next` calls honor it across processes."""
         p = self._load_progress()
@@ -337,7 +365,7 @@ class StepDriver:
         pending = self._load_pending()
         if not os.path.exists(self.sentinel_path) and pending is None:
             self._reset_skip()
-            self._reset_progress()
+            self._reset_run_counters()
             # Run-start credits preflight: check whether the supplied balance is likely sufficient
             # to cover the planned council spend. Only when council is configured.
             _run_start_credits_preflight(balance_eur, self.config, self.orch.unattended,
