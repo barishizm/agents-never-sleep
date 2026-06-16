@@ -159,6 +159,19 @@ Per ticket, when a `council` block is present:
    `... complete --council-verdict pass|concerns|error --council-cost <€charged> --review-coverage
    "<proposers that ran, who errored, € cost>"`. Omit `--council-verdict` only if you ran no council.
 
+> **Honest caveat — the verdict channel runs through the controlled party.** By default
+> `--council-verdict` is the AGENT's summary of what the panels said; the harness never sees the
+> panels. `reconcile` (a concern-language scan of the coverage text) mitigates a too-rosy PASS but
+> does not close the gap. **Opt-in fix (`council.structured_verdict`, default OFF):** when ON and the
+> agent passes `complete --council-verdict-file <json|->`, the harness PARSES a machine-readable
+> verdict artifact (`{overall, issues[], proposers[], judge}`) and DERIVES the trust-gate itself —
+> the verdict is computed from structured fields, not free-text agent prose. Derivation is fail-safe
+> (malformed / no-proposer → ERROR; a material open issue only ever DOWNGRADES an `overall`, never
+> upgrades it). **Honest scope:** this hardens the *format* — until the gateway emits the block
+> directly, the artifact still travels *via the agent*, so it does not yet make the verdict channel
+> independent of the controlled party; that is the gateway-emission go-live step (see the mcp-server
+> contract). Flag OFF = byte-identical behavior (artifact ignored).
+
 **Cost safety (unattended runs spend real money).** The harness enforces a per-night brake from
 `--council-cost`: once `budget.per_night_euro_cap` or `budget.max_council_calls_per_night` is reached,
 `next` returns `council: {disabled: ...}` — stop convening councils (high-risk diffs are still flagged

@@ -94,6 +94,11 @@ def default_config(profile) -> dict:
                 "gemini-3.1-pro": [125, 1000], "deepseek/deepseek-v4": [28, 42],
                 "gpt-5.4-mini": [50, 200]},
             "est_prompt_tokens": 3000,
+            # Opt-in (default OFF): when ON, the harness derives the trust-gate from the council's own
+            # machine-readable verdict artifact (`complete --council-verdict-file`) instead of the
+            # agent's self-reported --council-verdict — closing the self-reported-verdict gap. Flipping
+            # it on needs the gateway to emit the structured block (see mcp-server contract).
+            "structured_verdict": False,
             # Opt-in rotated test/fix/review loop (INT-1729). rotate=False by default — nobody is
             # pushed into consensus cost they did not enable. When rotate=true, the two panels must
             # have ZERO shared model slug (the harness validates this; the verify panel confirms the

@@ -313,10 +313,78 @@ def reconcile(verdict: CouncilVerdict, coverage_text: str) -> CouncilVerdict:
     """Cheap integrity check on the agent's self-reported verdict (it grades its own work, so a rosy
     PASS is the weak spot). If it claims PASS but its OWN council summary contains concern-language,
     distrust the self-report and treat it as CONCERNS. Mitigates — does not close — the independence
-    gap; the full fix (harness parses a machine-readable council artifact) is the next hardening."""
+    gap; the full fix is `verdict_from_structured` below (the harness parses the council's own
+    machine-readable artifact), gated by `council.structured_verdict` (default OFF)."""
     if verdict == CouncilVerdict.PASS and coverage_text and _CONCERN_LANG.search(coverage_text):
         return CouncilVerdict.CONCERNS
     return verdict
+
+
+# --- Structured verdict (opt-in) — close the self-reported-verdict gap ---------------------------
+# The heaviest open critique on the council: the trust decision reaches the harness via the AGENT
+# (`complete --council-verdict ...`) — the controlled party summarizing its own review. `reconcile`
+# (concern-language scan) mitigates but does not close it. When `council.structured_verdict` is ON,
+# the harness instead PARSES a machine-readable verdict artifact (the council's structured output) and
+# DERIVES the trust-gate from its fields, not from free-text agent prose. HONEST SCOPE: this hardens
+# the FORMAT — until the gateway emits the block directly the artifact still travels via the agent, so
+# the channel is not yet independent of the controlled party (that is the gateway-emission go-live).
+#
+# The artifact contract (JSON the tokonomix council returns; documented in mcp-server):
+#   { "overall":   "pass" | "concerns" | "error",   # optional — derived from issues when absent
+#     "issues":    [ { "severity": "high|medium|low|info",
+#                      "status":   "open|resolved",  # default "open"
+#                      "title":    "...", "file": "..." } ],
+#     "proposers": ["model-a", "model-b", ...],       # the panel that answered (blind/parallel)
+#     "judge":     "model-x"  |  "judges": ["model-x", ...] }  # the independent judge(s)
+#
+# Severities the gate treats as MATERIAL (an open one withholds the auto-trust upgrade).
+_MATERIAL_SEV = {"critical", "high", "med", "medium"}
+
+
+def structured_verdict_enabled(config: dict) -> bool:
+    """Opt-in (DEFAULT OFF): when ON, a parsed structured verdict artifact overrides the agent's
+    self-reported `--council-verdict` for the trust decision. Absent key == OFF == no behavior
+    change. Needs the council enabled (the artifact is a council product)."""
+    return enabled(config) and bool((config.get("council", {}) or {}).get("structured_verdict"))
+
+
+def verdict_from_structured(data, tier: CouncilTier) -> tuple:
+    """Derive the council verdict from the council's OWN machine-readable artifact — not agent prose.
+
+    FAIL-SAFE, mirroring `_coerce_verdict`/`reconcile`:
+      - a malformed artifact, or one where NO proposer ran, → ERROR (a blind spot withholds trust);
+      - an explicit `overall` is honored but can only be DOWNGRADED by a material open issue, never
+        upgraded (a self-declared "pass" that still carries an open HIGH issue becomes CONCERNS);
+      - an unrecognized `overall` → CONCERNS (withhold trust), never silently trusted.
+
+    Returns (CouncilVerdict, coverage_text). The coverage records the harness-derived provenance
+    (panel + judge + issue count) so the morning report shows the verdict was parsed, not reported."""
+    if not isinstance(data, dict):
+        return CouncilVerdict.ERROR, "structured-verdict: malformed artifact (not an object)"
+    proposers = [str(p) for p in (data.get("proposers") or []) if p]
+    judges = data.get("judges") or ([data["judge"]] if data.get("judge") else [])
+    judges = [str(j) for j in judges if j]
+    issues = data.get("issues") or []
+    if not proposers:
+        return CouncilVerdict.ERROR, "structured-verdict: no proposers ran (blind spot)"
+    material_open = any(
+        isinstance(i, dict)
+        and str(i.get("severity", "")).strip().lower() in _MATERIAL_SEV
+        and str(i.get("status", "open")).strip().lower() != "resolved"
+        for i in issues)
+    overall = str(data.get("overall", "")).strip().lower()
+    if overall == "error":
+        derived = CouncilVerdict.ERROR
+    elif material_open or overall == "concerns":
+        derived = CouncilVerdict.CONCERNS           # material open issue can only downgrade
+    elif overall in ("pass", ""):
+        derived = CouncilVerdict.PASS
+    else:
+        derived = CouncilVerdict.CONCERNS           # unrecognized overall → fail-safe
+    cov = (f"structured-verdict[{derived.value}] · proposers={','.join(proposers)} · "
+           f"judge={','.join(judges) or '?'} · issues={len(issues)}"
+           f"{' (material open)' if material_open else ''}")
+    return derived, cov
 
 
 def dispose(tier: CouncilTier, verdict: CouncilVerdict, coverage: str, *,

@@ -593,6 +593,7 @@ class StepDriver:
     def complete_ticket(self, *, attempted: str, cannot_implement: bool = False,
                         review_coverage: str | None = None,
                         council_verdict: str | None = None,
+                        council_verdict_artifact: dict | None = None,
                         council_cost_eur: float = 0.0,
                         council_http_status: int | None = None,
                         specialist_concerns: list | None = None,
@@ -654,11 +655,13 @@ class StepDriver:
             ticket, pending, attempted or "(no summary provided)",
             cannot_implement=cannot_implement, review_coverage=review_coverage,
             council_config=self.config, council_verdict=council_verdict,
+            council_verdict_artifact=council_verdict_artifact,
             specialist_concerns=specialist_concerns, credits_degrade=degrade_active)
         self._clear_pending()
         self._bump_progress(is_bad=outcome.state in BAD_STATES)
-        # a council was convened iff the agent reported a verdict — track its spend for the brake
-        if council_verdict:
+        # a council was convened iff the agent reported a verdict (self-report OR structured artifact)
+        # — track its spend for the per-night brake either way.
+        if council_verdict or council_verdict_artifact is not None:
             self._bump_council(council_cost_eur)
         # specialist lens reviews are paid too: fold their € into the same per-night spend cap
         # (without consuming a full-council call slot).
