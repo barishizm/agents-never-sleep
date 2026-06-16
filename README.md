@@ -42,22 +42,27 @@ paths so a mis-target is obvious. Operator escapes when a resume gets confused: 
 
 ## Cross-platform
 
-The harness is provider-neutral Python and runs anywhere. Enforcement (never-ASK / deny-irreversible /
-never-stop) is wired per platform from one shared decision core (`harness/enforcement.py`) via
-`python3 -m harness.enforce <platform> <event>`:
+The harness is provider-neutral Python and runs anywhere. The cross-platform enforcement (never-ASK /
+deny-irreversible / never-stop) is wired per platform from one shared decision core
+(`harness/enforcement.py`) via `python3 -m harness.enforce <platform> <event>`. (Claude Code *also*
+ships a self-contained bash deny-hook, `hooks/deny_irreversible.sh`, as the `bypassPermissions`
+backstop — it mirrors the same patterns but does not call the Python core, so it keeps working even
+if Python is unavailable.)
 
 | Platform | deny-irreversible | never-stop | never-ASK |
 |---|---|---|---|
 | Claude Code | ✅ | ✅ | ✅ |
-| Gemini CLI | ✅ | ✅ | ⚠️ degraded |
-| Codex CLI | ✅ | ✅ | ⚠️ degraded |
-| Copilot CLI | ✅ | ✅ | ✅ |
-| Cursor | ✅ | ⚠️ degraded | ⚠️ degraded |
-| Windsurf | ✅ | ⚠️ degraded | ⚠️ degraded |
+| Gemini CLI | ✅* | ✅* | ⚠️ degraded |
+| Codex CLI | ✅* | ✅* | ⚠️ degraded |
+| Copilot CLI | ✅* | ✅* | ✅* |
+| Cursor | ✅* | ⚠️ degraded | ⚠️ degraded |
+| Windsurf | ✅* | ⚠️ degraded | ⚠️ degraded |
 
-**Best-effort + graceful degradation:** ⚠️ guarantees with no native hook fall back to the SKILL.md
-prose contract AND are surfaced as a run-report BLIND SPOT — never silent. Install snippets per
-platform live in `hooks/platforms/`.
+**✅ = native + live-verified · ✅\* = native, built to the platform's documented hook contract but
+not yet live-verified on the real tool (run `acceptance/` there to promote it) · ⚠️ = no native hook
+for this guarantee → falls back to the SKILL.md prose contract AND is surfaced as a run-report BLIND
+SPOT, never silent.** Only Claude Code is live-verified today (`capabilities.py: LIVE_VERIFIED`).
+Install snippets per platform live in `hooks/platforms/`.
 
 ## Layout
 

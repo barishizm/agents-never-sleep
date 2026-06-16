@@ -17,8 +17,9 @@ description: >-
 
 Run a backlog to completion overnight without the run ever soft-halting on a question. The hard
 part is not doing the work — it is **state durability + concrete park-vs-continue semantics +
-anti-starvation**, so that is what this skill is built around. The heavy multi-model review funnel
-is deliberately Phase 2 (see `BUILD-PLAN.md`); ship reliability first.
+anti-starvation**, so that is what this skill is built around. The reliability spine shipped first
+(see `BUILD-PLAN.md`); the heavier multi-model review funnel was sequenced on top of it and is now
+built (status in "What is deferred to Phase 2" below).
 
 > Full rationale: `agents-never-sleep-design.md` (13 design threads + 3 council reviews).
 > The MVP spine is implemented as a small Python harness under `harness/` and proven by
@@ -59,8 +60,10 @@ test fixtures, a choice between two equivalent local implementations, trivially-
 **When genuinely unclassifiable → PARK.** A wrongly-parked small item costs a 5-second morning
 decision; a wrongly-assumed big one costs a night of wrong work.
 
-Every PROCEED assumption must be an immediately-revertible commit, and every PARK must record: why,
-the candidate interpretations, the exact human next-action, and its contamination scope.
+Commit each PROCEED assumption so it can be reverted; if the snapshot commit cannot be made
+(git lock / timeout / read-only object store), treat the ticket as `BLOCKED_ENV` rather than editing
+unrevertibly. Every PARK must record: why, the candidate interpretations, the exact human
+next-action, and its contamination scope.
 
 ## The per-ticket loop (what the harness enforces)
 
@@ -170,8 +173,8 @@ trusted to merge blind. Deterministic gates remain the only HARD gate; the counc
 
 ### Rotated review loop (when `council.review.rotate` is on) — INT-1729
 
-A single panel that confirms its OWN prior review shares its blind spots (proven 2026-06-07: an
-independent panel caught a silent-wrong-JSON bug the first panel missed). When the config opts in with
+A single panel that confirms its OWN prior review shares its blind spots (observed once, 2026-06-07: an
+independent panel caught a silent-wrong-JSON bug the first panel missed — n=1, illustrative not proof). When the config opts in with
 `council.review.rotate: true`, run the council as a **rotated test/fix/review loop** with two
 zero-model-overlap panels — a **propose** panel and an independent **verify** panel
 (`council.review.panels.{propose,verify}`).
@@ -248,9 +251,11 @@ The agent-as-worker bridge, the multi-model council (diff-routed light/heavy rev
 trust-gating), the never-ASK enforcement hook, the conditional specialist reviewers
 (architect/security/tenant-safety daylight-fold, diff-routed lenses), and shape-anchored secret
 redaction (scrubs credentials from the report, gate artifacts, Paperclip comments and emitted JSON;
-a literal-value registry the Vault slice will feed) are now built. Still deferred: full Paperclip
-integration (pull tickets / push status + parked comments) and cross-platform enforcement
-adapters. The spine ships and is proven first; quality machinery layers on top.
+a literal-value registry the Vault slice will feed) are now built. The cross-platform enforcement
+adapters (Gemini / Codex / Copilot / Cursor / Windsurf via `harness/enforce.py` + `capabilities.py`)
+are now built too — **live-verified on Claude Code, built to each platform's documented hook
+contract elsewhere** (see the README capability matrix). Still deferred: full Paperclip integration
+(pull tickets / push status + parked comments). The spine shipped first; quality machinery layers on top.
 
 The heartbeat watchdog is built and proven (`harness/watchdog.py`, `acceptance/test_watchdog.py`): a
 sidecar that runs the unattended command as a child, restarts it resumable when the heartbeat goes

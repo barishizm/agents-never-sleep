@@ -272,6 +272,18 @@ class StepDriver:
         if is_bad:
             p["bad"] += 1
         _atomic_write_json(self.progress_path, p)
+        # INT-1675: the cross-platform Stop dispatcher (enforce.py) caps never-stop at
+        # _STOP_LOOP_CAP *blocks*, counted in a `stop-block-count` file beside the sentinel, and
+        # only clears it when the whole backlog drains. Without a per-progress reset, 5 cumulative
+        # stop-blocks spread across a long run would silently disable never-stop for the rest of it.
+        # A completed ticket IS forward progress, so reset the counter here — making the cap
+        # effectively "blocks WITHOUT progress", which is the real infinite-loop guard.
+        try:
+            cnt = os.path.join(os.path.dirname(self.sentinel_path) or ".", "stop-block-count")
+            if os.path.exists(cnt):
+                os.remove(cnt)
+        except OSError:
+            pass
 
     def _bump_council(self, cost_eur: float) -> None:
         """Accumulate reported council spend + call count for the per-night cost brake."""
