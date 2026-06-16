@@ -52,7 +52,7 @@ _PATTERNS = [
     (re.compile(r"\bs\.[A-Za-z0-9]{24,}"), "[REDACTED:vault-token]"),
     # Provider API keys with a distinctive prefix.
     (re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}"), "[REDACTED:openai-key]"),
-    (re.compile(r"\btok_live_[A-Za-z0-9]{20,}"), "[REDACTED:tokonomix-key]"),
+    (re.compile(r"\btok_live_[A-Za-z0-9_-]{20,}"), "[REDACTED:tokonomix-key]"),
     (re.compile(r"\bgh[posru]_[A-Za-z0-9]{20,}"), "[REDACTED:github-token]"),
     (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}"), "[REDACTED:github-token]"),
     (re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}"), "[REDACTED:slack-token]"),
