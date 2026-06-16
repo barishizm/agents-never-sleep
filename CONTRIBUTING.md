@@ -32,6 +32,14 @@ Pure standard library, Python 3.10+. No build step.
   credentials. Test fixtures must be obviously fake.
 - Surgical, focused changes; match the existing style.
 
+## Publishing
+
+This repo is **generated** from an upstream canonical copy via a one-way mirror — do not
+hand-edit it expecting changes to stick, as the next sync overwrites the tree. Land changes
+upstream; maintainers publish with a dry-runnable mirror script (diff vs this remote first,
+then an explicit, supervised push). Outside contributions are welcomed as PRs and folded in
+upstream.
+
 ## Security
 
 Report vulnerabilities privately — see [SECURITY.md](./SECURITY.md).
