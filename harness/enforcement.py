@@ -10,8 +10,10 @@ The three guarantees:
   * never-stop       — block an end-of-turn while the run-incomplete sentinel exists.
 
 NB: the Claude adapter predates this module as three proven bash hooks (hooks/*.sh) and keeps its own
-copy of the irreversible patterns. The canonical copy now lives HERE; converging deny_irreversible.sh
-onto this module is a documented follow-up (avoid refactoring proven security code without need).
+copy of the irreversible patterns. The canonical copy now lives HERE (INT-1935 single-source audit);
+converging deny_irreversible.sh onto this module is a documented follow-up (avoid refactoring proven
+security code without need). ALL new "never do" patterns go into _IRREVERSIBLE below — not in SKILL.md
+or any hook file.
 """
 from __future__ import annotations
 

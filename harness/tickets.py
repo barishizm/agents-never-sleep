@@ -11,6 +11,10 @@ import os
 import re
 from typing import Optional
 
+# A declared agent hint must be a CLI/preset slug — see Ticket.declared_agent for why (it is
+# interpolated into a copy-pasteable command in the report, so no shell-meta / whitespace / newline).
+_AGENT_SLUG = re.compile(r"^[A-Za-z0-9_.\-]+$")
+
 
 @dataclasses.dataclass
 class Ticket:
@@ -28,6 +32,25 @@ class Ticket:
     @property
     def declared_blast_radius(self) -> Optional[str]:
         return self.meta.get("blast_radius")
+
+    @property
+    def declared_agent(self) -> Optional[str]:
+        """F2-declarative: an optional `agent:` front-matter hint naming the agent CLI this
+        ticket would prefer. Metadata ONLY — the run never switches CLIs mid-flight; the
+        morning report just groups tickets whose hint differs from the active agent and
+        recommends a focused `ans-run --agent <name>` follow-up. None when unset.
+
+        A valid hint is a CLI/preset SLUG (`[A-Za-z0-9_.-]`). A ticket author controls this
+        value, and it is interpolated into a copy-pasteable `ans-run --agent …` command in the
+        report — so anything with a space, shell metacharacter or newline (which `redact()` does
+        NOT neutralize — it scrubs secrets, not shell syntax) is treated as NO hint. That makes
+        the boundary the single chokepoint: an unsafe value can never reach the report command,
+        and it could not name a real preset anyway (council review 2026-06-10)."""
+        agent = self.meta.get("agent")
+        if not isinstance(agent, str):
+            return None
+        agent = agent.strip()
+        return agent if (agent and _AGENT_SLUG.match(agent)) else None
 
 
 def _parse_frontmatter(text: str) -> tuple[dict, str]:

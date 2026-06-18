@@ -25,8 +25,10 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 
 from .orchestrator import BAD_STATES, Orchestrator, ProceedToken
+from .vcs import GitError
 from .decide import Action
 from .report import build_report
 from .state import (ContaminationScope, OutcomeState, TERMINAL_SKIP_ON_RESUME,
@@ -140,12 +142,28 @@ class StepDriver:
         self.pending_path = os.path.join(state_dir, "pending.json")
         self.skip_path = os.path.join(state_dir, "skip-this-run.json")
         self.progress_path = os.path.join(state_dir, "run-progress.json")
+        # Run-branch isolation (INT-1825 bug 2): which branch the harness commits to, and the
+        # operator branch to restore at the terminal. Persisted because each next/complete is a
+        # fresh process and must rejoin the SAME run branch (never commit onto the operator branch).
+        self.runbranch_path = os.path.join(state_dir, "run-branch.json")
         # The Stop-hook (hooks/stop_guard.sh) reads ${UE_RUN_INCOMPLETE:-$PWD/.unattended/
         # run-incomplete}. The driver MUST write the SAME file the hook checks, or never-stop
         # silently breaks when the agent's CWD != --repo (the cron/claude-run case). So honour the
         # same env var, falling back to the repo-relative path (correct when run from repo root).
         self.sentinel_path = (os.environ.get("UE_RUN_INCOMPLETE")
                               or os.path.join(orch.repo_dir, ".unattended", "run-incomplete"))
+        # Fresh-session-per-N-tickets (opt-in context strategy). The launcher sets
+        # UE_SESSION_TICKET_BUDGET=N and respawns a fresh agent each time the previous one stops.
+        # The driver counts RECORDED completions for THIS session; on reaching N it writes the
+        # session-budget-reached marker, which the Stop-hook honours to let the agent stop EARLY
+        # (even though the run-incomplete sentinel still exists). DEFAULT OFF: when the env var is
+        # UNSET, none of this code runs and behaviour is byte-identical to a single accumulating run.
+        # The marker path is pinned via UE_SESSION_BUDGET_MARKER (like UE_RUN_INCOMPLETE) so the
+        # hook and driver agree even when the agent's CWD != --repo (cron/claude-run case).
+        self.session_count_path = os.path.join(state_dir, "session-ticket-count")
+        self.session_marker_path = (os.environ.get("UE_SESSION_BUDGET_MARKER")
+                                    or os.path.join(orch.repo_dir, ".unattended", "state",
+                                                    "session-budget-reached"))
 
     # ---- pending checkpoint (the in-flight ticket) --------------------------------------
 
@@ -200,6 +218,110 @@ class StepDriver:
     def _clear_sentinel(self) -> None:
         if os.path.exists(self.sentinel_path):
             os.unlink(self.sentinel_path)
+
+    # ---- per-session ticket budget (opt-in fresh-session-per-N-tickets) -----------------
+    # Active ONLY when UE_SESSION_TICKET_BUDGET is set by the launcher. Counts RECORDED ticket
+    # completions for the CURRENT agent session; the launcher resets the counter + marker before
+    # each fresh spawn (so "session start" = counter file absent). On reaching the budget the
+    # marker is written, which the Stop-hook honours to allow an EARLY stop while the run-incomplete
+    # sentinel still exists — letting the launcher resume the backlog in a fresh, un-degraded session.
+
+    def _session_budget(self) -> int:
+        """N from the launcher env, or 0 (feature off). Any non-positive/invalid value = off."""
+        raw = os.environ.get("UE_SESSION_TICKET_BUDGET")
+        if not raw:
+            return 0
+        try:
+            n = int(raw)
+        except ValueError:
+            return 0
+        return n if n > 0 else 0
+
+    def _bump_session_count(self) -> bool:
+        """Increment this session's RECORDED-completion count; write the marker on reaching budget.
+        Returns True iff the budget was just reached (so `complete` can tell the agent to STOP).
+        No-op returning False when the feature is off (budget unset) — default behaviour is
+        byte-identical."""
+        budget = self._session_budget()
+        if budget <= 0:
+            return False
+        try:
+            with open(self.session_count_path, "r", encoding="utf-8") as fh:
+                count = int(fh.read().strip() or "0")
+        except (OSError, ValueError):
+            count = 0
+        count += 1
+        os.makedirs(os.path.dirname(self.session_count_path), exist_ok=True)
+        with open(self.session_count_path, "w", encoding="utf-8") as fh:
+            fh.write(str(count))
+        if count >= budget:
+            os.makedirs(os.path.dirname(self.session_marker_path), exist_ok=True)
+            with open(self.session_marker_path, "w", encoding="utf-8") as fh:
+                fh.write(f"session reached {count}/{budget} tickets\n")
+            return True
+        return False
+
+    # ---- run-branch isolation (INT-1825 bug 2) ------------------------------------------
+    # All harness snapshot/result commits must land on a dedicated ans/run-* branch, never on the
+    # operator's branch. The run branch + the branch to restore are persisted so every fresh
+    # next/complete process rejoins the same branch; the terminal restores the operator's branch
+    # but LEAVES the run branch for review/merge.
+
+    def _load_runbranch(self) -> dict | None:
+        if not os.path.exists(self.runbranch_path):
+            return None
+        try:
+            with open(self.runbranch_path, "r", encoding="utf-8") as fh:
+                return json.load(fh)
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def _save_runbranch(self, run_branch: str, original_branch: str) -> None:
+        _atomic_write_json(self.runbranch_path,
+                           {"run_branch": run_branch, "original_branch": original_branch})
+
+    def _clear_runbranch(self) -> None:
+        if os.path.exists(self.runbranch_path):
+            os.unlink(self.runbranch_path)
+
+    def _enter_run_branch(self) -> None:
+        """Ensure the harness is ON its dedicated run branch before any snapshot/commit/revert.
+
+        Creates+persists the branch on the first call of a run; re-checks-it-out on every later
+        process. Best-effort: a git failure degrades to the current branch (isolation lost, run
+        continues) rather than crashing the night — surfaced as a morning-report blind spot."""
+        git = self.orch.git
+        if not git.is_repo():
+            return
+        try:
+            state = self._load_runbranch()
+            if state and state.get("run_branch"):
+                if git.current_ref() != state["run_branch"]:
+                    git.checkout(state["run_branch"])
+                return
+            original = git.current_ref()
+            run_branch = f"ans/run-{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
+            git.create_run_branch(run_branch)
+            self._save_runbranch(run_branch, original)
+        except GitError as exc:
+            self.key_blind_spots.append(
+                f"run-branch isolation unavailable ({exc}); harness commits may land on the "
+                "current branch — verify git health before the next run")
+
+    def _exit_run_branch(self) -> None:
+        """At a terminal signal, check the operator's branch back out (leaving the run branch intact
+        for review/merge) and clear the run-branch state so the next run starts fresh."""
+        state = self._load_runbranch()
+        if state and state.get("original_branch"):
+            git = self.orch.git
+            try:
+                if git.is_repo() and git.current_ref() != state["original_branch"]:
+                    git.checkout(state["original_branch"])
+            except GitError as exc:
+                self.key_blind_spots.append(
+                    f"could not restore the operator branch {state['original_branch']!r} ({exc}); "
+                    f"the repo may be left on the run branch — checkout manually")
+        self._clear_runbranch()
 
     # ---- run-scoped breaker accounting --------------------------------------------------
     # The low-yield breaker must measure THIS run, not all-time history: a fresh resume of a
@@ -317,6 +439,14 @@ class StepDriver:
 
     def _terminate(self, status: str, *, reason: str = "") -> dict:
         self._clear_sentinel()
+        # Capture the run branch BEFORE _exit clears the state, so the report + payload can point the
+        # operator at where the night's work actually lives (the work is on the run branch now, not on
+        # their branch — without this pointer an overnight run hides its own output). INT-1825 bug 2.
+        rb_state = self._load_runbranch()
+        run_branch = (rb_state or {}).get("run_branch")
+        # Restore the operator's branch (leaving the run branch for review/merge) before writing the
+        # report onto it. Done first so the report file lands on the operator branch's working tree.
+        self._exit_run_branch()
         # The run is over: clear the per-run scratch so the next run starts clean even if the
         # sentinel-clear races a concurrent resume. (A run that ends ABNORMALLY — process killed,
         # never reaching here — leaves the skip set in place; the continuation resumes with it,
@@ -332,6 +462,7 @@ class StepDriver:
         od = onboarding.directive(self.config, interactive=not self.orch.unattended)
         if od and od.get("action") == "degraded":
             notes.append(od["blind_spot"])
+        done = sum(1 for o in outcomes if o.state.value.startswith("DONE"))
         stop_notes = list(notes)
         if status == "STOPPED_CREDITS":
             stop_notes.insert(0, f"CREDITS EXHAUSTED — run stopped cleanly: {reason}")
@@ -339,13 +470,14 @@ class StepDriver:
             outcomes, run_label=self.run_label,
             halted=(status == "HALTED"), halt_reason=reason,
             stopped_low_yield=(status == "LOW_YIELD"), notes=stop_notes,
+            work_branch=(run_branch if done else None),
         )
         with open(self.report_path, "w", encoding="utf-8") as fh:
             fh.write(report)
-        done = sum(1 for o in outcomes if o.state.value.startswith("DONE"))
         return {"status": status, "reason": reason, "report_path": self.report_path,
-                "processed": len(outcomes), "done": done,
-                "message": f"backlog {status}; report written to {self.report_path}"}
+                "processed": len(outcomes), "done": done, "run_branch": run_branch,
+                "message": f"backlog {status}; report written to {self.report_path}"
+                           + (f"; work on branch {run_branch}" if run_branch and done else "")}
 
     # ---- the two entry points the agent calls -------------------------------------------
 
@@ -375,6 +507,11 @@ class StepDriver:
         # A fresh run (no sentinel yet, nothing in flight) clears the per-run "set aside" list so a
         # new resume retries the tickets a prior run set aside. A continuing run keeps it.
         pending = self._load_pending()
+        # Join the dedicated run branch BEFORE the crash-recovery revert below — otherwise the
+        # recovery would reset the operator's branch tree (INT-1825 bug 2). Only when there is work
+        # context (tickets to do, or a run already in flight); an empty backlog terminates untouched.
+        if self.tickets or pending is not None or self._load_runbranch():
+            self._enter_run_branch()
         if not os.path.exists(self.sentinel_path) and pending is None:
             self._reset_skip()
             self._reset_run_counters()
@@ -396,8 +533,16 @@ class StepDriver:
                 # no outcome yet, or a non-terminal one (FAILED_RETRYABLE/BLOCKED_ENV whose finalize
                 # already reverted — re-reverting to the snapshot is idempotent). Discard any partial
                 # edits and let the ticket be re-scheduled under its attempt cap.
-                self.orch.git.revert_to(pending.snapshot)
-                self._clear_pending()
+                try:
+                    self.orch.git.revert_to(pending.snapshot)
+                    self._clear_pending()
+                except GitError as exc:
+                    # The backup-before-revert failed (broken git/env), so revert_to ABORTED to
+                    # preserve the WIP. Keep pending for a healthy-git resume; surface, never crash.
+                    self.key_blind_spots.append(
+                        f"crash-recovery revert of {pending.ticket_id} was aborted to preserve WIP "
+                        f"({exc}); the partial edit is intact on the run branch — resume when git "
+                        "is healthy")
 
         if not self.tickets:
             return self._terminate("DRAINED")
@@ -414,6 +559,12 @@ class StepDriver:
         credits_stop_reason = progress.get("credits_stop_requested")
         if credits_stop_reason:
             return self._terminate("STOPPED_CREDITS", reason=str(credits_stop_reason))
+        # INT-1935: hard per-run ticket cap — stop at max_tickets_per_run so a surprise-large
+        # backlog never consumes the whole night. Default 20 (config). None = no ceiling.
+        _max_tickets = (self.config.get("budget") or {}).get("max_tickets_per_run")
+        if _max_tickets is not None and int(progress.get("processed", 0)) >= int(_max_tickets):
+            return self._terminate("DRAINED",
+                                   reason=f"max_tickets_per_run={_max_tickets} reached")
         skip = self._load_skip()
 
         for ticket in self.tickets:
@@ -543,11 +694,6 @@ class StepDriver:
                          "council errors/times out, log the blind-spot and PROCEED. Then pass "
                          "--council-verdict pass|concerns|error and --council-coverage to `complete`."),
         }
-        # Opt-in rotated review loop (INT-1729): when council.review.rotate is on, enrich the council
-        # block with the rotation panels + protocol (honoring the same per-round budget brake).
-        review = council.review_payload(self.config, progress, balance_eur=balance_eur)
-        if review is not None:
-            payload["council"]["review"] = review
 
     def _attach_specialist_hint(self, payload: dict, ticket) -> None:
         """Non-binding pre-work hint so the agent can line up the right specialist lenses BEFORE
@@ -593,7 +739,6 @@ class StepDriver:
     def complete_ticket(self, *, attempted: str, cannot_implement: bool = False,
                         review_coverage: str | None = None,
                         council_verdict: str | None = None,
-                        council_verdict_artifact: dict | None = None,
                         council_cost_eur: float = 0.0,
                         council_http_status: int | None = None,
                         specialist_concerns: list | None = None,
@@ -607,6 +752,9 @@ class StepDriver:
         the degrade flag (policy B) or signals STOP on the NEXT `next` call (policy A). The current
         ticket is still completed normally."""
         self._beat("record")
+        # Rejoin the run branch before finalize commits the result / reverts (INT-1825 bug 2):
+        # this is a fresh process and must not commit onto the operator's branch.
+        self._enter_run_branch()
         # 402 from the council gateway: map to decide_budget with http_402=True and persist the
         # degrade flag (policy B) or set a progress marker for STOP (policy A). The current ticket
         # completes normally — the policy fires on the NEXT `next` call.
@@ -632,21 +780,32 @@ class StepDriver:
                     "error": "no ticket in flight — call `next` to get a PROCEED ticket first"}
         ticket = self._ticket_by_id(pending.ticket_id)
         if ticket is None:
-            # INT-1675 #1 + INT-1734 (data-loss fix): a ticket that can't be resolved at
-            # complete-time is ALWAYS ambiguous. The loaded source may simply DIFFER from the one
-            # `next` used — `complete` run without --tickets defaults to a `tickets/` dir that can
-            # hold OTHER tickets (non-empty), or no source was loaded at all. Neither is positive
-            # evidence the ticket was deleted, and reverting would destroy the agent's already-
-            # completed work on a mere source mismatch. So NEVER revert here: preserve the working
-            # tree + the in-flight pending record and tell the operator to re-run `complete` with the
-            # SAME ticket source `next` used. A red deterministic gate is the only thing that reverts.
-            hint = ("no ticket source was loaded — pass --tickets <dir> (or enable Paperclip)"
-                    if not self.tickets else
-                    f"the loaded ticket source does not contain {pending.ticket_id} — re-run "
-                    f"`complete` with the SAME --tickets source that `next` used")
+            # INT-1675 #1 (data-loss fix): distinguish "ticket genuinely deleted" from
+            # "ticket source was never loaded". A revert here destroys already-completed
+            # work, so it must require POSITIVE evidence the ticket vanished — i.e. the
+            # source WAS loaded (self.tickets non-empty) yet this id is absent. When the
+            # source was not loaded at all (e.g. `complete` run without --tickets and no
+            # Paperclip source), do NOT revert: preserve the working tree + the in-flight
+            # pending record so the operator can re-run `complete` with the source.
+            if not self.tickets:
+                return {"status": "ERROR",
+                        "error": (f"ticket {pending.ticket_id} could not be resolved: no ticket "
+                                  f"source was loaded. Pass --tickets <dir> (or enable Paperclip) "
+                                  f"and re-run `complete`. Working tree and in-flight ticket left "
+                                  f"INTACT — nothing was reverted.")}
+            # Source loaded but this id is genuinely absent → the file vanished mid-flight.
+            try:
+                self.orch.git.revert_to(pending.snapshot)
+            except GitError as exc:
+                # Backup-before-revert failed; revert_to aborted to preserve WIP. Keep pending +
+                # working tree intact rather than crashing — the operator recovers in daylight.
+                return {"status": "ERROR",
+                        "error": (f"ticket {pending.ticket_id} no longer present, but the revert was "
+                                  f"aborted to preserve WIP ({exc}); working tree + in-flight ticket "
+                                  "left INTACT — check git health.")}
+            self._clear_pending()
             return {"status": "ERROR",
-                    "error": (f"ticket {pending.ticket_id} could not be resolved: {hint}. Working "
-                              f"tree and in-flight ticket left INTACT — nothing was reverted.")}
+                    "error": f"ticket {pending.ticket_id} no longer present; reverted and skipped"}
 
         # In degrade mode (policy B), councils are skipped: floor DONE to DONE_LOW_CONFIDENCE so
         # the trust-gating fires even on low-risk (LIGHT) diffs that the council never reviewed.
@@ -655,13 +814,11 @@ class StepDriver:
             ticket, pending, attempted or "(no summary provided)",
             cannot_implement=cannot_implement, review_coverage=review_coverage,
             council_config=self.config, council_verdict=council_verdict,
-            council_verdict_artifact=council_verdict_artifact,
             specialist_concerns=specialist_concerns, credits_degrade=degrade_active)
         self._clear_pending()
         self._bump_progress(is_bad=outcome.state in BAD_STATES)
-        # a council was convened iff the agent reported a verdict (self-report OR structured artifact)
-        # — track its spend for the per-night brake either way.
-        if council_verdict or council_verdict_artifact is not None:
+        # a council was convened iff the agent reported a verdict — track its spend for the brake
+        if council_verdict:
             self._bump_council(council_cost_eur)
         # specialist lens reviews are paid too: fold their € into the same per-night spend cap
         # (without consuming a full-council call slot).
@@ -670,11 +827,25 @@ class StepDriver:
         # for the rest of this run; the next resume retries them under the cross-resume attempt cap.
         if outcome.state not in TERMINAL_SKIP_ON_RESUME:
             self._add_skip(ticket.id)
+        # Count this completion toward the per-session budget (no-op unless the feature is on).
+        # Counting every RECORDED completion — not just DONE — is intentional: context degradation
+        # tracks session LENGTH, not success, and retryable items re-queue for the next session.
+        budget_reached = self._bump_session_count()
+        # When the per-session budget is just reached, instruct the agent to STOP (do NOT call
+        # `next`): the agent's loop is complete->next, so a complete that says "stop" is the only
+        # deterministic brake. The launcher resumes the backlog in a FRESH session, and the
+        # Stop-hook allows the early stop because the session-budget-reached marker now exists. The
+        # run-incomplete sentinel is untouched, so if the backlog actually drained at exactly N the
+        # launcher just respawns one cheap session that DRAINs and clears the sentinel. Default-off
+        # (budget unset) always takes the legacy "call next" branch — byte-identical behaviour.
+        next_hint = ("session budget reached — STOP now (do NOT call `next`); the launcher will "
+                     "resume you in a fresh session to continue the backlog"
+                     if budget_reached else "call `next` for the next ticket")
         return {
             "status": "RECORDED",
             "ticket_id": ticket.id,
             "state": outcome.state.value,
             "why": outcome.why,
             "bad": outcome.state in BAD_STATES,
-            "next": "call `next` for the next ticket",
+            "next": next_hint,
         }

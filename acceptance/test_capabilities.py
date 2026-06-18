@@ -64,7 +64,7 @@ def test_degradation_notes(failures):
 
 def test_status_line(failures):
     s = C.status_line("cursor")
-    if "deny-irreversible=native" not in s or "never-stop=degraded" not in s or "never-ASK=degraded" not in s:
+    if "deny-irreversible=native" not in s or "never-stop=soft-enforced" not in s or "never-ASK=soft-enforced" not in s:
         failures.append(f"[status] cursor status line wrong: {s}")
     if "live-verified" not in C.status_line("claude"):
         failures.append("[status] claude should read as live-verified")

@@ -90,6 +90,28 @@ next-action, and its contamination scope.
 
 ## Running it — the agent IS the worker (drive this loop)
 
+**Before starting from an interactive session, ask the user ONCE, in chat:** run the backlog
+*here in this session* (foreground — it stops if they close the terminal), or launch a *detached*
+run via `bin/ans-run` that survives logout? This is a setup/routing decision, not a mid-run
+question — it does not violate the never-ASK contract, and it is the only question you ask.
+
+**If tokonomix consensus mode is configured** (`council` block in PROCEED payloads, or a
+`tokonomix_*` MCP tool is available): at run start:
+
+- **Unattended (`CLAUDE_UNATTENDED=1`):** emit ONE log line and proceed immediately — never
+  block or ask:
+  `ℹ️  Tokonomix consensus active — auto-rating each council call via tokonomix_rate_consensus.`
+- **Interactive (no `CLAUDE_UNATTENDED`):** if the account has no saved rating preference yet
+  (i.e. `review_feedback_opt_in` not yet set — detectable because `feedback_invite` is absent
+  from the first consensus response), ask the user ONCE in chat:
+  > "Tokonomix consensus is active. After each council call I can auto-submit a usefulness
+  > rating (score + findings) to improve model scores. Enable this? (yes/no)"
+  Store the answer in `.unattended/state/consensus_rating_pref.json` so this is asked only
+  once across sessions. If yes: proceed with auto-rating. If no: skip rating calls entirely.
+
+If `consensus_rating_endpoint_enabled` returns 404 on the first rating attempt, log it once as
+a blind-spot and skip all subsequent rating calls for this run.
+
 The harness cannot call you from inside a Python loop, so you drive it. Alternate these two
 subcommands until the backlog drains. Each prints one JSON object to stdout.
 
@@ -137,11 +159,191 @@ only + a loud note in the report.
 > Legacy `python3 -m harness.run run` drives the loop in-process with a deterministic Worker; it is
 > only for the hermetic acceptance demo. Real runs use the `next`/`complete` flow above.
 
+## Launching a run — `bin/ans-run` (pre-token preflight + working-tree lock)
+
+`harness/preflight.py` measures capabilities AFTER the agent session boots — by then the first
+tokens are already spent and a doomed run has already cost money. For headless/cron launches,
+start through the launcher instead:
+
+```
+bin/ans-run [--repo <project>] [--agent <preset>] [--fg] [--check] [--trust] "<prompt>"
+```
+
+It is a deterministic GO/NO-GO gate that runs BEFORE the agent CLI boots:
+
+- **config trust (TOFU)** — `.claude/agents-never-sleep.json` travels with the repo and describes
+  commands the launcher executes (agent argv, host checks). A new or changed config must be
+  trusted once per user — interactively at the prompt, or explicitly via `ans-run --trust` after
+  review. Headless + untrusted = NO-GO. Trust is recorded outside the repo
+  (`~/.config/agents-never-sleep/trusted.json`, keyed on the config's SHA-256) — the repo cannot
+  vouch for itself. **Never run ans-run in a repo you trust less than its `make install`.**
+- **identity** — configurable `launcher.target_user` + root-guard: started as root with a target
+  user configured → re-exec as that user; as root with none configured → NO-GO (an unattended run
+  must never own the night as root),
+- **agent selection** — named presets under `launcher.agents`, picked by `--agent` or
+  `launcher.default_agent`. NO platform detection happens at launch time (session env markers are
+  spoofable and gone under cron); the wizard is where detection — as a prefill hint — and the
+  human decision live. Three gates per preset: argv[0] must be a known agent CLI
+  (`claude`/`codex`/`gemini`/`copilot`; override only via `launcher.allow_custom_agent` in a
+  trusted config), the binary must pass a 5s `--version` **capability probe** (catches flag drift
+  before tokens are spent), and `autonomy_confirmed` must be true (see below),
+- **credentials** — `launcher.credentials_paths` is blocking when configured, warn-only when not
+  (keychain and API-key setups have no credentials file),
+- **repo health** — git usable (catches dubious-ownership), repo writable, disk space
+  (`launcher.min_disk_mb`), dirty/staged tree surfaced as warnings,
+- **host checks** — services/DB probes come EXCLUSIVELY from `launcher.checks`
+  (`[{"name", "command", "blocking"}]`); nothing site-specific is hardcoded in the launcher.
+
+Exit codes: `0` started/GO · `64` NO-GO · `65` working tree busy.
+
+### Autonomy flags are an explicit human decision — never a default
+
+A detached run with the CLI's permission system fully on stalls at its first approval prompt
+(stdin is closed, nobody is watching); the flag that prevents that grants real power. The shipped
+map (`harness/agent_clis.py`, single source for wizard + launcher) keeps both variants apart and
+the wizard shows what the flag grants before asking you to confirm — only then does the preset
+record `autonomy_confirmed` and become launchable:
+
+| CLI | unattended invocation | the flag grants |
+|---|---|---|
+| Claude Code | `claude -p --permission-mode acceptEdits` | file edits auto-approved; shell/network stay gated |
+| Codex | `codex exec --sandbox workspace-write` | edits/commands inside the workspace sandbox |
+| Gemini | `gemini --yolo -p` | EVERYTHING — run in a container/VM or throwaway checkout |
+| Copilot | `copilot --allow-all-tools -p` | everything (required for programmatic `-p`) |
+
+A preset without `autonomy_confirmed` refuses to launch detached — a deliberate NO-GO instead of
+a silent stall-and-burn, and instead of nudging users to google a bypass flag without guidance.
+
+### Tokonomix-delegated routing — the managed tier (token-refs, never literal keys)
+
+A preset's `env` map can point the spawned CLI at an OpenAI-compatible gateway, so model choice,
+budget caps, EU-residency and central billing are configured ONCE on a Tokonomix token instead of
+per machine. The config scaffold ships this documented shape:
+
+```jsonc
+"managed": {
+  "cmd": ["codex", "exec", "--sandbox", "workspace-write"],
+  "env": { "OPENAI_BASE_URL": "https://gateway.tokonomix.ai/v1",
+           "OPENAI_API_KEY": "env:TOKONOMIX_KEY" },
+  "autonomy_confirmed": false
+}
+```
+
+The key is a **token-ref, NEVER a literal**: `env:VAR` resolves from the launcher's own
+environment at spawn; `vault:<mount>/<path>[#field]` resolves via the existing keysource
+(`harness/keysource.py`, gated on `integrations.vault`). Resolution happens into the child env
+BEFORE the capability probe (probe == spawn rule) and a failed resolution — missing env var,
+unreadable vault path, disabled vault integration — is a blocking NO-GO with a clear message,
+never a silent empty value. Resolved values are registered with the redaction layer and never
+printed. A literal value still passes through unchanged, but one that LOOKS like a pasted key
+(long, token-shaped, high-entropy) is loudly flagged at launch. Trust scope: an `env:` ref lets
+the config choose WHICH launcher env vars enter the child env — that choice is part of what you
+vouch for at `--trust` time, like the argv and host checks the config already carries. Honest
+free/paid line: this is the managed **governance** tier — the gateway owns routing, caps and
+billing centrally; the DIY path with your own provider keys stays fully functional. **Residual
+surface (by design):** the spawned agent legitimately holds the resolved key, and its raw background
+run-log (`.unattended/logs/`) is the agent's own stream — NOT redaction-scoped — so the launcher
+creates that log `0600` (owner-only, never world-readable) rather than pretending to scrub it; for an
+untrusted agent binary use `--fg` or a restricted `launcher.log_dir`.
+
+### Mutual exclusion is atomic and pidfile-free
+
+The launcher takes a non-blocking `flock(2)` on `<repo>/.unattended/ans-run.lock` — BEFORE the
+expensive probes — and hands the open FD to the long-lived agent process: the kernel holds the
+lock exactly as long as the run lives and releases it on any crash or kill. Pidfile schemes were
+rejected in review — they are TOCTOU-racy and leave stale state after a crash. The lock is
+repo-local (not shared `/tmp`), so only principals who can already write the repo can touch it.
+Two simultaneous starts always yield exactly one winner (proven by
+`acceptance/test_launcher.py`); `--check` only probes the lock and never blocks a launch.
+Opt-out for intentionally disjoint worktrees: `ANS_RUN_NO_LOCK=1`.
+
+Background mode (the default) writes agent output to `.unattended/logs/` (override:
+`launcher.log_dir`) and prints the PID plus a watch hint; `--fg` execs the agent so its exit code
+propagates unchanged (cron-friendly).
+
+### Running unattended as the right user — prefer no sudo at all
+
+Run the cron/systemd job AS the target user (`User=` in the unit, or the user's own crontab) —
+then no sudo rule is needed. Where the root-guard re-exec is genuinely required, use a
+**command-scoped** sudoers rule pointing at a root-owned, non-writable path:
+
+```
+ops ALL=(ansrunner) NOPASSWD: /usr/local/bin/ans-run
+```
+
+Never `NOPASSWD: ALL` — that hands an autonomous shell-executing agent a passwordless
+privilege-escalation primitive.
+
+## Context strategy for long backlogs
+
+A single agent session that drives a long backlog **degrades as it accumulates** — empirically
+around ticket ~19 the session starts deferring large/live-facing work and losing earlier design
+constraints. Each `next`/`complete` is already a fresh subprocess that rejoins the run branch, so
+the *harness state* never degrades; what degrades is the **one long agent context** driving the loop.
+
+Consensus chose a hybrid (Option D):
+
+- **Short / coupled backlogs** → keep one session. The agent CLI's built-in **auto-compact** (~95%
+  of the window) handles it; don't intervene.
+- **Long / independent backlogs** → a **fresh agent session per N tickets**. A fresh session starts
+  with a clean, un-degraded context and re-reads the durable per-ticket state, so ticket 40 gets the
+  same quality as ticket 1.
+- **NEVER a mid-task %-trigger** (e.g. "compact at 50%"). It is wrong on three counts: it summarizes
+  lossily mid-thought, it busts the prompt cache (every later token re-billed), and it silently drops
+  design constraints the agent was holding. Auto-compact near the ceiling is fine; a low %-trigger is not.
+
+### The `fresh_session_every` knob (opt-in, default OFF)
+
+`launcher.fresh_session_every` (int ≥ 0, **default `0` = off**) turns on the fresh-session loop in
+`bin/ans-run`:
+
+```json
+{ "launcher": { "fresh_session_every": 8 } }
+```
+
+- **`0` (default)** — byte-identical legacy behaviour: one background `claude -p` spawn drives the
+  whole loop; the Stop-hook blocks any stop while the run-incomplete sentinel exists.
+- **`N > 0`** — the launcher supervises a bounded loop (cap 500): it spawns an agent with
+  `UE_SESSION_TICKET_BUDGET=N`, waits for it to exit, then checks the run-incomplete sentinel. Sentinel
+  **absent** → the run reached a terminal state (DRAINED/HALTED/…) → stop. **Present** → reset the
+  per-session counter + marker and spawn a **fresh** agent for the next N tickets.
+
+How the early stop is coordinated without weakening never-stop: while a budget is set, the driver
+counts RECORDED completions for the current session into `.unattended/state/session-ticket-count`;
+at N it writes `.unattended/state/session-budget-reached` **and** changes the `complete` response's
+`next` hint from "call `next`" to "STOP now — the launcher will resume you fresh". Since the agent's
+loop is complete→next, a `complete` that says STOP is the deterministic brake (the agent simply
+doesn't call `next`). The Stop-hook then **allows** the stop because `UE_SESSION_TICKET_BUDGET` is set
+AND the marker exists — even with the run-incomplete sentinel still present — so the launcher resumes
+in a fresh session. When the budget env var is **unset** (the default), the driver writes nothing, the
+`next` hint is unchanged, and the hook keeps blocking while the sentinel exists: the never-stop
+guarantee is fully intact. The marker path is pinned via `UE_SESSION_BUDGET_MARKER` (like
+`UE_RUN_INCOMPLETE`) so hook and driver agree even when CWD ≠ repo.
+
+Tested in `acceptance/test_fresh_session.py`: default-off is a single budget-free spawn and a real
+default-off `complete` writes no counter/marker and keeps the "call next" hint; the hook blocks while
+the sentinel exists and the budget is unset; the hook allows an early stop when budget + marker are
+present; a sub-budget completion keeps the "call next" hint while the at-budget completion flips to
+STOP; the counter resets per session; and the loop respawns until the sentinel clears.
+
 ## Council review (multi-model, advisory) — when configured
 
 If the project config enables `council` (needs the tokonomix gateway), each `PROCEED` ticket carries a
 `council` block. **You run the council via the tokonomix MCP** (the harness can't call LLMs) — it is
 ADVISORY and never blocks the run; it only decides whether finished high-risk work is auto-trusted.
+
+> **Epistemics — what the council is and isn't.** A multi-model council is a **recall amplifier that
+> feeds judgment, not a truth oracle**: with several vendors you only need one to catch the missed
+> edge case, and it gets surfaced — but agreement is *not* correctness (frontier models share training
+> data, so they can be confidently+uniformly wrong on a shared blind spot). It works here because of
+> the design, not the headcount: proposers answer **parallel + blind** (dissent is preserved, no
+> debate-capitulation), the **judge is independent** (disjoint from the proposers, never scoring its
+> own answer, cross-family), and selection favours **decorrelation over raw score**. The biggest lever
+> against shared hallucination is **grounding** (feed the real diff/logs/spec), not more models. This is
+> exactly why ANS treats the council as advisory and never auto-trusts: a HEAVY-risk diff whose council
+> raised concerns / errored / never ran is recorded `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT REVIEW** —
+> the deterministic gate stays the only HARD gate. (Full rationale: the `tokonomix-consensus` skill's
+> "How the council is built" + "What it does — and doesn't — give you".)
 
 Per ticket, when a `council` block is present:
 1. **Pre-work:** read `council.hint_tier` (a non-binding hint). Plan to convene a council on your
@@ -155,22 +357,16 @@ Per ticket, when a `council` block is present:
    errored/timed-out afterward. Unattended: show and continue. Interactive: show and get approval.
 4. **Graceful degradation:** if the council errors / times out / has no key, log it as a blind-spot
    and PROCEED — never stop. Report it as `--council-verdict error`.
-5. **Feed the result back** on `complete`:
+5. **Rate the council call** via `tokonomix_rate_consensus` immediately after acting on the result.
+   Submit: `score` (1–10, how useful was the council for THIS ticket decision), `helped_model` (the
+   proposer whose view was most decisive, if any), and `outcome` + `findings` real/false counts per
+   severity bucket (once you know whether the concerns were real). This feeds the agent-utility
+   reputation scores. **Only when `consensus_rating_endpoint_enabled` is ON** — skip silently if
+   the call returns 404. Interactive: show the rating you plan to submit and get approval first.
+   Unattended: auto-submit based on your outcome assessment, log the rating in the ticket summary.
+6. **Feed the result back** on `complete`:
    `... complete --council-verdict pass|concerns|error --council-cost <€charged> --review-coverage
    "<proposers that ran, who errored, € cost>"`. Omit `--council-verdict` only if you ran no council.
-
-> **Honest caveat — the verdict channel runs through the controlled party.** By default
-> `--council-verdict` is the AGENT's summary of what the panels said; the harness never sees the
-> panels. `reconcile` (a concern-language scan of the coverage text) mitigates a too-rosy PASS but
-> does not close the gap. **Opt-in fix (`council.structured_verdict`, default OFF):** when ON and the
-> agent passes `complete --council-verdict-file <json|->`, the harness PARSES a machine-readable
-> verdict artifact (`{overall, issues[], proposers[], judge}`) and DERIVES the trust-gate itself —
-> the verdict is computed from structured fields, not free-text agent prose. Derivation is fail-safe
-> (malformed / no-proposer → ERROR; a material open issue only ever DOWNGRADES an `overall`, never
-> upgrades it). **Honest scope:** this hardens the *format* — until the gateway emits the block
-> directly, the artifact still travels *via the agent*, so it does not yet make the verdict channel
-> independent of the controlled party; that is the gateway-emission go-live step (see the mcp-server
-> contract). Flag OFF = byte-identical behavior (artifact ignored).
 
 **Cost safety (unattended runs spend real money).** The harness enforces a per-night brake from
 `--council-cost`: once `budget.per_night_euro_cap` or `budget.max_council_calls_per_night` is reached,
@@ -183,47 +379,6 @@ The harness then re-routes from the ACTUAL diff (overriding the hint) and decide
 HEAVY-risk diff whose council raised **concerns**, **errored**, or **was never run** is recorded
 `DONE_LOW_CONFIDENCE` and flagged **NEEDS DAYLIGHT REVIEW** in the morning report — done, but not
 trusted to merge blind. Deterministic gates remain the only HARD gate; the council never reverts.
-
-### Rotated review loop (when `council.review.rotate` is on) — INT-1729
-
-A single panel that confirms its OWN prior review shares its blind spots (observed once, 2026-06-07: an
-independent panel caught a silent-wrong-JSON bug the first panel missed — n=1, illustrative not proof). When the config opts in with
-`council.review.rotate: true`, run the council as a **rotated test/fix/review loop** with two
-zero-model-overlap panels — a **propose** panel and an independent **verify** panel
-(`council.review.panels.{propose,verify}`).
-
-**Opt-in only.** This whole loop is contingent on `council.enabled` AND `review.rotate`. With the
-council off you get the deterministic gate only (no spend). With the council on but `rotate` off you
-get today's single-panel advisory review. Nobody is pushed into rotation cost they did not enable.
-
-Per PROCEED ticket, when the loop is on:
-1. **implement → gate(tests)** — deterministic tests are the ONLY hard gate, unchanged.
-2. **review(propose panel)** — run `tokonomix_consensus_ask` with the propose panel's models.
-3. **If it raises concerns → fix → re-gate.**
-4. **review(verify panel, ROTATED)** — run the *independent* panel (zero shared model slug). This is
-   the confirmation step. Alternate panels each round (propose → verify → propose → …).
-5. **Loop until a ROTATED panel confirms with no new material issue.** Convergence = a panel *rotated
-   relative to the previous round* returns a clean PASS — NOT the same panel saying "ok" twice, and
-   NOT a single panel's first pass. Cap at `review.max_rounds` (default 3).
-6. **On cap-exhaustion** (max_rounds reached without a rotated confirmation) → the harness records
-   `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT REVIEW**. Done, but flagged for a human — never blocked.
-
-**Cost & degrade ladder.** Each round is one council call, bounded by the existing
-`per_night_euro_cap` + `max_council_calls_per_night` AND the per-ticket `review.max_rounds`. Rotation
-diversifies the panels; it does not multiply per-round cost. Honor `tokonomix_get_balance` and the
-budget brake: **ROTATE → SINGLE → DETERMINISTIC**. If the balance is below
-`budget.balance_threshold_euro`, the gateway returns HTTP 402, or no council call is affordable → drop
-to deterministic-only. If budget allows only one more call (a rotated pair needs two) → drop to a
-single advisory panel. The deterministic gate is always the floor.
-
-**Re-check the budget BEFORE EVERY round — not once per ticket.** The rotated loop runs multiple
-council calls *between* `next` calls, so a mid-loop balance drop or €-cap crossing is invisible to the
-harness until the next ticket boundary. Before starting each round, re-run `tokonomix_get_balance` and
-re-evaluate the brake: if the balance is below `budget.balance_threshold_euro`, a 402 occurred, or the
-remaining €/call headroom can't fund the next round, **stop the loop immediately** and record the
-ticket `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT REVIEW** — do not start another round. This is what
-keeps `per_night_euro_cap` a hard ceiling within a ticket, not just across tickets. Always report the
-real charged cost via `--council-cost` so the per-night brake stays accurate.
 
 ### Specialist reviewers (when `specialists` is enabled)
 
@@ -264,11 +419,15 @@ The agent-as-worker bridge, the multi-model council (diff-routed light/heavy rev
 trust-gating), the never-ASK enforcement hook, the conditional specialist reviewers
 (architect/security/tenant-safety daylight-fold, diff-routed lenses), and shape-anchored secret
 redaction (scrubs credentials from the report, gate artifacts, Paperclip comments and emitted JSON;
-a literal-value registry the Vault slice will feed) are now built. The cross-platform enforcement
-adapters (Gemini / Codex / Copilot / Cursor / Windsurf via `harness/enforce.py` + `capabilities.py`)
-are now built too — **live-verified on Claude Code, built to each platform's documented hook
-contract elsewhere** (see the README capability matrix). Still deferred: full Paperclip integration
-(pull tickets / push status + parked comments). The spine shipped first; quality machinery layers on top.
+a literal-value registry the Vault slice will feed) are now built. Full Paperclip integration is
+also built (`harness/sources/paperclip.py` + `run.py` wiring, `acceptance/test_paperclip.py`): pull
+open issues from a single configured project as the work-source, push per-ticket status transitions
+(todo→in_progress→done/blocked) and parked/daylight comments back, with the board token resolved via
+the keysource (`env:`/`vault:`) and graceful degrade-to-local + blind-spot when it can't be read.
+The cross-platform enforcement adapters (Gemini / Codex / Copilot / Cursor / Windsurf via
+`harness/enforce.py` + `capabilities.py`) are now built too — **live-verified on Claude Code, built
+to each platform's documented hook contract elsewhere** (see the README capability matrix). The spine
+shipped first; the quality machinery layered on top.
 
 The heartbeat watchdog is built and proven (`harness/watchdog.py`, `acceptance/test_watchdog.py`): a
 sidecar that runs the unattended command as a child, restarts it resumable when the heartbeat goes
@@ -286,3 +445,15 @@ but no tokonomix credential is found, a `PROCEED` payload carries an `onboarding
 keyless `tokonomix_onboard` → `tokonomix_onboard_verify` handshake (interactive), or, unattended, the
 night proceeds with review disabled and the morning report carries a **BLIND SPOT** note. The MCP
 calls are yours; the harness owns only the gate.
+
+
+## Related skills
+
+- **`tokonomix-gateway`** — direct HTTP access to the Tokonomix gateway for
+  apps and agent frameworks not using MCP. If you are building a custom
+  integration instead of running ANS, see the gateway skill.
+  Get it: `npx tokonomix-council-mcp` includes the skill under
+  `node_modules/tokonomix-council-mcp/skill/tokonomix-gateway/`.
+- **`tokonomix-council-mcp`** — MCP tools for interactive consensus
+  (`tokonomix_consensus_ask`, `tokonomix_single_ask`, etc.) used by ANS
+  for the review gate. The same npm package also bundles the gateway skill.

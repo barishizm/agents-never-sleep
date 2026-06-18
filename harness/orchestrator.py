@@ -79,7 +79,7 @@ class Orchestrator:
                  worker: Worker, artifacts_dir: str, unattended: bool = True,
                  breaker: LowYieldBreaker | None = None, ledger=None,
                  fix_cap: int = 3, loop_threshold: int = 2, heartbeat=None,
-                 protect_paths: list | None = None):
+                 protect_paths: list | None = None, classify_overrides: dict | None = None):
         self.repo_dir = repo_dir
         self.store = store
         self.gate = gate
@@ -92,6 +92,9 @@ class Orchestrator:
         self.fix_cap = fix_cap
         self.loop_threshold = loop_threshold
         self.heartbeat = heartbeat
+        # Operator-supplied per-ticket classification overrides (INT-1825 bug 1): {ticket_id: action}.
+        # Config-sourced and trusted; never an agent-runtime loosening of its own PARK gate.
+        self.classify_overrides = classify_overrides or {}
 
     # ---- shared per-ticket helpers (used by BOTH run() and StepDriver) --------------------
 
@@ -110,6 +113,7 @@ class Orchestrator:
         decision = classify(
             f"{ticket.title}\n{ticket.body}",
             unattended=self.unattended, has_safety_net=has_safety_net,
+            override=self.classify_overrides.get(ticket.id),
         )
         if decision.action == Action.ASK:
             decision.action = Action.PARK
@@ -167,7 +171,6 @@ class Orchestrator:
                             review_coverage: str | None = None,
                             council_config: dict | None = None,
                             council_verdict: str | None = None,
-                            council_verdict_artifact: dict | None = None,
                             specialist_concerns: list | None = None,
                             credits_degrade: bool = False) -> TicketOutcome:
         """Gate the (already-applied) edits, classify, revert-or-commit, write + return the outcome.
@@ -183,7 +186,6 @@ class Orchestrator:
                                        review_coverage=review_coverage,
                                        council_config=council_config,
                                        council_verdict=council_verdict,
-                                       council_verdict_artifact=council_verdict_artifact,
                                        specialist_concerns=specialist_concerns,
                                        credits_degrade=credits_degrade)
         except GitError as exc:
@@ -201,7 +203,6 @@ class Orchestrator:
                        review_coverage: str | None = None,
                        council_config: dict | None = None,
                        council_verdict: str | None = None,
-                       council_verdict_artifact: dict | None = None,
                        specialist_concerns: list | None = None,
                        credits_degrade: bool = False) -> TicketOutcome:
         """`cannot_implement=True` means the agent could not implement the ticket: revert and record
@@ -236,21 +237,10 @@ class Orchestrator:
             if council_config and _council.enabled(council_config):
                 files, difftext = self.git.diff_files(token.snapshot)
                 tier = _council.route_from_diff(files, difftext)
-                # Opt-in (default OFF): when council.structured_verdict is ON and the agent passed a
-                # machine-readable verdict artifact, the harness DERIVES the verdict from it — closing
-                # the self-reported-verdict gap. Otherwise: unchanged (agent self-report + reconcile).
-                if (_council.structured_verdict_enabled(council_config)
-                        and council_verdict_artifact is not None):
-                    verdict, dispose_cov = _council.verdict_from_structured(
-                        council_verdict_artifact, tier)
-                    if review_coverage:
-                        dispose_cov = f"{review_coverage} · {dispose_cov}"
-                else:
-                    verdict = _coerce_verdict(council_verdict, tier)
-                    # integrity cross-check: distrust a rosy PASS that contradicts its own summary
-                    verdict = _council.reconcile(verdict, review_coverage or "")
-                    dispose_cov = review_coverage
-                disp = _council.dispose(tier, verdict, dispose_cov, ticket_title=ticket.title)
+                verdict = _coerce_verdict(council_verdict, tier)
+                # integrity cross-check: distrust a rosy PASS that contradicts its own summary
+                verdict = _council.reconcile(verdict, review_coverage or "")
+                disp = _council.dispose(tier, verdict, review_coverage, ticket_title=ticket.title)
                 state, coverage = disp.state, disp.review_coverage
                 human_action = disp.human_action_required
                 if disp.needs_daylight_review:

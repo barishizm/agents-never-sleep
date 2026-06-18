@@ -59,6 +59,7 @@ def default_config(profile) -> dict:
             "per_night_token_cap": None,
             "per_night_euro_cap": None,            # €cap on council spend (None = no € ceiling)
             "max_council_calls_per_night": 50,     # deterministic ceiling even with no €cap set
+            "max_tickets_per_run": 20,             # hard cap: stop after N tickets so a surprise-large backlog doesn't consume the whole night
             "balance_threshold_euro": 1.0,         # agent stops convening councils below this balance
             "on_credits_exhausted": "stop",        # "stop" (A) or "degrade" (B) — see decide_budget
         },
@@ -66,6 +67,11 @@ def default_config(profile) -> dict:
             # unattended-no-config is conservative: non-destructive only until a human configures
             "non_destructive_only": True,
             "requirement_ambiguity": "hybrid",   # hybrid | park | assume
+            # Parked-WIP protection (INT-1735): before the run, stash these TRACKED parked paths and
+            # fence these untracked THROWAWAY globs into .git/info/exclude so the `git add -A`
+            # snapshot never commits intentional WIP; restored after a terminal signal. Default off.
+            "parked": {"enabled": False, "tracked_paths": [], "throwaway_globs": [],
+                       "label": "agents-never-sleep-parked"},
         },
         "integrations": {
             "paperclip": {"enabled": False, "project_id": None, "token_ref": None,
@@ -90,30 +96,8 @@ def default_config(profile) -> dict:
             "prices_cents_per_mtok": {
                 "claude-opus-4-8": [500, 2500], "gpt-5.4": [250, 1500],
                 "gemini-2.5-pro": [125, 1000], "deepseek/deepseek-v3.2": [25, 38],
-                "meta-llama/llama-4-maverick": [15, 60], "claude-sonnet-4-6": [300, 1500],
-                "gemini-3.1-pro": [125, 1000], "deepseek/deepseek-v4": [28, 42],
-                "gpt-5.4-mini": [50, 200]},
+                "meta-llama/llama-4-maverick": [15, 60], "claude-sonnet-4-6": [300, 1500]},
             "est_prompt_tokens": 3000,
-            # Opt-in (default OFF): when ON, the harness derives the trust-gate from the council's own
-            # machine-readable verdict artifact (`complete --council-verdict-file`) instead of the
-            # agent's self-reported --council-verdict — closing the self-reported-verdict gap. Flipping
-            # it on needs the gateway to emit the structured block (see mcp-server contract).
-            "structured_verdict": False,
-            # Opt-in rotated test/fix/review loop (INT-1729). rotate=False by default — nobody is
-            # pushed into consensus cost they did not enable. When rotate=true, the two panels must
-            # have ZERO shared model slug (the harness validates this; the verify panel confirms the
-            # propose panel's work independently). Slugs drift — pull fresh from tokonomix_list_models.
-            "review": {
-                "rotate": False,
-                "max_rounds": 3,
-                "panels": {
-                    "propose": {"proposers": ["claude-opus-4-8", "gemini-2.5-pro",
-                                              "deepseek/deepseek-v3.2"],
-                                "judges": ["claude-sonnet-4-6"]},
-                    "verify": {"proposers": ["gpt-5.4", "gemini-3.1-pro", "deepseek/deepseek-v4"],
-                               "judges": ["gpt-5.4-mini"]},
-                },
-            },
         },
         # Specialist review lenses (architect + security default; conditional ones added per-diff).
         # The agent runs each via tokonomix; a security/architect/tenant concern -> daylight review.
@@ -126,6 +110,39 @@ def default_config(profile) -> dict:
         },
         "report": {"local_path": "night-report.md", "paperclip_parked_comments": False,
                    "push_on_finish": False},
+        # Consumed by bin/ans-run (the pre-boot GO/NO-GO gate). Host-specific probes
+        # (services/DB) belong in `checks` — never hardcoded in the launcher itself.
+        # Agent selection is preset-based: every launchable preset needs a HUMAN-confirmed
+        # autonomy decision (autonomy_confirmed) — the wizard scaffolds these from the
+        # CLIs it finds installed. `env` is reserved for gateway delegation (phase 2):
+        # values use env:/vault: indirection, never literal secrets.
+        "launcher": {
+            "target_user": None,
+            "default_agent": None,
+            # {name: {cmd, autonomy_confirmed, env}}. The scaffolded "managed" preset is
+            # the Tokonomix-delegated tier: point the spawned CLI at an OpenAI-compatible
+            # gateway so model routing, budget caps, EU-residency and billing are governed
+            # centrally on ONE gateway token. The key is a TOKEN-REF (env:VAR /
+            # vault:path#field) resolved by ans-run at spawn — NEVER a literal secret in
+            # this file (a pasted literal is flagged at launch). The DIY path with your own
+            # provider keys stays fully functional: edit or replace this preset. It cannot
+            # launch until a human confirms its autonomy flag (autonomy_confirmed).
+            "agents": {
+                "managed": {
+                    "cmd": ["codex", "exec", "--sandbox", "workspace-write"],
+                    "env": {"OPENAI_BASE_URL": "https://gateway.tokonomix.ai/v1",
+                            "OPENAI_API_KEY": "env:TOKONOMIX_API_KEY"},
+                    "autonomy_confirmed": False,
+                    "_doc": "managed gateway tier — token-ref key only, never a literal; "
+                            "see SKILL.md 'Tokonomix-delegated routing'",
+                },
+            },
+            "allow_custom_agent": False,
+            "credentials_paths": None,   # None = best-effort probe (warn-only)
+            "min_disk_mb": 1000,
+            "log_dir": None,             # None = <repo>/.unattended/logs
+            "checks": [],                # [{"name", "command", "blocking"}]
+        },
         "_note": "Generated defaults. Run the wizard (interactive) to confirm/extend.",
     }
 
@@ -183,8 +200,44 @@ def run_wizard(repo_dir: str, profile) -> dict:
             cfg["budget"]["on_credits_exhausted"] = (
                 "degrade" if ans.strip().upper().startswith("B") else "stop")
 
+    # Launcher presets: scaffold one preset per INSTALLED known agent CLI, and make the
+    # autonomy decision explicit per CLI (security review 2026-06-10: autonomy flags are
+    # never applied silently — the human sees what the flag grants and confirms).
+    from .agent_clis import AGENT_CLIS, detect_session_platform, installed_clis
+    launcher = cfg["launcher"]
+    found = installed_clis()
+    if found:
+        print("")
+        print("Detached runs (bin/ans-run) need an agent CLI + an explicit autonomy choice.")
+        for name in found:
+            spec = AGENT_CLIS[name]
+            print(f"  {name}: unattended needs `{' '.join(spec['cmd_unattended'])}`")
+            print(f"    this flag: {spec['grants']}")
+            confirmed = ask(f"  Confirm this autonomy flag for {name}? (y/n)",
+                            "n").lower().startswith("y")
+            launcher["agents"][name] = {
+                "cmd": spec["cmd_unattended"] if confirmed else spec["cmd_safe"],
+                "autonomy_confirmed": confirmed,
+                "env": {},
+            }
+            if not confirmed:
+                print(f"    {name} saved WITHOUT autonomy — detached launches with it "
+                      "will refuse until you confirm (re-run the wizard or edit the "
+                      "config and re-trust).")
+        hint = detect_session_platform()
+        default = hint if hint in launcher["agents"] else found[0]
+        launcher["default_agent"] = ask("Default agent preset for detached runs",
+                                        default) or default
+    else:
+        print("No known agent CLI found in PATH (claude/codex/gemini/copilot) — "
+              "detached launches will refuse until launcher.agents is configured.")
+
     save_config(repo_dir, cfg)
     print(f"Saved config to {config_path(repo_dir)}")
+    # The wizard wrote this config in an interactive human session — record TOFU trust so
+    # the first detached run does not bounce on the config the human just authored.
+    from .trust import record_trust
+    record_trust(repo_dir, config_path(repo_dir))
     return cfg
 
 

@@ -25,3 +25,4 @@ night-report.md
 # Download bundles — build artifacts, served from the site / shipped as release assets
 *.tar.gz
 *.zip
+phase2-night-report*.md

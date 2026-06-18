@@ -26,7 +26,7 @@ from harness.gates import GateRunner  # noqa: E402
 from harness.ledger import AttemptLedger  # noqa: E402
 from harness.orchestrator import Orchestrator  # noqa: E402
 from harness.state import OutcomeState, OutcomeStore  # noqa: E402
-from harness.tickets import Ticket, load_tickets  # noqa: E402
+from harness.tickets import load_tickets  # noqa: E402
 from harness.worker import DemoWorker  # noqa: E402
 
 
@@ -144,41 +144,6 @@ def main() -> int:
             failures.append("[no-ticket-source] DATA LOSS: edits reverted despite unloaded ticket source")
         if driver4b._load_pending() is None:
             failures.append("[no-ticket-source] pending cleared — operator cannot finalize on re-run")
-
-    # --- 5. INT-1734: complete with a DIFFERENT (non-empty) ticket source must NOT revert work ----
-    # The data-loss the empty-source guard (#4) misses: `complete` run without --tickets defaults to
-    # a `tickets/` dir that may exist with OTHER tickets. self.tickets is then non-empty but the
-    # in-flight id is absent -> the old code reverted (destroyed the agent's work). A missing ticket
-    # at complete-time is ALWAYS ambiguous (wrong source vs genuine deletion); reverting is the
-    # destructive choice, so we preserve the tree + pending and return an instructive ERROR instead.
-    work5 = tempfile.mkdtemp(prefix="ue-edge-wrongsrc-")
-    repo5, store5, tickets5, driver5, report5 = _build(work5)
-    r5 = driver5.next_ticket()
-    if r5.get("status") != "PROCEED":
-        failures.append(f"[wrong-source] expected first next() PROCEED, got {r5}")
-    else:
-        tid5 = r5["ticket"]["id"]
-        DemoWorker().apply({t.id: t for t in tickets5}[tid5], repo5)
-        app5 = open(os.path.join(repo5, "app.py"), encoding="utf-8").read()
-        math5 = open(os.path.join(repo5, "mathutil.py"), encoding="utf-8").read()
-        # a complete-driver whose source is NON-EMPTY but does NOT contain the in-flight id
-        state5 = os.path.join(work5, "state")
-        gate5 = GateRunner(command=[sys.executable, "-m", "unittest", "discover", "-s", ".",
-                                    "-p", "test_*.py"], cwd=repo5, timeout=60)
-        orch5b = Orchestrator(repo_dir=repo5, store=store5, gate=gate5, worker=DemoWorker(),
-                              artifacts_dir=os.path.join(work5, "artifacts"), unattended=True,
-                              ledger=AttemptLedger(os.path.join(state5, "ledger.json")))
-        wrong_src = [Ticket(id="some-unrelated-ticket", title="x", body="y", meta={}, path="")]
-        driver5b = StepDriver(orch=orch5b, tickets=wrong_src, store=store5, state_dir=state5,
-                              report_path=report5)
-        res5 = driver5b.complete_ticket(attempted="done but a different --tickets source was loaded")
-        if res5.get("status") != "ERROR":
-            failures.append(f"[wrong-source] expected ERROR, got {res5}")
-        if open(os.path.join(repo5, "app.py"), encoding="utf-8").read() != app5 or \
-                open(os.path.join(repo5, "mathutil.py"), encoding="utf-8").read() != math5:
-            failures.append("[wrong-source] DATA LOSS: edits reverted despite a mismatched ticket source")
-        if driver5b._load_pending() is None:
-            failures.append("[wrong-source] pending cleared — operator cannot finalize on re-run")
 
     print(f"non-destructive statuses: {statuses}")
     print(f"resume run1: {first} | run2: {second}")

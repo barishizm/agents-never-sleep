@@ -7,8 +7,17 @@ truth; Paperclip mirroring + push are Slice-2/Phase-2.
 """
 from __future__ import annotations
 
+import re
+
 from .redact import redact
 from .state import OutcomeState
+
+# A token safe to interpolate into the copy-pasteable `ans-run --agent <name> <ids>` command the
+# report emits — same slug rule the ticket loader enforces on a declared agent. Applied to BOTH the
+# agent name AND the ticket ids (redact() scrubs secrets, not shell syntax), so neither half of that
+# command can carry whitespace / shell-meta / a newline a careless operator would paste or that would
+# forge report lines.
+_CMD_SAFE = re.compile(r"^[A-Za-z0-9_.\-]+$")
 
 # Severity order for the report (worst/most-actionable first).
 _ORDER = [
@@ -30,7 +39,9 @@ _LOW_YIELD = {
 
 def build_report(outcomes: list, *, run_label: str = "unattended run",
                  halted: bool = False, halt_reason: str = "",
-                 stopped_low_yield: bool = False, notes=()) -> str:
+                 stopped_low_yield: bool = False, notes=(),
+                 work_branch: str | None = None,
+                 active_agent: str | None = None, agent_hints: dict | None = None) -> str:
     total = len(outcomes)
     done = sum(1 for o in outcomes if o.state == OutcomeState.DONE)
     low_yield = sum(1 for o in outcomes if o.state in _LOW_YIELD)
@@ -70,6 +81,40 @@ def build_report(outcomes: list, *, run_label: str = "unattended run",
         for o in degraded:
             lines.append(f">   - {o.ticket_id}: {o.why}")
         lines.append("")
+    # Where the work lives (INT-1825 bug 2): the run is isolated to its own branch, so point the
+    # operator at it explicitly — this is an info pointer, NOT a blind spot.
+    if work_branch:
+        lines.append(f"> 📦 This run's work is on branch `{work_branch}` (your branch was left "
+                     f"untouched). Review and merge it: `git merge {work_branch}`.")
+        lines.append("")
+    # F2-declarative: tickets may carry an `agent:` front-matter hint. The run NEVER switches CLIs
+    # mid-flight (that nested design was rejected) — so here we only GROUP processed/parked tickets
+    # whose declared agent differs from the run's active agent and RECOMMEND a focused follow-up.
+    # Info-level pointer, never an automatic action. Only emitted when the active agent is known
+    # (a hint can't "differ" from an unknown active agent).
+    if agent_hints and active_agent:
+        outcome_ids = {o.ticket_id for o in outcomes}
+        by_agent: dict = {}
+        for tid in sorted(agent_hints):                 # deterministic id order in the command
+            want = agent_hints[tid]
+            if tid in outcome_ids and want and want != active_agent:
+                by_agent.setdefault(want, []).append(tid)
+        for want in sorted(by_agent):                   # deterministic per-agent grouping
+            ids = by_agent[want]
+            # Withhold the convenience command if ANY id (or the agent) is not command-safe — never
+            # emit a half-built or injectable command. The ticket(s) still appear in their per-state
+            # section, so nothing is dropped from the report; only the paste-ready line is withheld.
+            if not (_CMD_SAFE.match(want) and all(_CMD_SAFE.match(tid) for tid in ids)):
+                # Echo `want` only when it is itself slug-safe; never interpolate an unsafe token.
+                label = f"agent `{want}`" if _CMD_SAFE.match(want) else "a different agent"
+                lines.append(f"> 💡 {len(ids)} ticket(s) requested {label} (re-run command withheld "
+                             "— an unsafe ticket id; see the per-state sections below)")
+                lines.append("")
+                continue
+            lines.append(f"> 💡 {len(ids)} ticket(s) requested a different agent — re-run: "
+                         f"`ans-run --agent {want} {' '.join(ids)}`")
+            lines.append("")
+
     lines.append(f"**{done}/{total} DONE clean.** "
                  f"{low_yield} need attention (parked / blocked / failed / low-confidence).")
     lines.append("")

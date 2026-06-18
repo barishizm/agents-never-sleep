@@ -5,6 +5,16 @@ printed: the morning report, the saved gate artifacts (raw command stdout — th
 JSON the driver emits, and — irreversibly — Paperclip comments on shared infra. This module is the
 single chokepoint applied at all four.
 
+NOT in scope — a deliberate boundary: the agent's own raw run-log (`.unattended/logs/`, written
+straight from the spawned CLI's stdout/stderr in background mode) is NOT redacted. It is the agent's
+own output stream, the agent legitimately holds the gateway key it was launched with, and it can
+emit that key anywhere (files it writes, network, non-line-buffered binary output) — so a partial
+line-redactor over the log would add launcher-hot-path complexity and a false sense of safety. The
+launcher instead shrinks the blast radius the cheap, complete way: the log is created 0600
+(owner-only, never world-readable; see `bin/ans-run`'s `open_log`). For an UNTRUSTED agent binary,
+prefer `--fg` (output goes to the operator's terminal, not an on-disk log) or a `launcher.log_dir`
+on restricted storage.
+
 DESIGN (deliberate, learned the hard way): match a secret by its VALUE SHAPE, never by a nearby
 keyword. This codebase's own legitimate output is saturated with the words a naive scrubber keys on —
 "token" (tokonomix), "secret", "Authorization" (the Paperclip client), "security" (a specialist

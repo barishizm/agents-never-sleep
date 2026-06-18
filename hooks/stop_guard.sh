@@ -23,6 +23,19 @@ if [[ "$already" == "1" ]]; then
   exit 0
 fi
 
+# Opt-in fresh-session-per-N-tickets: when the launcher set a per-session ticket budget AND the
+# driver has written the session-budget-reached marker, the agent has done its share for THIS
+# session and may stop EARLY — the launcher will resume the backlog in a fresh session. This branch
+# fires ONLY when UE_SESSION_TICKET_BUDGET is set; with it unset (the default) the never-stop
+# guarantee below is fully intact. The marker path is pinned (like the sentinel) so it agrees with
+# the driver even when CWD != repo.
+if [[ -n "${UE_SESSION_TICKET_BUDGET:-}" ]]; then
+  marker="${UE_SESSION_BUDGET_MARKER:-$PWD/.unattended/state/session-budget-reached}"
+  if [[ -f "$marker" ]]; then
+    exit 0
+  fi
+fi
+
 # The orchestrator writes this sentinel at run start and removes it when the backlog is drained.
 sentinel="${UE_RUN_INCOMPLETE:-$PWD/.unattended/run-incomplete}"
 if [[ -f "$sentinel" ]]; then

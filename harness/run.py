@@ -100,6 +100,26 @@ class _Context:
             elif r.blind_spot:
                 self.key_blind_spots.append(r.blind_spot)
 
+        # Fallback: if TOKONOMIX_API_KEY is still unset (token_ref null or unresolved), read it
+        # from the well-known credentials file so the council fires in launcher-env contexts where
+        # only the file is guaranteed to exist (e.g. `claude -p` without the key in shell env).
+        if not os.environ.get("TOKONOMIX_API_KEY"):
+            _cred_path = os.path.expanduser(
+                os.environ.get("TOKONOMIX_CREDS_FILE", "~/.tokonomix/credentials.json"))
+            try:
+                import json as _json
+                with open(_cred_path) as _f:
+                    _creds = _json.load(_f)
+                _key = _creds.get("api_key") or _creds.get("token")
+                if isinstance(_key, str):
+                    _key = _key.strip()
+                if _key:
+                    from .redact import register_secret
+                    register_secret(_key)
+                    os.environ.setdefault("TOKONOMIX_API_KEY", _key)
+            except (OSError, ValueError, AttributeError, TypeError):
+                pass  # no file or parse error — degrade silently, onboarding gate handles it
+
         # Ticket source: Paperclip (optional, site-specific) overrides the local .md dir when
         # configured. The adapter is quarantined to this entrypoint; the core never sees Paperclip.
         self.paperclip = None
@@ -139,7 +159,14 @@ class _Context:
             ledger=self.ledger, heartbeat=self.heartbeat,
             fix_cap=self.config.get("budget", {}).get("per_ticket_fix_iterations", 3),
             protect_paths=sorted(protect),
+            # Operator-trusted per-ticket classification overrides (INT-1825 bug 1).
+            classify_overrides=(self.config.get("classify", {}) or {}).get("overrides", {}) or {},
         )
+        # Parked-WIP guard (INT-1735): None unless autonomy.parked.enabled. Protects intentional
+        # working-tree WIP from the `git add -A` snapshot; driven at run-begin / terminal below.
+        from .parked import guard_from_config
+        self.parked = guard_from_config(self.config, self.repo, self.state_dir)
+
         self.non_destructive = bool(
             self.config.get("autonomy", {}).get("non_destructive_only"))
         self.driver = StepDriver(
@@ -270,9 +297,15 @@ def cmd_next(args) -> int:
         return _emit({"status": "NON_DESTRUCTIVE",
                       "message": "unattended + no saved config — run interactively once to "
                                  "configure before file-writing autonomy is allowed."})
+    # Protect parked WIP before any snapshot/edit. Idempotent + resume-safe: a no-op after the
+    # first `next` of the run, so calling it on every `next` is correct.
+    if ctx.parked is not None:
+        ctx.parked.protect()
     balance_eur = getattr(args, "balance_eur", None)
     result = ctx.driver.next_ticket(balance_eur=balance_eur)
     if result.get("status") in _TERMINAL:               # run finished -> report back to the board
+        if ctx.parked is not None:                      # restore parked WIP after a terminal signal
+            result["parked_restore"] = ctx.parked.restore()
         summary = _push_paperclip(ctx)
         if summary is not None:
             result["paperclip"] = summary
@@ -287,22 +320,9 @@ def cmd_complete(args) -> int:
     ctx = _Context(args)
     concerns = [s for s in (args.specialist_concerns or "").split(",") if s.strip()]
     http_status = getattr(args, "council_http_status", None)
-    # Optional machine-readable verdict artifact (consumed only when council.structured_verdict is ON;
-    # see council.verdict_from_structured). A malformed/unreadable artifact is NOT silently dropped —
-    # it returns an ERROR so the run never trusts a broken verdict channel.
-    artifact = None
-    vfile = getattr(args, "council_verdict_file", None)
-    if vfile:
-        try:
-            raw = sys.stdin.read() if vfile == "-" else open(vfile, encoding="utf-8").read()
-            artifact = json.loads(raw)
-        except (OSError, ValueError) as exc:
-            return _emit({"status": "ERROR",
-                          "error": f"could not read --council-verdict-file {vfile!r}: {exc}"})
     out = ctx.driver.complete_ticket(
         attempted=args.attempted, cannot_implement=args.cannot_implement,
         review_coverage=args.review_coverage, council_verdict=args.council_verdict,
-        council_verdict_artifact=artifact,
         council_cost_eur=args.council_cost, council_http_status=http_status,
         specialist_concerns=concerns, specialist_cost_eur=args.specialist_cost)
     # INT-1675 P2: surface the resolved source so a `complete` run against the wrong --tickets dir
@@ -336,9 +356,20 @@ def cmd_reset_spend(args) -> int:
                   "note": "per-night spend accounting zeroed; breaker counters (processed/bad) untouched"})
 
 
+def _agent_hint_kwargs(ctx) -> dict:
+    """F2-declarative inputs for the report: the run's active agent (launcher.default_agent — the
+    best signal the harness has for 'what we're running as') and a ticket_id -> declared `agent:`
+    map for tickets that carried the hint. Paperclip-sourced tickets simply have no hint (None)."""
+    active = (ctx.config.get("launcher", {}) or {}).get("default_agent")
+    hints = {t.id: t.declared_agent for t in ctx.tickets
+             if getattr(t, "declared_agent", None)}
+    return {"active_agent": active, "agent_hints": hints}
+
+
 def cmd_report(args) -> int:
     ctx = _Context(args)
-    report = build_report(ctx.store.all(), run_label="unattended run")
+    report = build_report(ctx.store.all(), run_label="unattended run",
+                          **_agent_hint_kwargs(ctx))
     with open(ctx.report_path, "w", encoding="utf-8") as fh:
         fh.write(report)
     out = {"status": "REPORT_WRITTEN", "report_path": ctx.report_path}
@@ -348,13 +379,29 @@ def cmd_report(args) -> int:
     return _emit(out)
 
 
+def cmd_parked(args) -> int:
+    """Manually protect/restore parked WIP (INT-1735) — the same helper next/report drive, exposed
+    standalone so an operator can restore after a run that never reached a terminal signal."""
+    ctx = _Context(args)
+    if ctx.parked is None:
+        return _emit({"status": "DISABLED",
+                      "message": "autonomy.parked.enabled is false — nothing to protect/restore"})
+    result = ctx.parked.protect() if args.action == "protect" else ctx.parked.restore()
+    return _emit({"status": "OK", "action": args.action, "result": result})
+
+
 def cmd_run(args) -> int:
-    """Legacy in-process loop (NullWorker). Kept for parity; real runs use next/complete."""
+    """Legacy in-process loop (NullWorker). Kept for parity; real runs use next/complete.
+
+    NOTE: this legacy path does NOT use the run-branch isolation (INT-1825 bug 2) that next/complete
+    apply — it commits onto the currently-checked-out branch. Do not point it at a real repo expecting
+    the operator's branch to be left untouched; use the agent-driven next/complete flow for that."""
     ctx = _Context(args)
     result = ctx.orch.run(ctx.tickets)
     report = build_report(result.outcomes, run_label="unattended run (in-process)",
                           halted=result.halted, halt_reason=result.halt_reason,
-                          stopped_low_yield=result.stopped_low_yield)
+                          stopped_low_yield=result.stopped_low_yield,
+                          **_agent_hint_kwargs(ctx))
     with open(ctx.report_path, "w", encoding="utf-8") as fh:
         fh.write(report)
     return _emit({"status": "HALTED" if result.halted else
@@ -401,10 +448,6 @@ def main(argv=None) -> int:
     pc.add_argument("--council-http-status", type=int, default=None, dest="council_http_status",
                     help="HTTP status code returned by the council gateway (402 = insufficient_balance "
                          "→ triggers the configured credits-exhaustion policy)")
-    pc.add_argument("--council-verdict-file", default=None, dest="council_verdict_file",
-                    help="path to a machine-readable council verdict artifact (JSON; '-' = stdin). "
-                         "When council.structured_verdict is ON, the harness DERIVES the trust-gate "
-                         "from this artifact instead of --council-verdict (default OFF: ignored)")
     pc.set_defaults(func=cmd_complete)
 
     pr = sub.add_parser("report", help="(re)write the morning report from the store")
@@ -421,6 +464,12 @@ def main(argv=None) -> int:
                          help="zero the per-night council spend accounting (operator escape)")
     _add_common(prs)
     prs.set_defaults(func=cmd_reset_spend)
+
+    pp = sub.add_parser("parked", help="protect/restore parked WIP (INT-1735)")
+    _add_common(pp)
+    pp.add_argument("action", choices=["protect", "restore"],
+                    help="protect = stash parked WIP before a run; restore = bring it back after")
+    pp.set_defaults(func=cmd_parked)
 
     prun = sub.add_parser("run", help="legacy in-process loop (needs a wired Worker)")
     _add_common(prun)

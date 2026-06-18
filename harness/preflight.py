@@ -42,16 +42,14 @@ def _has(cmd: str) -> bool:
 
 
 def _detect_platform() -> str:
-    env = os.environ
-    if env.get("CLAUDECODE") or env.get("CLAUDE_CODE_ENTRYPOINT") or "CLAUDE_CODE" in " ".join(env):
-        return "claude-code"
-    if env.get("CODEX_SANDBOX") or env.get("OPENAI_CODEX"):
-        return "codex"
-    if env.get("GEMINI_CLI") or env.get("GEMINI_API_KEY") and env.get("GEMINI_CLI_SESSION"):
-        return "gemini"
-    if env.get("COPILOT_AGENT") or env.get("GITHUB_COPILOT_CLI"):
-        return "copilot"
-    return "unknown"
+    # Explicit marker keys only (review 2026-06-10): no substring scans over the whole
+    # env, and no API-key heuristics — an exported GEMINI_API_KEY is set by anyone using
+    # the Gemini SDK and does not mean this session runs inside Gemini CLI. The shared
+    # marker table lives in agent_clis.SESSION_MARKERS; this stays a hint, never a
+    # launch-time spawn selector.
+    from .agent_clis import detect_session_platform
+    hint = detect_session_platform()
+    return {"claude": "claude-code"}.get(hint, hint) or "unknown"
 
 
 def _detect_gates(cwd: str) -> list:

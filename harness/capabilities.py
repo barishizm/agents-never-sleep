@@ -2,7 +2,7 @@
 
 Best-effort enforcement means each platform enforces what its hook system allows; the rest falls back
 to the SKILL.md prose contract. This module makes that status EXPLICIT so a missing guarantee is never
-silent: it owns the per-platform capability matrix and produces blind-spot notes for the degraded
+silent: it owns the per-platform capability matrix and produces blind-spot notes for the soft-enforced
 guarantees, which the driver/report surface as startup notes + morning-report BLIND SPOTs.
 
 The matrix is researched fact (see references/cross-platform-enforcement-design.md), not a guess.
@@ -12,14 +12,14 @@ from __future__ import annotations
 import os
 
 NATIVE = "native"
-DEGRADED = "degraded"
+DEGRADED = "soft-enforced"
 
 DENY_IRREVERSIBLE = "deny_irreversible"
 NEVER_STOP = "never_stop"
 NEVER_ASK = "never_ask"
 _ORDER = (DENY_IRREVERSIBLE, NEVER_STOP, NEVER_ASK)
 
-# Per-platform guarantee status. ⚠️ degraded cells fall back to the prose contract + a blind-spot.
+# Per-platform guarantee status. 🟡 soft-enforced cells fall back to the prose contract + a blind-spot.
 _MATRIX = {
     "claude":   {DENY_IRREVERSIBLE: NATIVE, NEVER_STOP: NATIVE,   NEVER_ASK: NATIVE},
     "gemini":   {DENY_IRREVERSIBLE: NATIVE, NEVER_STOP: NATIVE,   NEVER_ASK: DEGRADED},
@@ -82,7 +82,7 @@ def verification_note(platform: str):
 
 
 def report_notes(platform: str) -> list:
-    """All enforcement blind-spots for the morning report: degraded guarantees + the not-yet-verified
+    """All enforcement blind-spots for the morning report: soft-enforced guarantees + the not-yet-verified
     caveat for native-but-unproven platforms."""
     notes = degradation_notes(platform)
     vn = verification_note(platform)

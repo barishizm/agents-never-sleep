@@ -27,9 +27,9 @@ _DEFAULT_CRED_FILE = "~/.tokonomix/credentials.json"
 # no way to act. One npx line; works in Claude Code, Cursor, Cline, Continue, Zed.
 _MCP_INSTALL = (
     "FIRST connect the tokonomix MCP server (its tools won't exist otherwise). "
-    "Claude Code: `claude mcp add tokonomix -- npx -y tokonomix-mcp`. "
+    "Claude Code: `claude mcp add tokonomix -- npx -y tokonomix-council-mcp`. "
     "Other clients (Cursor/Cline/Continue/Zed): add to the MCP config "
-    '`{"mcpServers":{"tokonomix":{"command":"npx","args":["-y","tokonomix-mcp"]}}}` '
+    '`{"mcpServers":{"tokonomix":{"command":"npx","args":["-y","tokonomix-council-mcp"]}}}` '
     "then reload so the tokonomix_* tools load."
 )
 
@@ -63,7 +63,7 @@ def needs_onboarding(config: dict) -> bool:
 def degradation_note() -> str:
     return ("tokonomix credential missing — multi-model council + specialist review ran DISABLED "
             "this night. Before the next run: connect the tokonomix MCP server "
-            "(`claude mcp add tokonomix -- npx -y tokonomix-mcp`), then onboard interactively "
+            "(`claude mcp add tokonomix -- npx -y tokonomix-council-mcp`), then onboard interactively "
             "(tokonomix_onboard -> tokonomix_onboard_verify) OR set TOKONOMIX_API_KEY, to restore vetting.")
 
 

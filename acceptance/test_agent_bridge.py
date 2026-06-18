@@ -137,12 +137,37 @@ def main() -> int:
             failures.append(f"{tid}: expected {want.value}, got {got.get(tid)}")
 
     # ---- reversibility + artifact -------------------------------------------------------
+    # INT-1825 bug 2: the run is isolated to a dedicated ans/run-* branch and the operator's branch
+    # is restored at the terminal. So the contract is now: (a) the operator's working tree is
+    # PRISTINE after the run (the good edit is NOT swept onto it), and (b) the good edit is KEPT on
+    # the run branch (reverting the bad edit, keeping the good one) for the operator to review/merge.
+    def _git(*args):
+        return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True).stdout
+
+    cur_branch = _git("rev-parse", "--abbrev-ref", "HEAD").strip()
+    run_branches = [b.strip().lstrip("* ") for b in _git("branch").splitlines() if "ans/run-" in b]
+    if not run_branches:
+        failures.append("no ans/run-* branch survived the run — the night's work is gone (bug 2)")
+    if cur_branch.startswith("ans/run-"):
+        failures.append("terminal left the repo on the run branch — operator branch not restored")
+
+    # (a) operator branch pristine: bad edit absent AND the good edit not swept onto it.
     mathutil = open(os.path.join(repo, "mathutil.py"), encoding="utf-8").read()
     if "return a + b" not in mathutil:
-        failures.append("ticket-03 was NOT reverted — mathutil.py still broken")
-    app = open(os.path.join(repo, "app.py"), encoding="utf-8").read()
-    if "agents-never-sleep demo started" not in app:
-        failures.append("ticket-01's good edit was lost")
+        failures.append("ticket-03 was NOT reverted — mathutil.py still broken on operator branch")
+    app_on_operator = open(os.path.join(repo, "app.py"), encoding="utf-8").read()
+    if "agents-never-sleep demo started" in app_on_operator:
+        failures.append("good edit leaked onto the operator branch — run not isolated (bug 2)")
+
+    # (b) good edit kept + bad edit reverted ON the run branch.
+    if run_branches:
+        rb = run_branches[0]
+        app_on_run = _git("show", f"{rb}:app.py")
+        if "agents-never-sleep demo started" not in app_on_run:
+            failures.append("ticket-01's good edit was lost from the run branch")
+        math_on_run = _git("show", f"{rb}:mathutil.py")
+        if "return a + b" not in math_on_run:
+            failures.append("ticket-03's bad edit was NOT reverted on the run branch")
     if not os.path.exists(os.path.join(repo, "artifacts", "ticket-03-redgate.gate.txt")):
         failures.append("ticket-03 failing-gate artifact missing")
 

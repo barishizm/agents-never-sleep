@@ -36,13 +36,22 @@ class Decision:
     category: str = ""
     foundational: bool = False
     contamination_scope: ContaminationScope = ContaminationScope.NONE
+    # F5 (build-narrow): True ONLY on the requirement_meaning PARK branch — the one place a
+    # consensus-assisted disambiguation is safe (FILE-scoped, reversible). decide.py just TAGS it;
+    # the F5 logic + the consensus call live outside the pure classifier (harness/f5.py + driver).
+    consensus_resolvable: bool = False
 
 
 # Enumerated hard-PARK categories. Each maps to (regex, foundational?, scope).
+#
+# INT-1825 bug 1: two tokens were narrowed because they collide with everyday engineering jargon and
+# caused false-PARKs. Bare `schema` matched "JSON-Schema" (INT-1781); bare `isolation` matched
+# container/network "process isolation" (s2-01). Both are now phrase-anchored to real DB/tenant
+# context so genuine schema-migration / tenant-isolation work STILL parks, but the jargon does not.
 HARD_PARK_CATEGORIES = {
-    "db_schema_or_migration": (r"\b(schema|migrat|alter table|drop column|add column)\b", True, ContaminationScope.SERVICE),
+    "db_schema_or_migration": (r"\b(migrat|alter table|drop column|add column|create table|database schema|db schema|schema migration|schema change)\b", True, ContaminationScope.SERVICE),
     "api_contract": (r"\b(api contract|response shape|request shape|public api|endpoint contract)\b", True, ContaminationScope.SERVICE),
-    "security_or_tenant": (r"\b(auth|authz|permission|tenant|isolation|rbac|access control|jwt|session)\b", True, ContaminationScope.SERVICE),
+    "security_or_tenant": (r"\b(auth|authz|permission|tenant|rbac|access control|jwt|session|tenant isolation|data isolation)\b", True, ContaminationScope.SERVICE),
     "money_or_billing": (r"\b(discount|billing|price|pricing|invoice|payment|charge|refund|tax|vat)\b", False, ContaminationScope.MODULE),
     "cross_ticket_interface": (r"\b(shared interface|cross-ticket|other tickets depend|breaking change)\b", True, ContaminationScope.PACKAGE),
 }
@@ -58,15 +67,32 @@ def _matches(patterns, text) -> bool:
     return any(re.search(p, text, re.IGNORECASE | re.MULTILINE) for p in patterns)
 
 
-def classify(ticket_text: str, *, unattended: bool, has_safety_net: bool) -> Decision:
-    """Decide ASK/PARK/HALT for a ticket. `ticket_text` = title + body."""
+_OVERRIDE_ACTIONS = {"PROCEED": Action.PROCEED, "PARK": Action.PARK, "HALT": Action.HALT}
+
+
+def classify(ticket_text: str, *, unattended: bool, has_safety_net: bool,
+             override: str | None = None) -> Decision:
+    """Decide ASK/PARK/HALT for a ticket. `ticket_text` = title + body.
+
+    `override` (INT-1825 bug 1): an OPERATOR-supplied classification for THIS ticket, sourced only
+    from trusted config (`classify.overrides` keyed by ticket id) — never from the agent at runtime,
+    which would let an agent loosen the very PARK gate that exists to restrain it. A valid override
+    forces the action and short-circuits the heuristic. It CANNOT bypass the no-safety-net HALT:
+    without reversibility nothing is safe to do, so that guard runs first."""
     text = ticket_text.lower()
 
     # HALT: only when we cannot guarantee reversibility at all. Without a safety net even a
     # "reversible" assumption is not actually reversible -> do not risk destructive work.
+    # This precedes the operator override on purpose: an override may not authorise unrevertible work.
     if not has_safety_net:
         return Decision(Action.HALT, "no VCS/backup safety net — cannot guarantee reversibility",
                         category="no_safety_net")
+
+    if override:
+        action = _OVERRIDE_ACTIONS.get(override.strip().upper())
+        if action is not None:
+            return Decision(action, f"operator classification override: {action.value}",
+                            category="operator_override")
 
     # Hard-PARK categories: high blast-radius regardless of how 'reversible' it looks.
     for cat, (pattern, foundational, scope) in HARD_PARK_CATEGORIES.items():
@@ -80,7 +106,8 @@ def classify(ticket_text: str, *, unattended: bool, has_safety_net: bool) -> Dec
     if _matches(AMBIGUITY_SIGNALS, text):
         return Decision(Action.PARK, "requirement-meaning ambiguous; defer the decision",
                         category="requirement_meaning", foundational=False,
-                        contamination_scope=ContaminationScope.FILE)
+                        contamination_scope=ContaminationScope.FILE,
+                        consensus_resolvable=True)
 
     # Otherwise: low blast-radius + reversible -> assume and proceed.
     return Decision(Action.PROCEED, "low blast-radius, reversible — assume + do",
