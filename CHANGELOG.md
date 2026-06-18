@@ -1,8 +1,47 @@
 # Changelog — agents-never-sleep
 
 All notable changes to the public API surface (see `ARCHITECTURE.md`) are documented here.
+The versioning **policy** (Stable vs Experimental classification + the v1.0 roadmap) lives in
+`SEMVER.md`.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+> Working-tree changes, not yet versioned/published. Version bump + publish are Mes-gated.
+
+### Added
+- **Packaging — `pyproject.toml` (ticket INT-1964).** `pip install agents-never-sleep` now works
+  in a fresh venv with **zero runtime dependencies** (the harness is pure standard library).
+  - Two console scripts: `ans-run` → `harness.launcher:main` (pre-token preflight launcher) and
+    `ans` → `harness.run:main` (the `next`/`complete` loop). External users no longer clone the
+    repo + hand-set `PYTHONPATH`.
+  - Version is read dynamically from `harness/__init__.py` (`[tool.setuptools.dynamic]`) — single
+    source of truth, no second place to bump.
+  - Verified locally: wheel builds offline (`pip wheel . --no-deps`), installs into a throwaway
+    venv, and `ans-run --check` runs from the installed entry point with no checkout on PATH.
+  - **PyPI publish is a Mes action** (not done here): `twine upload` with the project's PyPI token.
+- **`SEMVER.md` (DRAFT, ticket INT-1966).** Formal SemVer commitment: Stable-vs-Experimental
+  classification of every public surface (loop CLI, launcher CLI, ticket format, gate/config,
+  outcome states, import surface) + a deprecation policy + a checkable v1.0 roadmap. Draft only —
+  1.0 is not declared; flags the `harness`→`agents_never_sleep` package-rename as a v1.0 blocker.
+
+### Changed
+- **Launcher refactored into `harness/launcher.py` (enables the `ans-run` console entry point).**
+  The body of `bin/ans-run` moved into the importable module `harness.launcher` with `main()`;
+  `bin/ans-run` is now a thin shim that delegates to it. Behaviour is unchanged — the launcher
+  acceptance suite (`test_launcher.py`) stays GREEN. (A console entry point must point at
+  `module:callable`, which the old script-only `bin/ans-run` could not provide.)
+- **`acceptance/test_real_claude.py` (ticket INT-1965): now also asserts the work was COMMITTED.**
+  Beyond `done>=2` + file content, the integration test reads `run-branch.json` and asserts ≥2
+  per-ticket `done:<id>` commits landed on the dedicated `ans/run-*` branch — proving git-backed
+  reversibility end-to-end, not just the state machine. Still `@pytest.mark.integration`
+  (excluded from the default suite; live run needs a real `claude` CLI + credentials).
+
+### Notes
+- `.gitignore`: added Python packaging artifacts (`build/`, `dist/`, `*.egg-info/`, `*.whl`).
 
 ---
 

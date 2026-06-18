@@ -7,10 +7,12 @@ Requires:
 - `claude` CLI available on PATH (Claude Code)
 - CLAUDE_UNATTENDED=1 may be set; the test sets --permission-mode acceptEdits
 
-What this proves:
+What this proves (the only evidence that counts for HN/enterprise — ticket INT-1965):
 - A real Claude Code session can drive next/complete until DRAINED
-- The harness's durable state (run-progress.json) reflects done=2 at the end
+- The harness's durable state (run-progress.json) reflects done>=2 at the end
 - Both tickets land with DONE state (no hallucinated stops, no ASK violations)
+- The work was actually COMMITTED: the harness's per-ticket `done:<id>` commits land on
+  the dedicated `ans/run-*` branch (git-backed reversibility is real, not simulated)
 """
 import json
 import os
@@ -87,6 +89,31 @@ def test_real_claude_drives_two_tickets():
         assert os.path.exists(hello_path), "hello.txt was not created"
         content = open(hello_path).read()
         assert "hello" in content, f"hello.txt missing 'hello': {content!r}"
+
+        # Verify the work was actually COMMITTED — not just left dirty in the tree. The harness
+        # commits each successful ticket as `done:<id>` on a dedicated ans/run-* branch, recorded
+        # in run-branch.json (the operator branch is checked back out at the DRAINED terminal).
+        runbranch_path = os.path.join(repo, ".unattended", "state", "run-branch.json")
+        assert os.path.exists(runbranch_path), (
+            "run-branch.json missing — the harness never created its dedicated run branch, so "
+            "no commit could have landed.\n"
+            f"claude stdout:\n{result.stdout[-2000:]}"
+        )
+        with open(runbranch_path) as f:
+            run_branch = json.load(f).get("run_branch")
+        assert run_branch, f"run-branch.json has no run_branch: {runbranch_path}"
+
+        # Count the harness's per-ticket `done:` commits ON THE RUN BRANCH. >=2 proves both
+        # tickets were committed (git-backed reversibility is real).
+        log = subprocess.run(
+            ["git", "-C", repo, "log", run_branch, "--format=%s"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        done_commits = [line for line in log.splitlines() if line.startswith("done:")]
+        assert len(done_commits) >= 2, (
+            f"Expected >=2 'done:' commits on {run_branch}, got {len(done_commits)}.\n"
+            f"commit subjects:\n{log}"
+        )
 
     finally:
         shutil.rmtree(work, ignore_errors=True)

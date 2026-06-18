@@ -23,6 +23,21 @@ Three responses to uncertainty — never collapsed:
 
 This is enforced structurally (not by agent discipline) via opt-in, env-gated hooks.
 
+## Install
+
+```bash
+# Once published to PyPI (publish is pending) this is the whole install:
+pip install agents-never-sleep      # gives you the `ans` (loop) and `ans-run` (launcher) commands
+# Until then — or to hack on it — install the checkout in editable mode:
+pip install -e path/to/agents-never-sleep
+# No extras to choose: the harness is pure standard library, zero runtime dependencies.
+```
+
+The package exposes two console scripts: `ans` (= `python3 -m harness.run`, the per-ticket loop)
+and `ans-run` (the pre-token preflight launcher). A checkout also works without installing — run
+`bin/ans-run` and `python3 -m harness.run` directly (set `PYTHONPATH` to the skill root for the
+latter).
+
 ## Quick start
 
 ```bash

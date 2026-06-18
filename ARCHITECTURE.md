@@ -1,11 +1,16 @@
 # agents-never-sleep — Public API Surface
 
-This document defines the **stable public interface** of the ANS harness. Anything listed here
-follows semver: breaking changes require a major version bump.
+This document defines the **public interface** of the ANS harness — the contract. The *policy* for
+how this contract may change (the per-surface Stable-vs-Experimental classification, the deprecation
+rules, and the checkable v1.0 roadmap) lives in **`SEMVER.md`**. Anything classified Stable there
+follows SemVer once 1.0 is tagged: breaking changes require a major version bump.
+
+Installed entry points (after `pip install agents-never-sleep`): `ans` = `python3 -m harness.run`
+(the loop, §1); `ans-run` = the launcher (§6).
 
 ---
 
-## 1. CLI interface (`python3 -m harness.run`)
+## 1. CLI interface (`python3 -m harness.run` / `ans`)
 
 ### `next` — get the next ticket to work
 
@@ -133,3 +138,29 @@ Non-breaking additions (new optional keys) are allowed in minor versions.
 Removals or type changes to existing keys require a major version bump.
 
 Stable top-level keys: `gate`, `budget`, `integrations`, `council`, `specialists`, `launcher`.
+
+---
+
+## 6. Launcher CLI (`ans-run` / `bin/ans-run`)
+
+The pre-token GO/NO-GO preflight + atomic per-working-tree lock. Same code whether invoked as the
+pip-installed `ans-run` console script or via `bin/ans-run` in a checkout.
+
+```
+ans-run [--repo <path>] [--agent <preset>] [--fg] [--check] [--trust] -- PROMPT...
+```
+
+| Flag | Meaning |
+|---|---|
+| `--repo` | Working tree (default: cwd). |
+| `--agent` | Named preset from the config's `launcher.agents`. |
+| `--fg` | Run in foreground; the agent's exit code propagates. |
+| `--check` | Preflight report only — never starts a run, never disturbs a live one. |
+| `--trust` | Record TOFU trust for the repo's current config and exit. |
+
+**Exit codes (stable):** `0` = started / GO / trust recorded; `64` = NO-GO (a blocking preflight
+check failed, or no prompt); `65` = working tree busy (another run holds the lock).
+
+Agent selection uses human-confirmed presets only — no launch-time platform detection. A repo
+config is executable input and is trust-on-first-use. See `bin/ans-run` / `harness/launcher.py` and
+SKILL.md for the full security posture.
