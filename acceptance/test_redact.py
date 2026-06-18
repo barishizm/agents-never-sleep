@@ -63,6 +63,8 @@ def test_patterns(failures):
         "aws": "AKIAIOSFODNN7EXAMPLE",
         "github": "ghp_0123456789ABCDEFGHIJ0123456789ABCDEF",
         "openai": "sk-proj-0123456789ABCDEFGHIJKLMNOP",
+        "tokonomix-live": "tok_live_LalGUSnSXyz12345",
+        "tokonomix-label": "TOKONOMIX_API_KEY=plainvalue9876",
         "vault": "hvs.CAESIJ0123456789ABCDEFGHIJ",
         "url": "postgres://paperclip:supersecretpw@localhost:5432/paperclip",
         "pem": "-----BEGIN RSA PRIVATE KEY-----\nMIIabc123\n-----END RSA PRIVATE KEY-----",

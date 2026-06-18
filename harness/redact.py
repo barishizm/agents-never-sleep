@@ -62,7 +62,13 @@ _PATTERNS = [
     (re.compile(r"\bs\.[A-Za-z0-9]{24,}"), "[REDACTED:vault-token]"),
     # Provider API keys with a distinctive prefix.
     (re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}"), "[REDACTED:openai-key]"),
-    (re.compile(r"\btok_live_[A-Za-z0-9_-]{20,}"), "[REDACTED:tokonomix-key]"),
+    # Tokonomix live keys: tok_live_<base62 body 8+ chars>. Body minimum is 8 (not 20) because
+    # short keys issued during onboarding and sandbox trials are valid credentials.
+    (re.compile(r"\btok_live_[A-Za-z0-9]{8,}"), "[REDACTED:tokonomix-key]"),
+    # Tokonomix key-name label patterns: TOKONOMIX_API_KEY=<value> or TOKONOMIX_KEY=<value>.
+    # Catches raw values that do NOT carry the tok_live_ prefix (e.g. test-issuance, rotated keys).
+    (re.compile(r"(?i)(?P<p>TOKONOMIX_(?:API_)?KEY\s*[:=]\s*)[A-Za-z0-9._~+/=\-]{8,}"),
+     r"\g<p>[REDACTED:tokonomix-key]"),
     (re.compile(r"\bgh[posru]_[A-Za-z0-9]{20,}"), "[REDACTED:github-token]"),
     (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}"), "[REDACTED:github-token]"),
     (re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}"), "[REDACTED:slack-token]"),

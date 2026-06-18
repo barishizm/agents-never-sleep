@@ -6,6 +6,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.1] — 2026-06-18 (redact hardening)
+
+### Security
+- **`redact.py`: tok_live_ shape-pattern hardened + TOKONOMIX key-name canonicalized.**
+  - Lowered `tok_live_` body minimum from 20 to 8 characters — short sandbox/onboarding keys were
+    slipping through (ticket 2d05782a).
+  - Added `TOKONOMIX_API_KEY=<value>` and `TOKONOMIX_KEY=<value>` label patterns — catches raw
+    key values that do not carry the `tok_live_` shape prefix (e.g. rotated or test-issuance keys).
+  - Extended `test_patterns` in `acceptance/test_redact.py` with `tokonomix-live` and
+    `tokonomix-label` cases; suite remains GREEN.
+
+---
+
 ## [0.3.0] — 2026-06-18 (monorepo sync)
 
 ### Fixed
