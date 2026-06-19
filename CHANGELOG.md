@@ -27,6 +27,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   classification of every public surface (loop CLI, launcher CLI, ticket format, gate/config,
   outcome states, import surface) + a deprecation policy + a checkable v1.0 roadmap. Draft only —
   1.0 is not declared; flags the `harness`→`agents_never_sleep` package-rename as a v1.0 blocker.
+- **`PIP-INSTALL-PLAN.md` (ticket INT-1964).** Grounded plan for `pip install agents-never-sleep`:
+  documents the (verified) install path, the two-track distribution (pip = harness CLI vs the
+  Agent Skill = repo/hooks), and the remaining steps (name claim, build+twine, 3.9–3.12 smoke
+  matrix, PyPI publish = Mes). Also published to `/internip/ans-pip-install-plan-2026-06-20.html`.
+- **`COUNCIL-SETUP.md` (ticket INT-1963).** Reproducible record of how to make the Tokonomix
+  council fire (`cncl>0`): the two gates (`council.enabled` + `integrations.tokonomix.enabled`)
+  and the credential resolution order (`token_ref` → `~/.tokonomix/credentials.json`). The
+  per-project config that enables it lives in `.claude/agents-never-sleep.json` (gitignored).
+- **Default-suite exclusion for integration tests (`pyproject.toml`).** Added
+  `[tool.pytest.ini_options] addopts = "-m 'not integration'"` so a plain `pytest` stays fast and
+  offline; `pytest -m integration` still selects the live-`claude` test (a CLI `-m` overrides the
+  default). Complements the marker already registered in `acceptance/conftest.py`.
 
 ### Changed
 - **Launcher refactored into `harness/launcher.py` (enables the `ans-run` console entry point).**
@@ -34,14 +46,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `bin/ans-run` is now a thin shim that delegates to it. Behaviour is unchanged — the launcher
   acceptance suite (`test_launcher.py`) stays GREEN. (A console entry point must point at
   `module:callable`, which the old script-only `bin/ans-run` could not provide.)
-- **`acceptance/test_real_claude.py` (ticket INT-1965): now also asserts the work was COMMITTED.**
-  Beyond `done>=2` + file content, the integration test reads `run-branch.json` and asserts ≥2
-  per-ticket `done:<id>` commits landed on the dedicated `ans/run-*` branch — proving git-backed
-  reversibility end-to-end, not just the state machine. Still `@pytest.mark.integration`
-  (excluded from the default suite; live run needs a real `claude` CLI + credentials).
+- **`acceptance/test_real_claude.py` (ticket INT-1965): now VERIFIED GREEN against a live
+  `claude -p` session** (it had never actually run before). Four real defects fixed so it passes:
+  (1) the child no longer inherits the parent run's `UE_RUN_INCOMPLETE` (which made a nested run's
+  Stop-hook guard the *parent* sentinel → a 300s hang) — the parent run-env vars are scrubbed and
+  the sentinel is re-pinned to the child's own repo; (2) launches with
+  `--dangerously-skip-permissions` (mirroring the real ANS launcher) so the headless child can run
+  the harness shell commands; (3) reads the done-count from the durable `OutcomeStore`, not
+  `run-progress.json` (which is reset to 0 at the DRAINED terminal by design); (4) resolves the
+  persistent `ans/run-*` branch via `git for-each-ref` and verifies `hello.txt` via `git show` +
+  counts `done:` commits there (the operator branch is checked back out at the terminal, so the
+  work is NOT in the working tree). The in-test gate config was corrected to the `gates` (list)
+  shape. Still `@pytest.mark.integration`; now formally excluded from the default suite (above).
 
 ### Notes
 - `.gitignore`: added Python packaging artifacts (`build/`, `dist/`, `*.egg-info/`, `*.whl`).
+- **Version stays `0.3.1`.** Ticket INT-1966's "bump to 0.2.0" was written before the 0.2.0→0.3.x
+  releases and is now a no-op (a downgrade); the next bump for these [Unreleased] changes is a
+  deliberate **Mes-gated** action (per the policy at the top of this section), not part of this run.
 
 ---
 
