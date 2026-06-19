@@ -57,3 +57,13 @@ version = { attr = "harness.__version__" }
 # Package the harness and its sub-packages (harness.sources). Nothing else in the skill tree
 # is importable Python, so the find is scoped to harness*.
 include = ["harness*"]
+
+[tool.pytest.ini_options]
+# `@pytest.mark.integration` tests spawn a REAL agent CLI (claude -p) — slow + costs tokens.
+# Exclude them from the default suite so a plain `pytest` stays fast and offline; run them
+# explicitly with `pytest -m integration` (a CLI -m overrides this default). The marker itself
+# is also registered in acceptance/conftest.py.
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requires a live agent CLI (claude -p); excluded from the default suite",
+]
