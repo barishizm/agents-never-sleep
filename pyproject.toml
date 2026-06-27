@@ -58,6 +58,11 @@ version = { attr = "harness.__version__" }
 # is importable Python, so the find is scoped to harness*.
 include = ["harness*"]
 
+[tool.setuptools.package-data]
+# PEP 561: ship the py.typed marker so type-checkers (mypy/pyright) consume the harness's
+# inline annotations instead of treating it as untyped. The harness is fully annotated.
+harness = ["py.typed"]
+
 [tool.pytest.ini_options]
 # `@pytest.mark.integration` tests spawn a REAL agent CLI (claude -p) — slow + costs tokens.
 # Exclude them from the default suite so a plain `pytest` stays fast and offline; run them
