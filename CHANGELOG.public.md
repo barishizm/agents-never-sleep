@@ -4,7 +4,7 @@ User-facing changes only. No ticket numbers, no internal flags, no internal name
 
 ---
 
-## [1.0.0] — UNRELEASED (staged)
+## [1.0.0] — June 2026
 
 - **First stable release.** The command-line interface, configuration, ticket format, and run
   outcomes are now covered by a Semantic Versioning stability guarantee — future updates won't

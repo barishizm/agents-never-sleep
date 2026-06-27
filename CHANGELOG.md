@@ -8,11 +8,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [1.0.0] — UNRELEASED (staged; pending Mes sign-off + `git tag v1.0.0`)
+## [1.0.0] — 2026-06-27
 
-> The 1.0 line. Working-tree changes prepared for the first stable release. The version bump to
-> 1.0.0, the PyPI publish, the git tag, and removing the `SEMVER.md` DRAFT banner are the Mes-gated
-> release act (SEMVER §4 #7/#8) — **not done here**. Until then the package stays `0.3.1`.
+> First stable release. Distributed as the public GitHub repo
+> (`github.com/TokonoMix/agents-never-sleep`, `pip install git+…@v1.0.0`); a PyPI mirror is an
+> optional later add. The SemVer guarantee in `SEMVER.md` is binding from this release.
 
 ### Stability commitment
 - **First SemVer-stable release.** From the 1.0.0 tag, the surfaces classified **Stable** in

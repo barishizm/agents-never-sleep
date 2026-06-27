@@ -1,9 +1,8 @@
-# SemVer policy & v1.0 roadmap — agents-never-sleep
+# SemVer policy — agents-never-sleep
 
-> **STATUS: DRAFT for review (Mes).** This document proposes the versioning commitment. It does
-> **not** declare 1.0 and does **not** finalize the guarantee — tagging 1.0 is an explicit human
-> decision (see §4). Until 1.0 is tagged, the package stays `0.x` and the API is **not** yet
-> stability-guaranteed (a `0.x` minor bump may break things, per SemVer §4).
+> **STATUS: BINDING from v1.0.0 (2026-06-27).** The stability guarantee below is in force. A
+> breaking change to any surface classified **Stable** in §2 requires a MAJOR bump, announced in
+> the CHANGELOG with a migration note.
 
 This file complements two existing documents — read them together:
 
@@ -13,7 +12,7 @@ This file complements two existing documents — read them together:
 - **`CHANGELOG.md`** — the per-version record of what changed; it already carries a "Roadmap to
   v1.0" list, which §4 here makes concrete and checkable.
 
-The current published version is **`0.3.1`** (source of truth: `agents_never_sleep/__init__.py` `__version__`).
+The current published version is **`1.0.0`** (source of truth: `agents_never_sleep/__init__.py` `__version__`).
 
 ---
 
@@ -42,9 +41,6 @@ its hook API and a deny stops registering, that is a host change to adapt to —
 the ANS API. This keeps the stability promise honest: strong where ANS owns the surface, explicit
 about the one seam it doesn't.
 
-**Before 1.0 (now):** SemVer §4 applies — `0.x` makes **no** stability promise. We nonetheless aim
-to treat `0.MINOR` bumps as the signal for surface changes and keep PATCH for fixes, so the habit is
-already in place when 1.0 lands.
 
 ## 2. Public API surface — Stable vs Experimental
 
@@ -130,8 +126,9 @@ publishing to PyPI, and cutting the GitHub release are explicit Mes decisions �
 | 4 | **Package rename** `harness` → `agents_never_sleep` (§2.6 blocker) decided + executed, or explicitly waived. | ✅ done — renamed with a back-compat `harness` shim (decision D1); verified from a fresh-venv wheel install; guarded by `acceptance/test_shim.py` |
 | 5 | **Cross-platform enforcement adapters** — the 6 scaffolded adapters (Claude/Gemini/Codex/Copilot/Cursor/Windsurf) hermetically tested + a recorded hook-contract version each (Aider + Hermes → 1.1). | ◐ hermetic negative tests + hook-version record done; per-platform LIVE-smoke = Mes/credential-gated |
 | 6 | **Public docs** — doc CONTENT consistent (README/SKILL/ARCHITECTURE/SEMVER); the public site at tokonomix.ai/agents-never-sleep (styled HTML + nav + indexed publish) = Mes-gated. | ◐ content ready; ☐ public publish |
-| 7 | **CHANGELOG complete** with a `1.0.0` entry + the SemVer commitment statement made final (remove the DRAFT banner from this file). | ◐ CHANGELOG 1.0.0 staged + D5 guarantee drafted; ☐ DRAFT-banner removal is the tag-time act (T09) |
-| 8 | **Mes sign-off** — PyPI publish + GitHub release + git tag `v1.0.0`. | ☐ human-gated |
+| 7 | **CHANGELOG complete** with a `1.0.0` entry + the SemVer commitment statement made final (DRAFT banner removed). | ✅ done — CHANGELOG 1.0.0 dated, DRAFT banner removed, guarantee binding |
+| 8 | **Mes sign-off** — GitHub release + git tag `v1.0.0` (PyPI = optional, deferred). | ✅ GitHub release `v1.0.0` cut (2026-06-27); **PyPI deferred** (GitHub is the distribution channel; PyPI is an optional later add when a token exists) |
 
-When 1.0 is tagged, delete the DRAFT banner at the top of this file and the §1 "Before 1.0" caveat;
-the guarantee becomes binding from that commit.
+**v1.0.0 was tagged 2026-06-27** — the guarantee above is binding from that commit. Distribution is
+the public GitHub repo (`github.com/TokonoMix/agents-never-sleep`, `pip install git+…@v1.0.0`); a
+PyPI mirror is an optional later convenience, not a maintenance commitment.
