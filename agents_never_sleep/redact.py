@@ -1,9 +1,11 @@
 """Secret redaction — scrub credentials from everything the night WRITES OUT.
 
-An unattended run writes to four surfaces that can leak a secret a failing test or a careless log
+An unattended run writes to five surfaces that can leak a secret a failing test or a careless log
 printed: the morning report, the saved gate artifacts (raw command stdout — the biggest risk), the
-JSON the driver emits, and — irreversibly — Paperclip comments on shared infra. This module is the
-single chokepoint applied at all four.
+JSON the driver emits, the persisted outcome store (`.unattended/state/*.json` — the agent's
+free-text `attempted`/`exact_blocker` could carry a pasted credential; scrubbed on write as
+defense-in-depth, T05), and — irreversibly — Paperclip comments on shared infra. This module is the
+single chokepoint applied at all five.
 
 NOT in scope — a deliberate boundary: the agent's own raw run-log (`.unattended/logs/`, written
 straight from the spawned CLI's stdout/stderr in background mode) is NOT redacted. It is the agent's

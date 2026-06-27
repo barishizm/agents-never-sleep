@@ -118,8 +118,13 @@ class OutcomeStore:
         # atomic: write temp in same dir, fsync, replace
         fd, tmp = tempfile.mkstemp(dir=self.state_dir, prefix=".tmp-", suffix=".json")
         try:
+            # Defense-in-depth (T05): scrub secret-shaped values from the persisted outcome so a
+            # credential pasted into the agent's free-text fields (`attempted` / `exact_blocker`)
+            # never lands verbatim in the on-disk state. Same shape-anchored redactor the driver's
+            # stdout JSON uses — it leaves ticket-ids/SHAs/states/prose intact (over-match guard).
+            from .redact import redact_obj
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump(outcome.to_json(), fh, indent=2, sort_keys=True)
+                json.dump(redact_obj(outcome.to_json()), fh, indent=2, sort_keys=True)
                 fh.flush()
                 os.fsync(fh.fileno())
             os.replace(tmp, path)

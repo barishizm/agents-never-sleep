@@ -164,11 +164,32 @@ def _diff(a, b):
     return f"  length differs: {len(a)} vs {len(b)}"
 
 
+def test_store_boundary(failures):
+    """T05: a secret pasted into an outcome's free-text fields must NOT persist verbatim in the
+    on-disk state store (the night report / driver JSON already scrub on emit; this closes the
+    'someone reads .unattended/state/*.json' vector too)."""
+    from agents_never_sleep.state import TicketOutcome, OutcomeState
+    work = tempfile.mkdtemp()
+    store = OutcomeStore(os.path.join(work, "state"))
+    secret = "tok_live_PLANTED12345secretBODY"
+    store.write(TicketOutcome(
+        ticket_id="t-redact", state=OutcomeState.FAILED_RETRYABLE,
+        attempted=f"gate failed; log printed {secret} and Authorization: Bearer pcp_board_AAAA1111BBBB",
+        exact_blocker=f"auth: {secret}"))
+    import glob
+    blob = "".join(open(f).read() for f in glob.glob(os.path.join(work, "state", "*.json")))
+    if secret in blob or "pcp_board_AAAA1111BBBB" in blob:
+        failures.append("[store] secret survived verbatim into the on-disk outcome store")
+    if "t-redact" not in blob or "FAILED_RETRYABLE" not in blob:
+        failures.append("[store] redaction shredded non-secret outcome fields (ticket_id/state)")
+
+
 def main() -> int:
     failures = []
     test_over_match_guard(failures)
     test_patterns(failures)
     test_registry(failures)
+    test_store_boundary(failures)
     test_redact_obj(failures)
     test_outward_boundary(failures)
     print("=" * 60)
