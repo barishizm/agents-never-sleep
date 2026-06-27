@@ -4,6 +4,21 @@ User-facing changes only. No ticket numbers, no internal flags, no internal name
 
 ---
 
+## [1.0.0] — UNRELEASED (staged)
+
+- **First stable release.** The command-line interface, configuration, ticket format, and run
+  outcomes are now covered by a Semantic Versioning stability guarantee — future updates won't
+  break them without a major-version bump.
+- **Import package renamed** `harness` → `agents_never_sleep` to match the install name. The old
+  `import harness` / `python -m harness.run` keep working (with a deprecation warning) through all
+  of 1.x and are removed in 2.0 — migrate when convenient.
+- **Cross-platform enforcement** for Claude Code, Gemini CLI, Codex CLI, Copilot CLI, Cursor, and
+  Windsurf, each tested against its documented hook contract (only Claude Code is additionally
+  live-verified; the rest say so in the report).
+- **Hardening:** secrets pasted into a run's notes can no longer linger in the on-disk run state;
+  ships type information (`py.typed`) for type-checkers.
+- Removed the old in-process `run` command — real runs use the `next`/`complete` loop.
+
 ## [0.3.0] — June 2026
 
 - improvement: **Tokonomix consensus integration** — after every council call the

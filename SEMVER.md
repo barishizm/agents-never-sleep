@@ -31,6 +31,17 @@ We follow [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). For 
 - **PATCH** — bug fixes and internal changes that do not alter any Stable surface (e.g. the redact
   hardening in 0.3.1).
 
+**Decision D5 — the guarantee scope, and where it deliberately stops.** The commitment above covers
+the **ANS API**: the loop/launcher CLIs, the config + ticket-file schema, the outcome states, and the
+console entry points (§2). It does **not** extend to the *behaviour* of a cross-platform enforcement
+adapter on a third-party host, because that depends on the host's hook contract — which can change
+outside ANS's control. Per-platform adapter behaviour is therefore **best-effort, validated against
+the hook-contract version recorded for each platform** (`agents_never_sleep/capabilities.py`
+`_HOOK_CONTRACT`, surfaced in the run report; only Claude Code is live-verified). If a host changes
+its hook API and a deny stops registering, that is a host change to adapt to — not a MAJOR break of
+the ANS API. This keeps the stability promise honest: strong where ANS owns the surface, explicit
+about the one seam it doesn't.
+
 **Before 1.0 (now):** SemVer §4 applies — `0.x` makes **no** stability promise. We nonetheless aim
 to treat `0.MINOR` bumps as the signal for surface changes and keep PATCH for fixes, so the habit is
 already in place when 1.0 lands.
@@ -117,9 +128,9 @@ publishing to PyPI, and cutting the GitHub release are explicit Mes decisions �
 | 2 | **`pip install agents-never-sleep` works** in a fresh venv, both console scripts on PATH. | ✅ built + verified locally (wheel installs offline, `ans-run`/`ans` run from a venv); **PyPI publish is a Mes action** |
 | 3 | **Real-agent E2E proof** — `acceptance/test_real_claude.py` drives real `claude -p` to DRAINED, asserts done≥2 **and** committed work on the run branch. | ✅ test present + collects clean; live run is Mes/credential-gated |
 | 4 | **Package rename** `harness` → `agents_never_sleep` (§2.6 blocker) decided + executed, or explicitly waived. | ✅ done — renamed with a back-compat `harness` shim (decision D1); verified from a fresh-venv wheel install; guarded by `acceptance/test_shim.py` |
-| 5 | **Cross-platform enforcement adapters** — at least Codex + Gemini CLI hooks implemented & tested (Claude Code shipped). | ☐ partial (adapters scaffolded under `hooks/platforms/`) |
-| 6 | **Public docs** — tokonomix.ai/agents-never-sleep (or equivalent) published. | ☐ |
-| 7 | **CHANGELOG complete** with a `1.0.0` entry + the SemVer commitment statement made final (remove the DRAFT banner from this file). | ☐ |
+| 5 | **Cross-platform enforcement adapters** — the 6 scaffolded adapters (Claude/Gemini/Codex/Copilot/Cursor/Windsurf) hermetically tested + a recorded hook-contract version each (Aider + Hermes → 1.1). | ◐ hermetic negative tests + hook-version record done; per-platform LIVE-smoke = Mes/credential-gated |
+| 6 | **Public docs** — doc CONTENT consistent (README/SKILL/ARCHITECTURE/SEMVER); the public site at tokonomix.ai/agents-never-sleep (styled HTML + nav + indexed publish) = Mes-gated. | ◐ content ready; ☐ public publish |
+| 7 | **CHANGELOG complete** with a `1.0.0` entry + the SemVer commitment statement made final (remove the DRAFT banner from this file). | ◐ CHANGELOG 1.0.0 staged + D5 guarantee drafted; ☐ DRAFT-banner removal is the tag-time act (T09) |
 | 8 | **Mes sign-off** — PyPI publish + GitHub release + git tag `v1.0.0`. | ☐ human-gated |
 
 When 1.0 is tagged, delete the DRAFT banner at the top of this file and the §1 "Before 1.0" caveat;

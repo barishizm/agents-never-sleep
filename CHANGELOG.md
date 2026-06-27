@@ -8,11 +8,54 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [1.0.0] — UNRELEASED (staged; pending Mes sign-off + `git tag v1.0.0`)
 
-> Working-tree changes, not yet versioned/published. Version bump + publish are Mes-gated.
+> The 1.0 line. Working-tree changes prepared for the first stable release. The version bump to
+> 1.0.0, the PyPI publish, the git tag, and removing the `SEMVER.md` DRAFT banner are the Mes-gated
+> release act (SEMVER §4 #7/#8) — **not done here**. Until then the package stays `0.3.1`.
+
+### Stability commitment
+- **First SemVer-stable release.** From the 1.0.0 tag, the surfaces classified **Stable** in
+  `SEMVER.md` §2 (loop CLI subcommands + core flags, launcher CLI + exit codes, ticket format,
+  gate/config schema, the 7 outcome states, `agents_never_sleep.__version__` + the console entry
+  points) are guaranteed: a breaking change to any of them requires a MAJOR bump. **Per-platform
+  adapter *behaviour* is best-effort** against each platform's recorded hook-contract version
+  (SEMVER §D5) — a host changing its hook API is the one failure mode outside ANS's control.
+  Machine-guarded by `acceptance/test_surface_drift.py`.
+
+### Changed
+- **Package renamed `harness` → `agents_never_sleep`** so the public import path matches the
+  distribution name (a generic `harness` is collision-prone once pip-installed). A back-compat
+  `harness` shim (emits one `DeprecationWarning`) keeps `import harness`, `from harness.launcher
+  import main`, and `python3 -m harness.run` / `-m harness.enforce` working through **all of 1.x**;
+  it is **removed in 2.0**. Console entry points + the dynamic-version attr now resolve
+  `agents_never_sleep`. **Migration:** swap `harness` → `agents_never_sleep` in your imports/recipes
+  at your convenience before 2.0.
 
 ### Added
+- `py.typed` (PEP 561) so type-checkers consume the package's inline annotations.
+- `acceptance/test_surface_drift.py` — guards the Stable surface (subcommands, core flags, the 7
+  outcome states) against drift vs `SEMVER.md` §2.
+- Per-platform **tested hook-contract version** (`capabilities._HOOK_CONTRACT`, surfaced in the run
+  report) + a hook-contract-coverage assertion over all 6 enforcement adapters' negative tests.
+
+### Removed
+- The Experimental in-process `run` CLI subcommand (+ its unwired `NullWorker`). Real runs use
+  `next`/`complete`; `Orchestrator.run()` stays as the internal demo/reference loop.
+
+### Security
+- The persisted outcome store (`.unattended/state/*.json`) is now scrubbed by the same shape-anchored
+  redactor as the other outward surfaces, so a credential pasted into an agent's free-text
+  (`attempted`/`exact_blocker`) can't linger verbatim on disk.
+
+### Deprecated
+- The `harness` import name — use `agents_never_sleep`; the shim is removed in 2.0.
+
+---
+
+_Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
+
+### Added (groundwork)
 - **Packaging — `pyproject.toml` (ticket INT-1964).** `pip install agents-never-sleep` now works
   in a fresh venv with **zero runtime dependencies** (the harness is pure standard library).
   - Two console scripts: `ans-run` → `harness.launcher:main` (pre-token preflight launcher) and
