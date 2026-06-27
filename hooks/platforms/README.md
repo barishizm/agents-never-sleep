@@ -3,7 +3,8 @@
 The autonomy contract — **never-ASK**, **deny-irreversible**, **never-stop** — is enforced at the code
 layer so it does not rely on the agent's 2am judgment. The Claude adapter is the three bash hooks one
 level up (`../*.sh`). This folder wires the **same decisions** into the other supported platforms via
-one shared dispatcher: `python3 -m harness.enforce <platform> <event>` (launched by `../enforce.sh`).
+one shared dispatcher: `python3 -m agents_never_sleep.enforce <platform> <event>` (launched by
+`../enforce.sh`; the pre-1.0 `python3 -m harness.enforce` still works via the back-compat shim).
 
 **Strategy: best-effort + graceful degradation.** Each platform enforces what its hook system allows.
 Where the host agent/CLI **provides no native hook for a guarantee and no alternative mechanism**
@@ -24,6 +25,14 @@ instructed to honour it) AND emits a loud **BLIND SPOT** in the morning report (
 | Windsurf | ✅ native | 🟡 soft-enforced (no stop event) | 🟡 soft-enforced (no pre-ask hook) |
 
 `deny-irreversible` works on every platform. The 🟡 soft-enforced cells are reported as blind spots at run end.
+
+**Tested hook contract.** Each adapter is built + hermetically tested against that platform's
+**2026-06 documented hook contract** (recorded per platform in `agents_never_sleep/capabilities.py`
+`_HOOK_CONTRACT`, surfaced in the run report). Only **Claude Code** is additionally **live-verified**
+on the real tool; the other five are documented-but-not-live-smoked (the report says so, never
+over-promising). This recorded version is the drift guard: if a real-tool deny ever stops
+registering, compare the tool's current hook version against the one stamped for it — a host
+changing its hook API is the one failure mode outside ANS's control (SEMVER §D5).
 
 ## Install (per platform — all opt-in, all env-gated)
 

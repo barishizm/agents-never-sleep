@@ -43,6 +43,27 @@ SUPPORTED = tuple(_MATRIX)
 # so a "native" cell there must NOT be reported as proven protection (avoid active false assurance).
 LIVE_VERIFIED = frozenset({"claude"})
 
+# The DOCUMENTED hook-contract reference each platform's adapter was built + hermetically tested
+# against (see references/cross-platform-enforcement-design.md "Sources", researched 2026-06).
+# Recorded so the biggest post-1.0 yank risk — a host changing its hook API out from under us — is
+# DETECTABLE: if a real-tool deny ever stops registering, compare that tool's current hook version
+# against the one stamped here. This is the cheap guard the stability guarantee leans on
+# (SEMVER §D5: ANS's API is Stable; adapter BEHAVIOUR is best-effort vs these recorded versions).
+_HOOK_CONTRACT = {
+    "claude":   "Claude Code PreToolUse/Stop hooks — 2026-06 documented contract",
+    "gemini":   "Gemini CLI settings.json hooks — 2026-06 documented contract",
+    "codex":    "Codex CLI hooks.json / config.toml [hooks] — 2026-06 documented contract",
+    "copilot":  "Copilot CLI .github/hooks + ask_user tool — 2026-06 documented contract",
+    "cursor":   "Cursor .cursor/hooks.json — 2026-06 documented contract",
+    "windsurf": "Windsurf hooks.json — 2026-06 documented contract",
+}
+
+
+def hook_contract(platform: str) -> str:
+    """The documented hook-contract reference the platform's adapter targets — the version to
+    compare against if a real-tool deny ever stops registering (third-party-hook drift guard)."""
+    return _HOOK_CONTRACT.get(platform, _HOOK_CONTRACT["claude"])
+
 
 def detect_platform(env=None) -> str:
     """The platform id. Explicit `UE_PLATFORM` wins (set by the launcher/install); defaults to
@@ -77,8 +98,8 @@ def verification_note(platform: str):
     if not native:
         return None
     return (f"enforcement on {platform}: {', '.join(native)} built to {platform}'s DOCUMENTED hook "
-            "contract but NOT yet live-verified on the real tool — run the smoke-test "
-            "(hooks/platforms/README.md) to confirm a deny actually registers.")
+            f"contract [{hook_contract(platform)}] but NOT yet live-verified on the real tool — run "
+            "the smoke-test (hooks/platforms/README.md) to confirm a deny actually registers.")
 
 
 def report_notes(platform: str) -> list:

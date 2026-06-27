@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-platform dispatcher test — proves harness.enforce emits each platform's CORRECT deny/block
+"""Cross-platform dispatcher test — proves agents_never_sleep.enforce emits each platform's CORRECT deny/block
 shape from that platform's documented stdin payload (the achievable hermetic bar; live smoke-tests on
 the real tools are a documented manual follow-up).
 
@@ -25,7 +25,7 @@ def _run(platform, event, payload, *, unattended=True, sentinel_path=None):
         env["UE_UNATTENDED"] = "1"
     if sentinel_path:
         env["UE_RUN_INCOMPLETE"] = sentinel_path
-    p = subprocess.run([sys.executable, "-m", "harness.enforce", platform, event],
+    p = subprocess.run([sys.executable, "-m", "agents_never_sleep.enforce", platform, event],
                        input=json.dumps(payload), text=True, capture_output=True,
                        cwd=SKILL_ROOT, env=env)
     return p
@@ -90,8 +90,23 @@ STOP_SUPPORT = ("claude", "gemini", "codex", "copilot", "cursor")
 PLATFORMS = list(IRREVERSIBLE)
 
 
+def _check_hook_contract_coverage(failures):
+    """Every supported platform must carry a recorded hook-contract version (the drift guard the
+    1.0 stability statement leans on) and the tested set must equal the capability matrix."""
+    sys.path.insert(0, SKILL_ROOT)
+    from agents_never_sleep import capabilities
+    tested = set(PLATFORMS)
+    supported = set(capabilities.SUPPORTED)
+    if tested != supported:
+        failures.append(f"[matrix] tested platforms {sorted(tested)} != capability matrix {sorted(supported)}")
+    for plat in supported:
+        if not capabilities.hook_contract(plat) or "contract" not in capabilities.hook_contract(plat):
+            failures.append(f"[matrix] {plat} has no recorded hook-contract version")
+
+
 def main() -> int:
     failures = []
+    _check_hook_contract_coverage(failures)
     def fresh_sentinel():
         # each run gets its OWN .unattended dir, so the platform-independent stop-block counter
         # (kept beside the sentinel) is isolated per run — exactly as in production.
@@ -160,7 +175,7 @@ def main() -> int:
 
     # fail-open on non-dict stdin: a JSON array must NOT crash (would be exit 1 = let-through on
     # windsurf). It should be a clean allow (rc 0, no deny), never a wedge.
-    p = subprocess.run([sys.executable, "-m", "harness.enforce", "windsurf", "pre_tool"],
+    p = subprocess.run([sys.executable, "-m", "agents_never_sleep.enforce", "windsurf", "pre_tool"],
                        input="[1,2,3]", text=True, capture_output=True, cwd=SKILL_ROOT,
                        env={**os.environ, "UE_UNATTENDED": "1"})
     if p.returncode not in (0,):
