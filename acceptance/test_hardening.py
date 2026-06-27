@@ -21,15 +21,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness.driver import StepDriver  # noqa: E402
-from harness.gates import GateRunner  # noqa: E402
-from harness.heartbeat import Heartbeat  # noqa: E402
-from harness.ledger import AttemptLedger  # noqa: E402
-from harness.orchestrator import LowYieldBreaker, Orchestrator, ProceedToken  # noqa: E402
-from harness.state import ContaminationScope, OutcomeState, OutcomeStore, TicketOutcome  # noqa: E402
-from harness.tickets import load_tickets  # noqa: E402
-from harness.vcs import GitError  # noqa: E402
-from harness.worker import DemoWorker  # noqa: E402
+from agents_never_sleep.driver import StepDriver  # noqa: E402
+from agents_never_sleep.gates import GateRunner  # noqa: E402
+from agents_never_sleep.heartbeat import Heartbeat  # noqa: E402
+from agents_never_sleep.ledger import AttemptLedger  # noqa: E402
+from agents_never_sleep.orchestrator import LowYieldBreaker, Orchestrator, ProceedToken  # noqa: E402
+from agents_never_sleep.state import ContaminationScope, OutcomeState, OutcomeStore, TicketOutcome  # noqa: E402
+from agents_never_sleep.tickets import load_tickets  # noqa: E402
+from agents_never_sleep.vcs import GitError  # noqa: E402
+from agents_never_sleep.worker import DemoWorker  # noqa: E402
 
 
 def _build(work, *, breaker=None, heartbeat=None):
@@ -181,7 +181,7 @@ def test_bug4_hard_fail_on_path_mismatch(failures):
 
 
 def test_frontmatter_horizontal_rule(failures):
-    from harness.tickets import _parse_frontmatter
+    from agents_never_sleep.tickets import _parse_frontmatter
     prose = "---\nThis is a release note.\n\nSome **bold** prose, no frontmatter here.\n---\ntail\n"
     meta, body = _parse_frontmatter(prose)
     if meta != {}:
@@ -200,7 +200,7 @@ def test_frontmatter_horizontal_rule(failures):
 
 
 def test_ledger_partial_json(failures):
-    from harness.ledger import AttemptLedger
+    from agents_never_sleep.ledger import AttemptLedger
     work = tempfile.mkdtemp(prefix="ue-h-ledger-")
     path = os.path.join(work, "ledger.json")
     with open(path, "w") as fh:
@@ -215,8 +215,8 @@ def test_ledger_partial_json(failures):
 
 
 def test_bare_filename_no_crash(failures):
-    from harness.heartbeat import Heartbeat
-    from harness.ledger import AttemptLedger
+    from agents_never_sleep.heartbeat import Heartbeat
+    from agents_never_sleep.ledger import AttemptLedger
     work = tempfile.mkdtemp(prefix="ue-h-bare-")
     cwd0 = os.getcwd()
     try:

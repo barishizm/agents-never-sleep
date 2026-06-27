@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness.vcs import Git  # noqa: E402
+from agents_never_sleep.vcs import Git  # noqa: E402
 
 
 def _git(repo, *args):
@@ -98,7 +98,7 @@ def test_backup_failure_on_dirty_tree_aborts_reset(failures):
     for an environmental reason — full disk, lock, RO object store), revert_to must RAISE and must
     NOT proceed to the destructive reset. Silently returning None and resetting = data loss with no
     backup, the exact bug being fixed."""
-    from harness.vcs import GitError
+    from agents_never_sleep.vcs import GitError
     repo = _new_repo()
     head = _git(repo, "rev-parse", "HEAD").stdout.strip()
     with open(os.path.join(repo, "tracked.txt"), "w") as fh:

@@ -23,14 +23,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness import council                                  # noqa: E402
-from harness.council import BudgetDecision, CouncilTier     # noqa: E402
-from harness.driver import _run_start_credits_preflight, StepDriver  # noqa: E402
-from harness.gates import GateRunner                         # noqa: E402
-from harness.ledger import AttemptLedger                     # noqa: E402
-from harness.orchestrator import Orchestrator                # noqa: E402
-from harness.state import OutcomeState, OutcomeStore         # noqa: E402
-from harness.tickets import load_tickets                     # noqa: E402
+from agents_never_sleep import council                                  # noqa: E402
+from agents_never_sleep.council import BudgetDecision, CouncilTier     # noqa: E402
+from agents_never_sleep.driver import _run_start_credits_preflight, StepDriver  # noqa: E402
+from agents_never_sleep.gates import GateRunner                         # noqa: E402
+from agents_never_sleep.ledger import AttemptLedger                     # noqa: E402
+from agents_never_sleep.orchestrator import Orchestrator                # noqa: E402
+from agents_never_sleep.state import OutcomeState, OutcomeStore         # noqa: E402
+from agents_never_sleep.tickets import load_tickets                     # noqa: E402
 
 # Minimal config with council + tokonomix enabled.
 CFG_STOP = {
@@ -356,8 +356,8 @@ def test_e2e_stop_credits(failures):
 
 def test_e2e_degrade_floors_done(failures):
     """In degrade mode, a ticket that would normally be DONE becomes DONE_LOW_CONFIDENCE."""
-    from harness.orchestrator import Orchestrator, ProceedToken
-    from harness.state import OutcomeState
+    from agents_never_sleep.orchestrator import Orchestrator, ProceedToken
+    from agents_never_sleep.state import OutcomeState
     work = tempfile.mkdtemp(prefix="ue-budget-e2e-degrade-")
     try:
         repo = os.path.join(work, "repo")
@@ -407,7 +407,7 @@ def test_e2e_402_roundtrip_stops(failures):
     """The reactive backstop: a council that reports HTTP 402 under policy A must make the NEXT
     next_ticket() terminate as STOPPED_CREDITS — proving credits_stop_requested survives the
     read-modify-write bumps inside complete_ticket (regression guard for the lossy-schema bug)."""
-    from harness.state import OutcomeState  # noqa: F401
+    from agents_never_sleep.state import OutcomeState  # noqa: F401
     work = tempfile.mkdtemp(prefix="ue-budget-e2e-402-")
     try:
         repo = os.path.join(work, "repo")
@@ -450,8 +450,8 @@ def test_e2e_402_roundtrip_stops(failures):
 
 def test_config_default(failures):
     """default_config includes on_credits_exhausted='stop'."""
-    from harness.config import default_config
-    from harness.preflight import CapabilityProfile
+    from agents_never_sleep.config import default_config
+    from agents_never_sleep.preflight import CapabilityProfile
     profile = CapabilityProfile(
         platform="test", has_git=False, git_clean=False, exec_mode="direct",
         gates=[], has_tokonomix=False, has_vault=False, has_paperclip=False,

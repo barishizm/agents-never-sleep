@@ -15,9 +15,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness.decide import Action  # noqa: E402
-from harness.orchestrator import Orchestrator  # noqa: E402
-from harness.tickets import Ticket  # noqa: E402
+from agents_never_sleep.decide import Action  # noqa: E402
+from agents_never_sleep.orchestrator import Orchestrator  # noqa: E402
+from agents_never_sleep.tickets import Ticket  # noqa: E402
 
 
 class _StubGate:

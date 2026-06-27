@@ -11,8 +11,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness import capabilities as C  # noqa: E402
-from harness.capabilities import DENY_IRREVERSIBLE, NEVER_ASK, NEVER_STOP, NATIVE, DEGRADED  # noqa: E402
+from agents_never_sleep import capabilities as C  # noqa: E402
+from agents_never_sleep.capabilities import DENY_IRREVERSIBLE, NEVER_ASK, NEVER_STOP, NATIVE, DEGRADED  # noqa: E402
 
 
 def test_matrix(failures):

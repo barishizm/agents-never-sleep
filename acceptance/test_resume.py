@@ -15,12 +15,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness.gates import GateRunner  # noqa: E402
-from harness.ledger import AttemptLedger  # noqa: E402
-from harness.orchestrator import Orchestrator  # noqa: E402
-from harness.state import OutcomeState, OutcomeStore  # noqa: E402
-from harness.tickets import load_tickets  # noqa: E402
-from harness.worker import DemoWorker  # noqa: E402
+from agents_never_sleep.gates import GateRunner  # noqa: E402
+from agents_never_sleep.ledger import AttemptLedger  # noqa: E402
+from agents_never_sleep.orchestrator import Orchestrator  # noqa: E402
+from agents_never_sleep.state import OutcomeState, OutcomeStore  # noqa: E402
+from agents_never_sleep.tickets import load_tickets  # noqa: E402
+from agents_never_sleep.worker import DemoWorker  # noqa: E402
 
 
 def build(repo, state_dir, artifacts_dir):

@@ -17,9 +17,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-from harness.agent_clis import (  # noqa: E402
+from agents_never_sleep.agent_clis import (  # noqa: E402
     AGENT_CLIS, ALLOWLIST, detect_session_platform, is_allowlisted)
-from harness import preflight  # noqa: E402
+from agents_never_sleep import preflight  # noqa: E402
 
 
 def test_map_shape(failures):

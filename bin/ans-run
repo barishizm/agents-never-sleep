@@ -22,7 +22,7 @@ if _SKILL_ROOT not in sys.path:
     sys.path.insert(0, _SKILL_ROOT)
 
 try:
-    from harness.launcher import main
+    from agents_never_sleep.launcher import main
 except ImportError as exc:  # copied out of the checkout → no importable harness package
     print(f"ans-run: cannot import the harness ({exc}) — run bin/ans-run from the skill "
           "checkout, or symlink it into PATH instead of copying the file (or "

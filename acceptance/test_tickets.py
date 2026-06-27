@@ -18,9 +18,9 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-from harness.tickets import load_tickets                 # noqa: E402
-from harness.report import build_report                  # noqa: E402
-from harness.state import TicketOutcome, OutcomeState    # noqa: E402
+from agents_never_sleep.tickets import load_tickets                 # noqa: E402
+from agents_never_sleep.report import build_report                  # noqa: E402
+from agents_never_sleep.state import TicketOutcome, OutcomeState    # noqa: E402
 
 
 def _ticket_dir(files: dict) -> str:

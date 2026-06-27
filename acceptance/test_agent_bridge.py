@@ -2,7 +2,7 @@
 """Agent-as-worker BRIDGE acceptance test — proves the real overnight path, not the in-process one.
 
 `run_acceptance.py` drives the in-process `Orchestrator` with a DemoWorker. That proves the spine
-but NOT the bridge a real run uses: the agent calling `python3 -m harness.run next`, implementing
+but NOT the bridge a real run uses: the agent calling `python3 -m agents_never_sleep.run next`, implementing
 the one ticket it is handed, then calling `... complete`, in a loop, across separate processes.
 
 This test is a scripted agent doing exactly that over the same 3 tickets via the real CLI, and it
@@ -26,9 +26,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness.state import OutcomeState, OutcomeStore  # noqa: E402
-from harness.tickets import load_tickets  # noqa: E402
-from harness.worker import DemoWorker  # noqa: E402
+from agents_never_sleep.state import OutcomeState, OutcomeStore  # noqa: E402
+from agents_never_sleep.tickets import load_tickets  # noqa: E402
+from agents_never_sleep.worker import DemoWorker  # noqa: E402
 
 EXPECTED = {
     "ticket-01-trivial": OutcomeState.DONE,

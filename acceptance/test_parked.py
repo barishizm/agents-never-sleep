@@ -19,7 +19,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness.parked import ParkedGuard  # noqa: E402
+from agents_never_sleep.parked import ParkedGuard  # noqa: E402
 
 
 def _git(repo, *args):

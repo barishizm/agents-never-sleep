@@ -1,7 +1,7 @@
 """Cross-platform enforcement DISPATCHER.
 
 One CLI, wired from each platform's hook config:
-    <platform-hook> -> python3 -m harness.enforce <platform> <event>
+    <platform-hook> -> python3 -m agents_never_sleep.enforce <platform> <event>
 
 It reads the platform's hook payload on stdin, NORMALISES it to (tool_name, command), asks the
 platform-neutral core (harness.enforcement.decide) for the verdict, and writes THAT platform's

@@ -21,8 +21,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-from harness import f5  # noqa: E402
-from harness.decide import classify, Action  # noqa: E402
+from agents_never_sleep import f5  # noqa: E402
+from agents_never_sleep.decide import classify, Action  # noqa: E402
 
 
 def _req_meaning_decision():

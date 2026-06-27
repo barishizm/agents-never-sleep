@@ -8,7 +8,7 @@ to a cap, then alerts. This is a separate sidecar ON PURPOSE: it must NOT modify
 flag (see WATCHDOG.md) — do not rewrite the wrapper.
 
 Usage:
-  python3 -m harness.watchdog --heartbeat <file> --stale 900 --max-restarts 3 -- <command...>
+  python3 -m agents_never_sleep.watchdog --heartbeat <file> --stale 900 --max-restarts 3 -- <command...>
 
 On exhausted restarts it runs the optional --alert command (e.g. a Paperclip issue creator).
 """
@@ -39,7 +39,7 @@ def _terminate(proc: subprocess.Popen) -> None:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="harness.watchdog")
+    ap = argparse.ArgumentParser(prog="agents_never_sleep.watchdog")
     ap.add_argument("--heartbeat", required=True)
     # CRITICAL: in the agent-driven flow the heartbeat is only beaten at next/complete boundaries;
     # between them the agent implements one ticket, which can take the full per_ticket_timeout_s

@@ -16,8 +16,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness.sources import paperclip as pc  # noqa: E402
-from harness.state import OutcomeState, OutcomeStore, TicketOutcome  # noqa: E402
+from agents_never_sleep.sources import paperclip as pc  # noqa: E402
+from agents_never_sleep.state import OutcomeState, OutcomeStore, TicketOutcome  # noqa: E402
 
 ISSUES = [
     {"id": "u-1", "identifier": "INF-1", "projectId": "P", "title": "open one",
@@ -146,7 +146,7 @@ def main() -> int:
     store.write(TicketOutcome(ticket_id="INF-1", state=OutcomeState.DONE, why="done"))
     op_i = _Opener(ISSUES)
     client_i = pc.PaperclipClient("http://x", "tok", "C", opener=op_i, write_enabled=True)
-    from harness.run import _push_paperclip
+    from agents_never_sleep.run import _push_paperclip
     ctx = types.SimpleNamespace(paperclip=client_i, pcp_id_by_ticket={"INF-1": "u-1"},
                                 store=store, state_dir=sd)
     r1 = _push_paperclip(ctx)

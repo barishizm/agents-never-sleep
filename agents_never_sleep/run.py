@@ -4,18 +4,18 @@
 The loop is AGENT-DRIVEN (the agent is the worker), so the primary interface is two subcommands the
 agent alternates between until the backlog drains:
 
-    python3 -m harness.run next      [--repo . --tickets tickets]   -> JSON: a PROCEED ticket OR a
+    python3 -m agents_never_sleep.run next      [--repo . --tickets tickets]   -> JSON: a PROCEED ticket OR a
                                                                        terminal signal (DRAINED/
                                                                        HALTED/LOW_YIELD)
-    python3 -m harness.run complete  --attempted "what I did"        -> JSON: the recorded outcome
+    python3 -m agents_never_sleep.run complete  --attempted "what I did"        -> JSON: the recorded outcome
                                      [--cannot-implement] [--review-coverage ...]
 
 `next` owns the run-incomplete sentinel and writes every PARK/cap outcome itself; the agent only
 implements the single ticket body it is handed, then calls `complete`. See harness/driver.py.
 
 Auxiliary subcommands:
-    python3 -m harness.run report    -> (re)write the morning report from the durable store
-    python3 -m harness.run run       -> legacy in-process loop (needs a wired Worker; the agent-
+    python3 -m agents_never_sleep.run report    -> (re)write the morning report from the durable store
+    python3 -m agents_never_sleep.run run       -> legacy in-process loop (needs a wired Worker; the agent-
                                         driven path above is what real runs use)
 
 All subcommands print a single JSON object to stdout so a driver/agent can parse the result.
@@ -419,7 +419,7 @@ def _add_common(p: argparse.ArgumentParser) -> None:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="harness.run")
+    ap = argparse.ArgumentParser(prog="agents_never_sleep.run")
     sub = ap.add_subparsers(dest="cmd")
 
     pn = sub.add_parser("next", help="get the next PROCEED ticket (or a terminal signal)")

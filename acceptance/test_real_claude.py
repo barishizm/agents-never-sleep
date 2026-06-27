@@ -54,10 +54,10 @@ def test_real_claude_drives_two_tickets():
             Your ONLY job: drive the harness loop until DRAINED.
 
             Loop:
-            1. Run: python3 -m harness.run next --repo {repo} --tickets {tickets_dir}
+            1. Run: python3 -m agents_never_sleep.run next --repo {repo} --tickets {tickets_dir}
             2. If status is DRAINED or HALTED: STOP immediately (exit).
             3. If status is PROCEED: implement the ticket body by editing files in {repo}.
-               Then run: python3 -m harness.run complete --repo {repo} --tickets {tickets_dir} --attempted "done"
+               Then run: python3 -m agents_never_sleep.run complete --repo {repo} --tickets {tickets_dir} --attempted "done"
             4. Go to step 1.
 
             Rules:
@@ -77,7 +77,7 @@ def test_real_claude_drives_two_tickets():
         env["UE_RUN_INCOMPLETE"] = os.path.join(repo, ".unattended", "run-incomplete")
         # `--dangerously-skip-permissions` mirrors how ANS actually launches Claude Code
         # unattended (harness/agent_clis.py + the launcher `claude` preset). The child must
-        # run shell commands (python3 -m harness.run ...) to drive the loop; the narrower
+        # run shell commands (python3 -m agents_never_sleep.run ...) to drive the loop; the narrower
         # `--permission-mode acceptEdits` auto-approves only edits, so a headless `-p` child
         # would block on the first Bash approval (no TTY) and hang until TIMEOUT_S.
         result = subprocess.run(
@@ -100,7 +100,7 @@ def test_real_claude_drives_two_tickets():
             f"state dir not written; claude exit={result.returncode}\n"
             f"stdout:\n{result.stdout[-2000:]}\nstderr:\n{result.stderr[-1000:]}"
         )
-        from harness.state import OutcomeStore
+        from agents_never_sleep.state import OutcomeStore
         outcomes = OutcomeStore(state_dir).all()
         done = sum(1 for o in outcomes if o.state.value.startswith("DONE"))
         assert done >= 2, (

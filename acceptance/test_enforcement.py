@@ -12,8 +12,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness import enforcement as E  # noqa: E402
-from harness.enforcement import Action  # noqa: E402
+from agents_never_sleep import enforcement as E  # noqa: E402
+from agents_never_sleep.enforcement import Action  # noqa: E402
 
 
 def test_ask(failures):

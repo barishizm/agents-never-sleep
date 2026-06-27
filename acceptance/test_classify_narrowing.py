@@ -16,7 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness.decide import Action, classify  # noqa: E402
+from agents_never_sleep.decide import Action, classify  # noqa: E402
 
 
 def _act(text, **kw):

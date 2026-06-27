@@ -47,21 +47,24 @@ Changelog = "https://github.com/TokonoMix/agents-never-sleep/blob/main/CHANGELOG
 # pip install generates BOTH commands on PATH. `ans-run` supersedes bin/ans-run for installed
 # users (bin/ans-run stays the checkout entry point — do NOT also ship it via script-files,
 # that would put two ans-run on PATH).
-ans-run = "harness.launcher:main"
-ans = "harness.run:main"
+ans-run = "agents_never_sleep.launcher:main"
+ans = "agents_never_sleep.run:main"
 
 [tool.setuptools.dynamic]
-version = { attr = "harness.__version__" }
+version = { attr = "agents_never_sleep.__version__" }
 
 [tool.setuptools.packages.find]
-# Package the harness and its sub-packages (harness.sources). Nothing else in the skill tree
-# is importable Python, so the find is scoped to harness*.
-include = ["harness*"]
+# Ship BOTH the real package (`agents_never_sleep`) AND the back-compat shim (`harness`, the
+# pre-1.0 import name, removed in 2.0). Dropping either breaks a published install: without
+# agents_never_sleep there is no code; without harness the legacy `python -m harness.run`
+# recipes 404. Nothing else in the skill tree is importable Python.
+include = ["agents_never_sleep*", "harness*"]
 
 [tool.setuptools.package-data]
-# PEP 561: ship the py.typed marker so type-checkers (mypy/pyright) consume the harness's
-# inline annotations instead of treating it as untyped. The harness is fully annotated.
-harness = ["py.typed"]
+# PEP 561: ship the py.typed marker so type-checkers (mypy/pyright) consume the package's
+# inline annotations instead of treating it as untyped. The package is fully annotated. (The
+# `harness` shim is deprecated and intentionally ships no py.typed.)
+agents_never_sleep = ["py.typed"]
 
 [tool.pytest.ini_options]
 # `@pytest.mark.integration` tests spawn a REAL agent CLI (claude -p) — slow + costs tokens.

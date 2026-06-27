@@ -22,11 +22,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness import redact as R  # noqa: E402
-from harness.gates import GateRunner  # noqa: E402
-from harness.orchestrator import Orchestrator  # noqa: E402
-from harness.sources.paperclip import PaperclipClient  # noqa: E402
-from harness.state import OutcomeStore  # noqa: E402
+from agents_never_sleep import redact as R  # noqa: E402
+from agents_never_sleep.gates import GateRunner  # noqa: E402
+from agents_never_sleep.orchestrator import Orchestrator  # noqa: E402
+from agents_never_sleep.sources.paperclip import PaperclipClient  # noqa: E402
+from agents_never_sleep.state import OutcomeStore  # noqa: E402
 
 
 def test_over_match_guard(failures):
@@ -136,8 +136,8 @@ def test_outward_boundary(failures):
 
     # (c) build_report file: a secret in an outcome field must not reach the report. Hit the REAL
     #     build_report (not redact() directly), so removing its redact() call fails this test.
-    from harness.report import build_report
-    from harness.state import OutcomeState, TicketOutcome
+    from agents_never_sleep.report import build_report
+    from agents_never_sleep.state import OutcomeState, TicketOutcome
     rsec = "hvs.CAESIJ0123456789ABCDEFGHIJ"
     o = TicketOutcome(ticket_id="t-sec", state=OutcomeState.FAILED_RETRYABLE,
                       why=f"failure printed token {rsec}",
@@ -148,7 +148,7 @@ def test_outward_boundary(failures):
     # (d) _emit: the JSON printed to stdout must be redacted (hit the REAL _emit).
     import contextlib
     import io
-    from harness.run import _emit
+    from agents_never_sleep.run import _emit
     esec = "pcp_board_abcdef0123456789abcdef0123456789abcdef01"
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):

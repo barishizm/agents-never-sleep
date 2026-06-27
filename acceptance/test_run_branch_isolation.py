@@ -21,12 +21,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness.driver import StepDriver  # noqa: E402
-from harness.gates import GateRunner  # noqa: E402
-from harness.ledger import AttemptLedger  # noqa: E402
-from harness.orchestrator import Orchestrator  # noqa: E402
-from harness.state import OutcomeStore  # noqa: E402
-from harness.tickets import Ticket  # noqa: E402
+from agents_never_sleep.driver import StepDriver  # noqa: E402
+from agents_never_sleep.gates import GateRunner  # noqa: E402
+from agents_never_sleep.ledger import AttemptLedger  # noqa: E402
+from agents_never_sleep.orchestrator import Orchestrator  # noqa: E402
+from agents_never_sleep.state import OutcomeStore  # noqa: E402
+from agents_never_sleep.tickets import Ticket  # noqa: E402
 
 
 def _git(repo, *args):

@@ -18,8 +18,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(HERE)
 sys.path.insert(0, SKILL_ROOT)
 
-from harness import redact as R  # noqa: E402
-from harness.keysource import VaultClient, VaultError, resolve_ref  # noqa: E402
+from agents_never_sleep import redact as R  # noqa: E402
+from agents_never_sleep.keysource import VaultClient, VaultError, resolve_ref  # noqa: E402
 
 VAULT_ON = {"integrations": {"vault": {"enabled": True}}}
 VAULT_OFF = {"integrations": {"vault": {"enabled": False}}}
@@ -171,10 +171,10 @@ def test_blind_spots_surfaced(failures):
     previously collected but never read). Drive a StepDriver with no tickets -> DRAINED + report."""
     import shutil
     import tempfile
-    from harness.gates import GateRunner
-    from harness.orchestrator import Orchestrator
-    from harness.state import OutcomeStore
-    from harness.driver import StepDriver
+    from agents_never_sleep.gates import GateRunner
+    from agents_never_sleep.orchestrator import Orchestrator
+    from agents_never_sleep.state import OutcomeStore
+    from agents_never_sleep.driver import StepDriver
     work = tempfile.mkdtemp(prefix="ue-ks-")
     repo = os.path.join(work, "repo")
     shutil.copytree(os.path.join(HERE, "sandbox"), repo)

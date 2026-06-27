@@ -186,7 +186,7 @@ def reexec_as_target_user(target_user: str) -> int:
     print(f"ans-run: started as root — re-exec as user '{target_user}'...", file=sys.stderr)
     # Re-exec the SHIM (bin/ans-run), not this module: the shim self-bootstraps sys.path
     # (it prepends the skill root before importing harness), so it works from any cwd. We must
-    # NOT re-exec `python -m harness.launcher` — `sudo -H` env-resets PYTHONPATH and the re-exec
+    # NOT re-exec `python -m agents_never_sleep.launcher` — `sudo -H` env-resets PYTHONPATH and the re-exec
     # happens before chdir(repo), so `harness` would be unimportable for the target user.
     # When ANS is pip-installed (no checkout shim on disk), fall back to the `ans-run` console
     # script, which resolves the package the normal site-packages way.
