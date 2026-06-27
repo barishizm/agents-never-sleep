@@ -50,7 +50,6 @@ already in place when 1.0 lands.
 | `report` subcommand | **Stable** | Re-emits the morning report. |
 | `reset-attempts`, `reset-spend` | **Stable** | Operator escapes. |
 | `parked protect|restore` | **Experimental** | WIP-protection surface (INT-1735). |
-| `run` (legacy in-process loop) | **Experimental / deprecated** | Needs a wired Worker; real runs use `next`/`complete`. Candidate for removal before 1.0. |
 | JSON output shapes in ARCHITECTURE.md §1 | **Stable** | Documented keys only; undocumented keys may appear/disappear. |
 
 ### 2.2 CLI — the launcher (`bin/ans-run` / `ans-run`)

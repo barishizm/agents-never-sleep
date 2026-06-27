@@ -15,8 +15,6 @@ implements the single ticket body it is handed, then calls `complete`. See harne
 
 Auxiliary subcommands:
     python3 -m agents_never_sleep.run report    -> (re)write the morning report from the durable store
-    python3 -m agents_never_sleep.run run       -> legacy in-process loop (needs a wired Worker; the agent-
-                                        driven path above is what real runs use)
 
 All subcommands print a single JSON object to stdout so a driver/agent can parse the result.
 """
@@ -37,18 +35,6 @@ from .preflight import run_preflight, write_profile
 from .report import build_report
 from .state import OutcomeStore
 from .tickets import load_tickets
-from .worker import Worker, WorkerCannotImplement
-
-
-class NullWorker(Worker):
-    """Placeholder worker for the legacy in-process `run` subcommand. In production the agent is the
-    worker (see the `next`/`complete` flow); without one we surface tickets honestly, never crash."""
-
-    def apply(self, ticket, repo_dir: str) -> str:
-        raise WorkerCannotImplement(
-            "no worker wired: use the agent-driven `next`/`complete` flow")
-
-
 def _unattended() -> bool:
     return bool(os.environ.get("CLAUDE_UNATTENDED")) or not sys.stdin.isatty()
 
@@ -153,8 +139,11 @@ class _Context:
             rel = os.path.relpath(d, self.repo)
             if not rel.startswith(".."):
                 protect.add(rel.split(os.sep)[0])
+        # worker=None: the CLI next/complete flow drives the orchestrator via StepDriver,
+        # which never calls Orchestrator.run() (the agent IS the worker). Orchestrator.run()
+        # with a real Worker remains the in-process reference loop used by the acceptance demo.
         self.orch = Orchestrator(
-            repo_dir=self.repo, store=self.store, gate=self.gate, worker=NullWorker(),
+            repo_dir=self.repo, store=self.store, gate=self.gate, worker=None,
             artifacts_dir=self.artifacts_dir, unattended=self.unattended,
             ledger=self.ledger, heartbeat=self.heartbeat,
             fix_cap=self.config.get("budget", {}).get("per_ticket_fix_iterations", 3),
@@ -390,26 +379,6 @@ def cmd_parked(args) -> int:
     return _emit({"status": "OK", "action": args.action, "result": result})
 
 
-def cmd_run(args) -> int:
-    """Legacy in-process loop (NullWorker). Kept for parity; real runs use next/complete.
-
-    NOTE: this legacy path does NOT use the run-branch isolation (INT-1825 bug 2) that next/complete
-    apply — it commits onto the currently-checked-out branch. Do not point it at a real repo expecting
-    the operator's branch to be left untouched; use the agent-driven next/complete flow for that."""
-    ctx = _Context(args)
-    result = ctx.orch.run(ctx.tickets)
-    report = build_report(result.outcomes, run_label="unattended run (in-process)",
-                          halted=result.halted, halt_reason=result.halt_reason,
-                          stopped_low_yield=result.stopped_low_yield,
-                          **_agent_hint_kwargs(ctx))
-    with open(ctx.report_path, "w", encoding="utf-8") as fh:
-        fh.write(report)
-    return _emit({"status": "HALTED" if result.halted else
-                  ("LOW_YIELD" if result.stopped_low_yield else "DRAINED"),
-                  "report_path": ctx.report_path,
-                  "processed": len(result.outcomes)})
-
-
 def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--repo", default=".", help="project working directory")
     p.add_argument("--tickets", default="tickets", help="dir of .md tickets")
@@ -470,10 +439,6 @@ def main(argv=None) -> int:
     pp.add_argument("action", choices=["protect", "restore"],
                     help="protect = stash parked WIP before a run; restore = bring it back after")
     pp.set_defaults(func=cmd_parked)
-
-    prun = sub.add_parser("run", help="legacy in-process loop (needs a wired Worker)")
-    _add_common(prun)
-    prun.set_defaults(func=cmd_run)
 
     args = ap.parse_args(argv)
     if not getattr(args, "func", None):
