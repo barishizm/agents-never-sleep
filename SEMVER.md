@@ -40,7 +40,7 @@ already in place when 1.0 lands.
 "Stable" = covered by the §1 guarantee at 1.0. "Experimental" = may change in a MINOR before
 1.0-equivalent stabilization; do not build load-bearing automation on it without pinning.
 
-### 2.1 CLI — the loop (`python3 -m harness.run` / `ans`)
+### 2.1 CLI — the loop (`python3 -m agents_never_sleep.run` / `ans`)
 
 | Surface | Class | Notes |
 |---|---|---|
@@ -58,7 +58,7 @@ already in place when 1.0 lands.
 |---|---|---|
 | `ans-run [--repo] [--agent] [--fg] [--check] [--trust] PROMPT...` | **Stable** | Flags + exit codes (0 / 64 NO-GO / 65 busy). |
 | `.claude/agents-never-sleep.json` `launcher` section (presets, `target_user`, `checks`, `credentials_paths`, `min_disk_mb`, `fresh_session_every`) | **Stable** | Additive keys = MINOR. |
-| `ANS_RUN_NO_LOCK`, `ANS_TRUST_STORE` env vars | **Experimental** | Escape hatches / test hooks. |
+| `ANS_RUN_NO_LOCK`, `ANS_TRUST_STORE` env vars | **Experimental** | Escape hatches / test hooks — **kept Experimental at 1.0 (decision D4)**. `ANS_TRUST_STORE` is honored only under `ANS_TEST_MODE=1` (a test fixture, not a runtime knob); `ANS_RUN_NO_LOCK=1` bypasses the working-tree lock (an operator escape). Neither is a behaviour a 1.0 should freeze. |
 
 ### 2.3 Ticket format (ARCHITECTURE.md §2)
 
@@ -82,20 +82,21 @@ All seven values (`DONE`, `DONE_LOW_CONFIDENCE`, `PARKED_DECISION`, `PARKED_FOUN
 interprets a run. New states may be ADDED (MINOR); existing ones are not renamed/removed without a
 MAJOR bump.
 
-### 2.6 Python import surface (`import harness`)
+### 2.6 Python import surface (`import agents_never_sleep`)
 
 | Surface | Class | Notes |
 |---|---|---|
-| `harness.__version__` | **Stable** | |
-| `harness.launcher:main`, `harness.run:main` (the console entry points) | **Stable** | Their *callability* is the contract, not their internal signature. |
-| Everything else under `harness.*` (e.g. `harness.driver`, `harness.orchestrator`, `harness.council`) | **Experimental / internal** | Importable but NOT a supported API. Use the CLI. |
+| `agents_never_sleep.__version__` | **Stable** | Canonical version symbol. |
+| `agents_never_sleep.launcher:main`, `agents_never_sleep.run:main` (the console entry points) | **Stable** | Their *callability* is the contract, not their internal signature. |
+| Everything else under `agents_never_sleep.*` (e.g. `.driver`, `.orchestrator`, `.council`) | **Experimental / internal** | Importable but NOT a supported API. Use the CLI. |
+| `harness` (and `harness.*`, `harness.__version__`) | **Deprecated shim** | Back-compat for the pre-1.0 import name; re-exports `agents_never_sleep` and emits one `DeprecationWarning`. Works through all of 1.x; **removed in 2.0**. |
 
-> ⚠️ **v1.0 blocker (see §4): top-level package name `harness`.** Pip-installing makes
-> `import harness` the public import path — a generic, collision-prone name for a published package.
-> Renaming the package to `agents_never_sleep` is a one-time breaking change that should land
-> **before** 1.0 (after 1.0 it would be a MAJOR bump). Deferred now because it breaks the symlinked
-> dev install, `python -m harness.run` in every doc/recipe, and `test_*` imports — it needs its own
-> ticket. **Decision for Mes.**
+> ✅ **v1.0 blocker resolved (decision D1).** The package was renamed `harness` →
+> `agents_never_sleep` so the public import path matches the distribution name (a generic
+> `harness` is collision-prone once pip-installed; after 1.0 this rename would be a MAJOR bump).
+> A thin `harness` shim preserves every pre-1.0 recipe (`import harness`, `from harness.launcher
+> import main`, `python -m harness.run` / `-m harness.enforce`) through 1.x and is removed in 2.0.
+> Verified from a fresh-venv wheel install; guarded by `acceptance/test_shim.py`.
 
 ## 3. Deprecation policy (applies from 1.0)
 
@@ -112,10 +113,10 @@ publishing to PyPI, and cutting the GitHub release are explicit Mes decisions �
 
 | # | Criterion | Status |
 |---|---|---|
-| 1 | **Stable surface frozen & reviewed** — §2 classifications signed off; "Experimental" items either stabilized or explicitly kept experimental past 1.0. | ☐ pending Mes review of this doc |
+| 1 | **Stable surface frozen & reviewed** — §2 classifications signed off; "Experimental" items either stabilized or explicitly kept experimental past 1.0. | ◐ drafted + machine-guarded by `acceptance/test_surface_drift.py` (subcommands, core flags, 7 outcome states); ☐ pending Mes sign-off |
 | 2 | **`pip install agents-never-sleep` works** in a fresh venv, both console scripts on PATH. | ✅ built + verified locally (wheel installs offline, `ans-run`/`ans` run from a venv); **PyPI publish is a Mes action** |
 | 3 | **Real-agent E2E proof** — `acceptance/test_real_claude.py` drives real `claude -p` to DRAINED, asserts done≥2 **and** committed work on the run branch. | ✅ test present + collects clean; live run is Mes/credential-gated |
-| 4 | **Package rename** `harness` → `agents_never_sleep` (§2.6 blocker) decided + executed, or explicitly waived. | ☐ Mes decision (needs own ticket) |
+| 4 | **Package rename** `harness` → `agents_never_sleep` (§2.6 blocker) decided + executed, or explicitly waived. | ✅ done — renamed with a back-compat `harness` shim (decision D1); verified from a fresh-venv wheel install; guarded by `acceptance/test_shim.py` |
 | 5 | **Cross-platform enforcement adapters** — at least Codex + Gemini CLI hooks implemented & tested (Claude Code shipped). | ☐ partial (adapters scaffolded under `hooks/platforms/`) |
 | 6 | **Public docs** — tokonomix.ai/agents-never-sleep (or equivalent) published. | ☐ |
 | 7 | **CHANGELOG complete** with a `1.0.0` entry + the SemVer commitment statement made final (remove the DRAFT banner from this file). | ☐ |

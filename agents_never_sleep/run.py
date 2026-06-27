@@ -387,7 +387,9 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--report", default="night-report.md")
 
 
-def main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser. Exposed (not inlined in main) so the surface-drift test can
+    introspect the frozen Stable subcommand set without shelling out to --help."""
     ap = argparse.ArgumentParser(prog="agents_never_sleep.run")
     sub = ap.add_subparsers(dest="cmd")
 
@@ -439,7 +441,11 @@ def main(argv=None) -> int:
     pp.add_argument("action", choices=["protect", "restore"],
                     help="protect = stash parked WIP before a run; restore = bring it back after")
     pp.set_defaults(func=cmd_parked)
+    return ap
 
+
+def main(argv=None) -> int:
+    ap = build_parser()
     args = ap.parse_args(argv)
     if not getattr(args, "func", None):
         ap.print_help()
