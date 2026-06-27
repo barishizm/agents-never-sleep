@@ -51,13 +51,13 @@ reported, never assumed.
 
 Three units, each one purpose, testable in isolation:
 
-1. **`harness/enforcement.py` — the decision CORE (platform-neutral, pure).** Single source of truth
+1. **`agents_never_sleep/enforcement.py` — the decision CORE (platform-neutral, pure).** Single source of truth
    for: the irreversible-command patterns, the set of ask-tool names (`AskUserQuestion`, `ask_user`),
    the canonical deny/block reason strings, and pure functions `is_irreversible(cmd)->(bool,kind)`,
    `is_ask_tool(name)->bool`, and `decide(event, tool_name, command, sentinel_present)->Decision`.
    No platform I/O. Tested once, exhaustively.
 
-2. **`harness/enforce.py` — the cross-platform DISPATCHER (CLI).** `python3 -m harness.enforce
+2. **`agents_never_sleep/enforce.py` — the cross-platform DISPATCHER (CLI).** `python3 -m agents_never_sleep.enforce
    <platform> <event>` reads the platform's stdin JSON, NORMALISES it to (tool_name, command),
    calls the core `decide()`, and emits THAT platform's deny/block shape (or exit code). Env-gated to
    `CLAUDE_UNATTENDED=1` (rename-agnostic: also honours `UE_UNATTENDED=1`). One dispatcher, one place
@@ -66,7 +66,7 @@ Three units, each one purpose, testable in isolation:
    enforcement.py as canonical; deny_irreversible.sh's copy is documented as a known duplicate to
    converge later.
 
-3. **`harness/capabilities.py` — capability detection + degradation reporting.** The matrix above as
+3. **`agents_never_sleep/capabilities.py` — capability detection + degradation reporting.** The matrix above as
    data: `guarantees(platform) -> {deny_irreversible, never_stop, never_ask: native|degraded}`, plus
    `degradation_notes(platform) -> [blind-spot strings]` for the guarantees that fall back to prose.
    The driver/report surface these as startup notes + morning-report BLIND SPOTs (reusing the

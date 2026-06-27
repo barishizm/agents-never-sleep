@@ -11,7 +11,7 @@ Where the host agent/CLI **provides no native hook for a guarantee and no altern
 (a limitation of *that* platform, not of this skill), the skill does not give up: it catches the
 guarantee as well as it can by falling back to the **SKILL.md prose contract** (the agent is
 instructed to honour it) AND emits a loud **BLIND SPOT** in the morning report (via
-`harness/capabilities.py`). A 🟡 soft-enforced guarantee is never silently dropped.
+`agents_never_sleep/capabilities.py`). A 🟡 soft-enforced guarantee is never silently dropped.
 
 ## Capability matrix (researched 2026-06 — see `../../references/cross-platform-enforcement-design.md`)
 

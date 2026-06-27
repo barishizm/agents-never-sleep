@@ -67,7 +67,7 @@ next-action, and its contamination scope.
 
 ## The per-ticket loop (what the harness enforces)
 
-1. **Preflight measures capabilities** (`harness/preflight.py`) — VCS/reversibility, platform,
+1. **Preflight measures capabilities** (`agents_never_sleep/preflight.py`) — VCS/reversibility, platform,
    gates, execution mode, tokonomix/Vault/Paperclip. Missing capability never stops the run; it
    lowers expected yield and raises conservatism. No VCS → establish a safety net (git init /
    timestamped backup) before any risky edit; if impossible → non-destructive only.
@@ -75,16 +75,16 @@ next-action, and its contamination scope.
 3. **Implement** the PROCEED ticket — *you, the agent, are the worker*: read the ticket the harness
    hands you and edit files. You drive this one ticket at a time via the two subcommands below; the
    harness owns scheduling, parking, snapshot/revert and the never-stop sentinel.
-4. **Gate** deterministically (`harness/gates.py`) — the BACKBONE. Classify failures:
+4. **Gate** deterministically (`agents_never_sleep/gates.py`) — the BACKBONE. Classify failures:
    introduced-by-the-diff → hard-block (revert to last green + park/fail); pre-existing / flaky /
    env → downgrade confidence, continue or park (never report as "the ticket failed"); timeout/env
    → BLOCKED_ENV. Every gate runs with a per-step timeout and a non-interactive environment so it
    can never hang on a TTY prompt. **Never delete or skip a failing test to go green** — that is a
    blocking blind-spot.
-5. **Record** exactly one durable outcome (`harness/state.py`): DONE, DONE_LOW_CONFIDENCE,
+5. **Record** exactly one durable outcome (`agents_never_sleep/state.py`): DONE, DONE_LOW_CONFIDENCE,
    PARKED_DECISION, PARKED_FOUNDATIONAL, BLOCKED_ENV, FAILED_RETRYABLE, FAILED_BUG_IN_AGENT — with
    the required fields. Atomic writes; resume-safe.
-6. **Next ticket.** Attempt + loop caps (`harness/ledger.py`) force-park a ticket that exceeds its
+6. **Next ticket.** Attempt + loop caps (`agents_never_sleep/ledger.py`) force-park a ticket that exceeds its
    cross-resume attempt cap or is provably looping, so the night is never burned on one cursed item.
    A low-yield circuit breaker stops and alerts if most work is parked/blocked.
 
@@ -118,14 +118,14 @@ subcommands until the backlog drains. Each prints one JSON object to stdout.
 ```
 # 1. Ask the harness for the next thing to do. It auto-parks ambiguous/high-blast-radius tickets
 #    and only ever hands you ONE ready-to-implement ticket, or a terminal signal.
-python3 -m harness.run next --repo <project> --tickets <dir-of-.md-tickets>
+python3 -m agents_never_sleep.run next --repo <project> --tickets <dir-of-.md-tickets>
 ```
 
 Read the JSON `status`:
 - **`PROCEED`** → implement ONLY `ticket.body` by editing files in the repo (do NOT touch other
   tickets, do NOT stop, do NOT ask). Then call `complete`:
   ```
-  python3 -m harness.run complete --repo <project> --attempted "one-line summary of what you did"
+  python3 -m agents_never_sleep.run complete --repo <project> --attempted "one-line summary of what you did"
   ```
   Use `--cannot-implement` (with `--attempted` explaining why) if you genuinely cannot do it — the
   harness reverts your partial edits and records BLOCKED_ENV. After `complete`, call `next` again.
@@ -156,12 +156,12 @@ The skill never schedules itself — running unattended (cron / `claude-run`) is
 explicit act, so the wizard always gets to run first. Unattended with no config → non-destructive
 only + a loud note in the report.
 
-> Legacy `python3 -m harness.run run` drives the loop in-process with a deterministic Worker; it is
+> Legacy `python3 -m agents_never_sleep.run run` drives the loop in-process with a deterministic Worker; it is
 > only for the hermetic acceptance demo. Real runs use the `next`/`complete` flow above.
 
 ## Launching a run — `bin/ans-run` (pre-token preflight + working-tree lock)
 
-`harness/preflight.py` measures capabilities AFTER the agent session boots — by then the first
+`agents_never_sleep/preflight.py` measures capabilities AFTER the agent session boots — by then the first
 tokens are already spent and a doomed run has already cost money. For headless/cron launches,
 start through the launcher instead:
 
@@ -200,7 +200,7 @@ Exit codes: `0` started/GO · `64` NO-GO · `65` working tree busy.
 
 A detached run with the CLI's permission system fully on stalls at its first approval prompt
 (stdin is closed, nobody is watching); the flag that prevents that grants real power. The shipped
-map (`harness/agent_clis.py`, single source for wizard + launcher) keeps both variants apart and
+map (`agents_never_sleep/agent_clis.py`, single source for wizard + launcher) keeps both variants apart and
 the wizard shows what the flag grants before asking you to confirm — only then does the preset
 record `autonomy_confirmed` and become launchable:
 
@@ -231,7 +231,7 @@ per machine. The config scaffold ships this documented shape:
 
 The key is a **token-ref, NEVER a literal**: `env:VAR` resolves from the launcher's own
 environment at spawn; `vault:<mount>/<path>[#field]` resolves via the existing keysource
-(`harness/keysource.py`, gated on `integrations.vault`). Resolution happens into the child env
+(`agents_never_sleep/keysource.py`, gated on `integrations.vault`). Resolution happens into the child env
 BEFORE the capability probe (probe == spawn rule) and a failed resolution — missing env var,
 unreadable vault path, disabled vault integration — is a blocking NO-GO with a clear message,
 never a silent empty value. Resolved values are registered with the redaction layer and never
@@ -425,11 +425,11 @@ open issues from a single configured project as the work-source, push per-ticket
 (todo→in_progress→done/blocked) and parked/daylight comments back, with the board token resolved via
 the keysource (`env:`/`vault:`) and graceful degrade-to-local + blind-spot when it can't be read.
 The cross-platform enforcement adapters (Gemini / Codex / Copilot / Cursor / Windsurf via
-`harness/enforce.py` + `capabilities.py`) are now built too — **live-verified on Claude Code, built
+`agents_never_sleep/enforce.py` + `capabilities.py`) are now built too — **live-verified on Claude Code, built
 to each platform's documented hook contract elsewhere** (see the README capability matrix). The spine
 shipped first; the quality machinery layered on top.
 
-The heartbeat watchdog is built and proven (`harness/watchdog.py`, `acceptance/test_watchdog.py`): a
+The heartbeat watchdog is built and proven (`agents_never_sleep/watchdog.py`, `acceptance/test_watchdog.py`): a
 sidecar that runs the unattended command as a child, restarts it resumable when the heartbeat goes
 stale (the hang the Stop-hook can't see), and on exhausted restarts alerts + exits 75. Integrating it
 with `claude-run` is **opt-in composition** (wrap the call; see `WATCHDOG.md`) — never a rewrite of

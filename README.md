@@ -33,10 +33,15 @@ pip install -e path/to/agents-never-sleep
 # No extras to choose: the harness is pure standard library, zero runtime dependencies.
 ```
 
-The package exposes two console scripts: `ans` (= `python3 -m harness.run`, the per-ticket loop)
+The package exposes two console scripts: `ans` (= `python3 -m agents_never_sleep.run`, the per-ticket loop)
 and `ans-run` (the pre-token preflight launcher). A checkout also works without installing — run
-`bin/ans-run` and `python3 -m harness.run` directly (set `PYTHONPATH` to the skill root for the
+`bin/ans-run` and `python3 -m agents_never_sleep.run` directly (set `PYTHONPATH` to the skill root for the
 latter).
+
+> **Migration note (pre-1.0 → 1.0):** the import package was renamed `harness` → `agents_never_sleep`.
+> A back-compat `harness` shim keeps the old form working (`import harness`, `python3 -m harness.run`,
+> `-m harness.enforce`) through all of 1.x — it emits one `DeprecationWarning` and is removed in 2.0.
+> New code should use `agents_never_sleep`.
 
 ## Quick start
 
@@ -49,8 +54,8 @@ latter).
 #    trust-on-first-use (`--trust`); autonomy flags are never applied silently:
 bin/ans-run --repo <project> --agent claude "work through the backlog unattended"
 # 3. drive the per-ticket loop (the agent IS the worker):
-python3 -m harness.run next     --repo <project> --tickets <dir-of-.md-tickets>
-python3 -m harness.run complete --repo <project> --attempted "what you did"
+python3 -m agents_never_sleep.run next     --repo <project> --tickets <dir-of-.md-tickets>
+python3 -m agents_never_sleep.run complete --repo <project> --attempted "what you did"
 #    repeat next/complete until it returns DRAINED/HALTED/LOW_YIELD.
 ```
 
@@ -64,7 +69,7 @@ paths so a mis-target is obvious. Operator escapes when a resume gets confused: 
 
 The harness is provider-neutral Python and runs anywhere. The cross-platform enforcement (never-ASK /
 deny-irreversible / never-stop) is wired per platform from one shared decision core
-(`harness/enforcement.py`) via `python3 -m harness.enforce <platform> <event>`. (Claude Code *also*
+(`agents_never_sleep/enforcement.py`) via `python3 -m agents_never_sleep.enforce <platform> <event>`. (Claude Code *also*
 ships a self-contained bash deny-hook, `hooks/deny_irreversible.sh`, as the `bypassPermissions`
 backstop — it mirrors the same patterns but does not call the Python core, so it keeps working even
 if Python is unavailable.)

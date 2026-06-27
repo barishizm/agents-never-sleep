@@ -14,7 +14,7 @@ to it.
 ## How to run
 
 ```
-python3 -m harness.run --repo <project> --tickets <dir-of-.md-tickets>
+python3 -m agents_never_sleep.run --repo <project> --tickets <dir-of-.md-tickets>
 ```
 
 (Run from this skill directory so the `harness` package is importable, or add it to `PYTHONPATH`.)
@@ -23,8 +23,8 @@ python3 -m harness.run --repo <project> --tickets <dir-of-.md-tickets>
 
 The harness (durable state machine, gates, park-semantics, reversibility, budgets) is
 provider-neutral Python and runs anywhere. Enforcement (never-ASK / deny-irreversible / never-stop)
-is wired per platform from ONE shared decision core (`harness/enforcement.py`) via the dispatcher
-`python3 -m harness.enforce <platform> <event>`. All adapters are opt-in and env-gated
+is wired per platform from ONE shared decision core (`agents_never_sleep/enforcement.py`) via the dispatcher
+`python3 -m agents_never_sleep.enforce <platform> <event>`. All adapters are opt-in and env-gated
 (`UE_UNATTENDED=1` / `CLAUDE_UNATTENDED=1`):
 
 - **Claude Code** — three bash hooks in `hooks/` (Stop-guard, deny-irreversible, deny-ask); see
@@ -33,7 +33,7 @@ is wired per platform from ONE shared decision core (`harness/enforcement.py`) v
   install in `hooks/platforms/` + the capability matrix. Strategy is **best-effort + graceful
   degradation**: each platform enforces what its hook system allows; a guarantee with no native hook
   falls back to the `SKILL.md` prose contract AND is reported as a morning-report BLIND SPOT
-  (`harness/capabilities.py`) — never silent. `deny-irreversible` is native everywhere; `never-stop`
+  (`agents_never_sleep/capabilities.py`) — never silent. `deny-irreversible` is native everywhere; `never-stop`
   everywhere except Cursor/Windsurf; `never-ASK` on Claude + Copilot only.
 
 Set `UE_PLATFORM=<gemini|codex|copilot|cursor|windsurf>` on non-Claude runs so degradation reporting

@@ -13,7 +13,7 @@ This file complements two existing documents — read them together:
 - **`CHANGELOG.md`** — the per-version record of what changed; it already carries a "Roadmap to
   v1.0" list, which §4 here makes concrete and checkable.
 
-The current published version is **`0.3.1`** (source of truth: `harness/__init__.py` `__version__`).
+The current published version is **`0.3.1`** (source of truth: `agents_never_sleep/__init__.py` `__version__`).
 
 ---
 

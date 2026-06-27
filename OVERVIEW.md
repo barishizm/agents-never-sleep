@@ -42,9 +42,9 @@ The agent **is** the worker; the harness owns the scheduling, safety and bookkee
 two-command loop until the backlog drains:
 
 ```bash
-python3 -m harness.run next     --repo <project> --tickets <dir>   # hands you ONE ready ticket…
+python3 -m agents_never_sleep.run next     --repo <project> --tickets <dir>   # hands you ONE ready ticket…
 #   …implement only that ticket…
-python3 -m harness.run complete --repo <project> --attempted "what you did"   # gate + record
+python3 -m agents_never_sleep.run complete --repo <project> --attempted "what you did"   # gate + record
 #   …repeat until DRAINED / HALTED / LOW_YIELD.
 ```
 

@@ -5,17 +5,17 @@ how this contract may change (the per-surface Stable-vs-Experimental classificat
 rules, and the checkable v1.0 roadmap) lives in **`SEMVER.md`**. Anything classified Stable there
 follows SemVer once 1.0 is tagged: breaking changes require a major version bump.
 
-Installed entry points (after `pip install agents-never-sleep`): `ans` = `python3 -m harness.run`
+Installed entry points (after `pip install agents-never-sleep`): `ans` = `python3 -m agents_never_sleep.run`
 (the loop, §1); `ans-run` = the launcher (§6).
 
 ---
 
-## 1. CLI interface (`python3 -m harness.run` / `ans`)
+## 1. CLI interface (`python3 -m agents_never_sleep.run` / `ans`)
 
 ### `next` — get the next ticket to work
 
 ```
-python3 -m harness.run next [--repo <path>] [--tickets <dir>]
+python3 -m agents_never_sleep.run next [--repo <path>] [--tickets <dir>]
 ```
 
 | Flag | Default | Meaning |
@@ -39,7 +39,7 @@ Stable response shapes:
 ### `complete` — record the outcome for the in-flight ticket
 
 ```
-python3 -m harness.run complete [--repo <path>] [--tickets <dir>]
+python3 -m agents_never_sleep.run complete [--repo <path>] [--tickets <dir>]
     --attempted "<summary>"
     [--cannot-implement]
     [--council-verdict pass|concerns|error]
@@ -61,7 +61,7 @@ Stable response shapes:
 ### `report` — write morning report and exit
 
 ```
-python3 -m harness.run report [--repo <path>] [--report <path>]
+python3 -m agents_never_sleep.run report [--repo <path>] [--report <path>]
 ```
 
 Writes a Markdown morning report and exits 0.
@@ -162,5 +162,5 @@ ans-run [--repo <path>] [--agent <preset>] [--fg] [--check] [--trust] -- PROMPT.
 check failed, or no prompt); `65` = working tree busy (another run holds the lock).
 
 Agent selection uses human-confirmed presets only — no launch-time platform detection. A repo
-config is executable input and is trust-on-first-use. See `bin/ans-run` / `harness/launcher.py` and
+config is executable input and is trust-on-first-use. See `bin/ans-run` / `agents_never_sleep/launcher.py` and
 SKILL.md for the full security posture.

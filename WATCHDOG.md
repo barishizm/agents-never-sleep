@@ -1,7 +1,7 @@
 # Watchdog — supervising the parent run (opt-in)
 
 The Stop-hook prevents a premature *stop*, but it cannot see a *hang* (no progress is not a stop).
-`harness/watchdog.py` is a standalone sidecar that runs the unattended command as a child, polls its
+`agents_never_sleep/watchdog.py` is a standalone sidecar that runs the unattended command as a child, polls its
 heartbeat file, and restarts it resumable when the heartbeat goes stale — then alerts once restarts
 are exhausted.
 
@@ -14,7 +14,7 @@ editing the wrapper.
 ## Standalone use
 
 ```
-python3 -m harness.watchdog \
+python3 -m agents_never_sleep.watchdog \
   --heartbeat /path/project/.unattended/state/heartbeat.json \
   --stale 2400 --max-restarts 3 \
   --alert 'curl -s -X POST -H "Authorization: Bearer $PCP" .../issues -d @alert.json' \
@@ -25,8 +25,8 @@ python3 -m harness.watchdog \
   work time.** The agent beats the heartbeat only at each `next`/`complete` boundary; in between it
   implements one ticket, which can take the full `per_ticket_timeout_s` (default 1800s). Set
   `--stale ≥ per_ticket_timeout_s + gate time + margin`, or the watchdog will false-restart a healthy
-  run mid-ticket. (The child here is the AGENT loop — it calls `harness.run next`/`complete` — not a
-  bare `harness.run`, which would be the legacy in-process path.)
+  run mid-ticket. (The child here is the AGENT loop — it drives `agents_never_sleep.run next`/`complete`
+  itself; the agent IS the worker.)
 - `--grace 300` — startup grace before staleness counts.
 - `--max-restarts 3` — resumable restarts (the run skips DONE/parked tickets and resumes the rest)
   before giving up. `--alert` runs with a hard `--alert-timeout` (30s) so giving up can't itself hang.
@@ -40,7 +40,7 @@ Wrap your existing `claude-run` invocation as the child command, so you keep cla
 resilience AND gain hang-detection:
 
 ```
-python3 -m harness.watchdog --heartbeat <hb> --stale 2400 -- \
+python3 -m agents_never_sleep.watchdog --heartbeat <hb> --stale 2400 -- \
   claude-run -p "work the backlog with the agents-never-sleep skill"
 ```
 
