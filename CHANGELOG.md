@@ -10,7 +10,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added — two new enforcement platforms (MINOR, additive; v1.1 target)
+### Added — four new enforcement platforms (MINOR, additive; v1.1 + v1.2 target)
 - **Hermes** (`hermes-orch-beta`) — ANS's first **in-process** adapter. A native plugin
   (`hooks/platforms/hermes/`, logic in `agents_never_sleep.hermes_plugin.ans_pre_tool`) registers
   on Hermes's `pre_tool_call` hook and calls the shared `decide()` core directly. Matrix:
@@ -21,6 +21,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`agents_never_sleep.aider_launcher.build_aider_argv`) + git-reversibility + prose. All three
   guarantees soft-enforced; the first platform where **deny-irreversible is not native** (breaks the
   old "deny works everywhere" invariant). never-stop/never-ASK are soft-but-structurally-strong.
+- **Crush** (charmbracelet) — dispatcher platform. `PreToolUse` shell hook in `crush.json` runs
+  before the permission check (beats `crush run --yolo`), forwards the stdin payload to the shared
+  dispatcher (`hooks/platforms/crush/`). Matrix **deny NATIVE / never-stop soft / never-ASK soft**.
+- **opencode** (sst) — dispatcher platform. `tool.execute.before` JS plugin (`hooks/platforms/opencode/`)
+  shells to the dispatcher and throws on deny. Matrix **deny NATIVE\* / never-stop soft / never-ASK
+  soft**. \*Caveat (recorded in the hook contract): subagent (`task`-tool) calls bypass the hook
+  (upstream sst/opencode#5894) — deny covers primary-agent calls only.
+- `agents_never_sleep.enforce`: crush + opencode deny via exit 2 + stderr (reusing the default
+  `tool_input.command` normalize — no new parser).
 - `agents_never_sleep.capabilities`: adapter-shape distinction (`dispatcher`/`in_process`/`wrapper`,
   `adapter_shape()`, `dispatcher_platforms()`); `_ASK_TOOLS` now includes `clarify`.
 - Hermetic tests `acceptance/test_enforce_hermes.py` + `acceptance/test_aider_launcher.py`.

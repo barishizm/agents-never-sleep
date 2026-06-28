@@ -1,0 +1,11 @@
+{
+  "//": "ANS enforcement for Crush — merge this `hooks` block into your crush.json (project .crush.json / crush.json, or $XDG_CONFIG_HOME/crush/crush.json). Replace <SKILL_DIR> with the absolute path to this skill. The PreToolUse hook runs BEFORE Crush's permission check (so it blocks even under `crush run --yolo`); it passes the tool payload as JSON on stdin, which enforce.sh forwards to the dispatcher. A deny is signalled by exit 2 + a stderr reason. Inert unless UE_UNATTENDED=1 / CLAUDE_UNATTENDED=1.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(bash|edit|write|multiedit)$",
+        "command": "<SKILL_DIR>/hooks/enforce.sh crush pre_tool"
+      }
+    ]
+  }
+}

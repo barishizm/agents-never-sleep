@@ -130,9 +130,11 @@ def _emit_deny(platform: str, reason: str) -> int:
         print(json.dumps({"permissionDecision": "deny", "permissionDecisionReason": reason}))
     elif platform == "cursor":
         print(json.dumps({"permission": "deny", "agent_message": reason, "user_message": reason}))
-    elif platform == "windsurf":
+    elif platform in ("windsurf", "crush", "opencode"):
+        # Windsurf pre-hooks block via exit 2; Crush's PreToolUse hook treats exit 2 + stderr
+        # as a deny; the opencode JS plugin reads exitCode===2 + stderr and throws to deny.
         print(reason, file=sys.stderr)
-        return 2  # Windsurf pre-hooks block via exit code 2
+        return 2
     else:
         print(json.dumps({"decision": "deny", "reason": reason}))
     return 0

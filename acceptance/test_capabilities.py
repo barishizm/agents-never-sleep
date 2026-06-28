@@ -27,20 +27,23 @@ def test_matrix(failures):
     for p in ("claude", "gemini", "codex", "copilot"):
         if not C.is_native(p, NEVER_STOP):
             failures.append(f"[matrix] {p}: never-stop should be native")
-    for p in ("cursor", "windsurf", "hermes", "aider"):
+    for p in ("cursor", "windsurf", "hermes", "aider", "crush", "opencode"):
         if C.is_native(p, NEVER_STOP):
             failures.append(f"[matrix] {p}: never-stop should be DEGRADED")
     # never-ASK: native only on claude + copilot + hermes (clarify behind the pre_tool hook)
     for p in ("claude", "copilot", "hermes"):
         if not C.is_native(p, NEVER_ASK):
             failures.append(f"[matrix] {p}: never-ASK should be native")
-    for p in ("gemini", "codex", "cursor", "windsurf", "aider"):
+    for p in ("gemini", "codex", "cursor", "windsurf", "aider", "crush", "opencode"):
         if C.is_native(p, NEVER_ASK):
             failures.append(f"[matrix] {p}: never-ASK should be DEGRADED")
-    # v1.1 adapter-shape distinction
+    # v1.1/v1.2 adapter-shape distinction
     if C.adapter_shape("hermes") != C.IN_PROCESS or C.adapter_shape("aider") != C.WRAPPER:
         failures.append("[matrix] hermes should be in_process, aider should be wrapper")
-    if set(C.dispatcher_platforms()) != {"claude", "gemini", "codex", "copilot", "cursor", "windsurf"}:
+    if C.adapter_shape("crush") != C.DISPATCHER or C.adapter_shape("opencode") != C.DISPATCHER:
+        failures.append("[matrix] crush + opencode should be dispatcher-shape")
+    if set(C.dispatcher_platforms()) != {"claude", "gemini", "codex", "copilot", "cursor",
+                                         "windsurf", "crush", "opencode"}:
         failures.append(f"[matrix] dispatcher platforms wrong: {C.dispatcher_platforms()}")
     # aider: deny-irreversible explicitly NOT native (the invariant-break)
     if C.is_native("aider", DENY_IRREVERSIBLE):
@@ -75,6 +78,13 @@ def test_degradation_notes(failures):
     an = C.degradation_notes("aider")
     if len(an) != 3:
         failures.append(f"[notes] aider should have 3 degradation notes (all soft): {an}")
+    # v1.2: crush + opencode each have 2 (never-stop + never-ASK); deny is native
+    for p in ("crush", "opencode"):
+        notes = C.degradation_notes(p)
+        if len(notes) != 2:
+            failures.append(f"[notes] {p} should have 2 degradation notes (never-stop + never-ASK): {notes}")
+        if not any("never-stop" in n for n in notes) or not any("never-ASK" in n for n in notes):
+            failures.append(f"[notes] {p} notes should name never-stop AND never-ASK: {notes}")
     # notes must read as actionable blind spots
     if not all("prose contract" in n for n in C.degradation_notes("windsurf")):
         failures.append("[notes] degradation notes should mention the prose-contract fallback")

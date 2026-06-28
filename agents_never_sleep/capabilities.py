@@ -38,6 +38,17 @@ _MATRIX = {
     #   soft-but-structurally-strong (one-shot run + --yes-always + stdin=/dev/null).
     "hermes":   {DENY_IRREVERSIBLE: NATIVE,   NEVER_STOP: DEGRADED, NEVER_ASK: NATIVE},
     "aider":    {DENY_IRREVERSIBLE: DEGRADED, NEVER_STOP: DEGRADED, NEVER_ASK: DEGRADED},
+    # v1.2 — dispatcher-shape platforms with a real pre-tool hook that can DENY (so
+    # deny-irreversible is NATIVE), but no stop-veto and no pre-ask hook (never-stop /
+    # never-ASK soft: never-stop = supervisor-relaunch; never-ASK = the headless --yolo /
+    # --skip-permissions launch flag, not a hook deny — same class as aider, so soft).
+    # crush: PreToolUse shell hook in crush.json, runs BEFORE the permission check (beats
+    #   --yolo); stdin JSON {tool_name, tool_input:{command}} (the default dispatcher shape).
+    # opencode: tool.execute.before JS plugin that shells to the dispatcher and throws on
+    #   deny. CAVEAT recorded in _HOOK_CONTRACT: subagent (task-tool) calls bypass the hook
+    #   (upstream sst/opencode#5894) — deny covers primary-agent tool calls only.
+    "crush":    {DENY_IRREVERSIBLE: NATIVE,   NEVER_STOP: DEGRADED, NEVER_ASK: DEGRADED},
+    "opencode": {DENY_IRREVERSIBLE: NATIVE,   NEVER_STOP: DEGRADED, NEVER_ASK: DEGRADED},
 }
 
 _LABEL = {DENY_IRREVERSIBLE: "deny-irreversible", NEVER_STOP: "never-stop", NEVER_ASK: "never-ASK"}
@@ -61,6 +72,9 @@ _ADAPTER_SHAPE = {
     "claude": DISPATCHER, "gemini": DISPATCHER, "codex": DISPATCHER,
     "copilot": DISPATCHER, "cursor": DISPATCHER, "windsurf": DISPATCHER,
     "hermes": IN_PROCESS, "aider": WRAPPER,
+    # v1.2 dispatcher platforms — crush wires a shell hook to enforce.sh; opencode's JS
+    # plugin shells to the dispatcher. Both go through enforce.py, so both are dispatcher-shape.
+    "crush": DISPATCHER, "opencode": DISPATCHER,
 }
 
 
@@ -97,6 +111,12 @@ _HOOK_CONTRACT = {
                 "--yes-always + stdin=/dev/null (io.py:866), auto-commit (base_coder.py:308), "
                 "one-shot run (base_coder.py:876), KNOWN HOLE: cmd_test/cmd_run bypass confirm "
                 "(commands.py); re-verify these on any aider upgrade",
+    "crush":    "Crush PreToolUse shell hook in crush.json (runs before permission check; stdin "
+                "JSON tool_input.command; deny via exit 2 + stderr) — 2026 documented contract",
+    "opencode": "opencode tool.execute.before JS plugin hook (input.tool + output.args.command; "
+                "throw-to-deny; @opencode-ai/plugin) — 2026 documented contract. CAVEAT: subagent "
+                "(task-tool) calls bypass this hook (upstream sst/opencode#5894) — deny covers "
+                "PRIMARY-agent tool calls only on opencode",
 }
 
 

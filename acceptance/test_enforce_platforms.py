@@ -32,7 +32,7 @@ def _run(platform, event, payload, *, unattended=True, sentinel_path=None):
 
 
 def _denied(platform, p) -> bool:
-    if platform == "windsurf":
+    if platform in ("windsurf", "crush", "opencode"):
         return p.returncode == 2
     try:
         out = json.loads(p.stdout)
@@ -71,6 +71,10 @@ IRREVERSIBLE = {
     "copilot":  {"toolName": "bash", "toolArgs": {"command": "systemctl stop nginx"}},
     "cursor":   {"command": "dd if=/dev/zero of=/dev/sda"},
     "windsurf": {"tool_info": {"command_line": "mkfs.ext4 /dev/sda1"}},
+    # v1.2 — crush (shell hook) + opencode (JS plugin) both send the DEFAULT dispatcher
+    # payload {tool_name, tool_input:{command}} and deny via exit 2 + stderr.
+    "crush":    {"tool_name": "bash", "tool_input": {"command": "git push --force origin main"}},
+    "opencode": {"tool_name": "bash", "tool_input": {"command": "rm -rf /home"}},
 }
 BENIGN = {
     "claude":   {"tool_name": "Bash", "tool_input": {"command": "ls -la"}},
@@ -79,6 +83,8 @@ BENIGN = {
     "copilot":  {"toolName": "bash", "toolArgs": {"command": "git clean -fd"}},
     "cursor":   {"command": "rm -rf ./build"},
     "windsurf": {"tool_info": {"command_line": "npm test"}},
+    "crush":    {"tool_name": "bash", "tool_input": {"command": "git reset --hard HEAD"}},
+    "opencode": {"tool_name": "bash", "tool_input": {"command": "npm test"}},
 }
 # platforms with a native ask-tool deny
 ASK = {
