@@ -8,6 +8,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Added — two new enforcement platforms (MINOR, additive; v1.1 target)
+- **Hermes** (`hermes-orch-beta`) — ANS's first **in-process** adapter. A native plugin
+  (`hooks/platforms/hermes/`, logic in `agents_never_sleep.hermes_plugin.ans_pre_tool`) registers
+  on Hermes's `pre_tool_call` hook and calls the shared `decide()` core directly. Matrix:
+  **deny-irreversible NATIVE / never-stop soft-enforced / never-ASK NATIVE**. Denying the `clarify`
+  tool preempts Hermes's fail-open clarify-timeout (invented consent) → explicit PARK. Opt-in
+  (`plugins.enabled`) + env-gated (`UE_UNATTENDED=1`); not live-verified (Mes smoke-test).
+- **Aider** (0.86.2) — ANS's first **wrapper** adapter (no hook API). Hardened launch preset
+  (`agents_never_sleep.aider_launcher.build_aider_argv`) + git-reversibility + prose. All three
+  guarantees soft-enforced; the first platform where **deny-irreversible is not native** (breaks the
+  old "deny works everywhere" invariant). never-stop/never-ASK are soft-but-structurally-strong.
+- `agents_never_sleep.capabilities`: adapter-shape distinction (`dispatcher`/`in_process`/`wrapper`,
+  `adapter_shape()`, `dispatcher_platforms()`); `_ASK_TOOLS` now includes `clarify`.
+- Hermetic tests `acceptance/test_enforce_hermes.py` + `acceptance/test_aider_launcher.py`.
+- No change to any Stable API surface — purely additive (new platforms + capability metadata).
+
 ## [1.0.0] — 2026-06-27
 
 > First stable release. Distributed as the public GitHub repo

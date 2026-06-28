@@ -22,7 +22,11 @@ import enum
 import re
 
 # Tool names meaning "ask the human a question", across platforms (lower-cased match).
-_ASK_TOOLS = {"askuserquestion", "ask_user"}
+# `clarify` is Hermes's ask tool (tools/clarify_tool.py): denying it preempts Hermes's
+# fail-open clarify-timeout (cli.py:8655 "use your best judgement and proceed" = invented
+# consent). Adding it here enables it for every platform — harmless, no other platform
+# exposes a tool named `clarify` (v1.1, see references/v1.1-aider-hermes-adapter-analysis.md).
+_ASK_TOOLS = {"askuserquestion", "ask_user", "clarify"}
 
 # Irreversible / outward command patterns (case-insensitive), mirroring hooks/deny_irreversible.sh.
 # Deliberately NOT matching local `git reset --hard` / `git clean` — that's the harness's own revert.

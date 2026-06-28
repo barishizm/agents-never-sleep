@@ -95,11 +95,14 @@ def _check_hook_contract_coverage(failures):
     1.0 stability statement leans on) and the tested set must equal the capability matrix."""
     sys.path.insert(0, SKILL_ROOT)
     from agents_never_sleep import capabilities
+    # The DISPATCHER-tested set must equal the dispatcher-shape platforms. The in-process
+    # (hermes) and wrapper (aider) adapters enforce differently and have their own tests, so
+    # they are excluded from this end-to-end dispatcher coverage check.
     tested = set(PLATFORMS)
-    supported = set(capabilities.SUPPORTED)
-    if tested != supported:
-        failures.append(f"[matrix] tested platforms {sorted(tested)} != capability matrix {sorted(supported)}")
-    for plat in supported:
+    dispatcher = set(capabilities.dispatcher_platforms())
+    if tested != dispatcher:
+        failures.append(f"[matrix] dispatcher-tested {sorted(tested)} != dispatcher matrix {sorted(dispatcher)}")
+    for plat in capabilities.SUPPORTED:  # ALL platforms (incl. in-process/wrapper) need a contract
         if not capabilities.hook_contract(plat) or "contract" not in capabilities.hook_contract(plat):
             failures.append(f"[matrix] {plat} has no recorded hook-contract version")
 

@@ -27,6 +27,17 @@ _MATRIX = {
     "copilot":  {DENY_IRREVERSIBLE: NATIVE, NEVER_STOP: NATIVE,   NEVER_ASK: NATIVE},
     "cursor":   {DENY_IRREVERSIBLE: NATIVE, NEVER_STOP: DEGRADED, NEVER_ASK: DEGRADED},
     "windsurf": {DENY_IRREVERSIBLE: NATIVE, NEVER_STOP: DEGRADED, NEVER_ASK: DEGRADED},
+    # v1.1 — DIFFERENT adapter SHAPES (see references/v1.1-aider-hermes-adapter-analysis.md):
+    # hermes = native in-process plugin (Mes's modifiable orchestrator) → deny + never-ASK
+    #   NATIVE via the pre_tool_call hook that fires before the clarify special-case (denying
+    #   `clarify` preempts the fail-open clarify-timeout that invents consent). never-stop has
+    #   no veto hook yet (soft → native via an in-tree patch).
+    # aider = wrapper adapter (NO hook API at all) → all three soft-enforced. Aider is the first
+    #   platform where deny-irreversible is NOT native (the old "deny works everywhere" invariant
+    #   breaks): cmd_test/cmd_run run shell with no confirm and no hook. never-stop/never-ASK are
+    #   soft-but-structurally-strong (one-shot run + --yes-always + stdin=/dev/null).
+    "hermes":   {DENY_IRREVERSIBLE: NATIVE,   NEVER_STOP: DEGRADED, NEVER_ASK: NATIVE},
+    "aider":    {DENY_IRREVERSIBLE: DEGRADED, NEVER_STOP: DEGRADED, NEVER_ASK: DEGRADED},
 }
 
 _LABEL = {DENY_IRREVERSIBLE: "deny-irreversible", NEVER_STOP: "never-stop", NEVER_ASK: "never-ASK"}
@@ -37,6 +48,30 @@ _WHY = {
 }
 
 SUPPORTED = tuple(_MATRIX)
+
+# Adapter SHAPE per platform. The guarantee matrix is shape-agnostic, but the enforcement
+# WIRING differs: `dispatcher` = out-of-process hook → enforce.py (the original six);
+# `in_process` = a native plugin that calls decide() in-process (hermes); `wrapper` = no hook
+# API, enforced by launch-preset + git-reversibility + prose (aider). The dispatcher-shape
+# platforms are exactly the ones the cross-platform dispatcher test exercises end-to-end.
+DISPATCHER = "dispatcher"
+IN_PROCESS = "in_process"
+WRAPPER = "wrapper"
+_ADAPTER_SHAPE = {
+    "claude": DISPATCHER, "gemini": DISPATCHER, "codex": DISPATCHER,
+    "copilot": DISPATCHER, "cursor": DISPATCHER, "windsurf": DISPATCHER,
+    "hermes": IN_PROCESS, "aider": WRAPPER,
+}
+
+
+def adapter_shape(platform: str) -> str:
+    return _ADAPTER_SHAPE.get(platform, DISPATCHER)
+
+
+def dispatcher_platforms() -> tuple:
+    """Platforms whose adapter is the out-of-process enforce.py dispatcher. hermes
+    (in-process plugin) and aider (wrapper) enforce differently and are excluded."""
+    return tuple(p for p in SUPPORTED if adapter_shape(p) == DISPATCHER)
 
 # Platforms whose NATIVE guarantees are proven to actually fire (hooks live-tested / in use). The
 # others are built to each platform's DOCUMENTED contract but not yet smoke-tested on the real tool,
@@ -56,6 +91,12 @@ _HOOK_CONTRACT = {
     "copilot":  "Copilot CLI .github/hooks + ask_user tool — 2026-06 documented contract",
     "cursor":   "Cursor .cursor/hooks.json — 2026-06 documented contract",
     "windsurf": "Windsurf hooks.json — 2026-06 documented contract",
+    "hermes":   "Hermes pre_tool_call plugin hook (hermes_cli.plugins register_hook + "
+                "get_pre_tool_call_block_message {'action':'block'}) — 2026-06 in-tree contract",
+    "aider":    "Aider 0.86.2 behavioral contract — NO hook API (wrapper adapter); relies on "
+                "--yes-always + stdin=/dev/null (io.py:866), auto-commit (base_coder.py:308), "
+                "one-shot run (base_coder.py:876), KNOWN HOLE: cmd_test/cmd_run bypass confirm "
+                "(commands.py); re-verify these on any aider upgrade",
 }
 
 

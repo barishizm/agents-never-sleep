@@ -17,15 +17,17 @@ from agents_never_sleep.enforcement import Action  # noqa: E402
 
 
 def test_ask(failures):
-    for name in ("AskUserQuestion", "ask_user", "ASK_USER"):
+    # `clarify` is Hermes's ask tool (v1.1) — denying it preempts the fail-open clarify-timeout.
+    for name in ("AskUserQuestion", "ask_user", "ASK_USER", "clarify", "Clarify"):
         if not E.is_ask_tool(name):
             failures.append(f"[ask] {name!r} should be recognised as an ask-tool")
     for name in ("Bash", "run_shell_command", "", None):
         if E.is_ask_tool(name):
             failures.append(f"[ask] {name!r} should NOT be an ask-tool")
-    d = E.decide("pre_tool", tool_name="AskUserQuestion")
-    if d.action != Action.DENY or "PARK" not in d.reason or "PROCEED" not in d.reason:
-        failures.append(f"[ask] ask-tool should DENY with PARK/PROCEED steer: {d}")
+    for tool in ("AskUserQuestion", "clarify"):
+        d = E.decide("pre_tool", tool_name=tool)
+        if d.action != Action.DENY or "PARK" not in d.reason or "PROCEED" not in d.reason:
+            failures.append(f"[ask] {tool} should DENY with PARK/PROCEED steer: {d}")
 
 
 def test_irreversible(failures):

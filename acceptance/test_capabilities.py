@@ -16,24 +16,35 @@ from agents_never_sleep.capabilities import DENY_IRREVERSIBLE, NEVER_ASK, NEVER_
 
 
 def test_matrix(failures):
-    # deny-irreversible is native EVERYWHERE
+    # deny-irreversible is native everywhere EXCEPT aider (v1.1: aider has no hook API at all,
+    # so it breaks the old "deny works everywhere" invariant — this is the deliberate exception).
     for p in C.SUPPORTED:
+        if p == "aider":
+            continue
         if not C.is_native(p, DENY_IRREVERSIBLE):
             failures.append(f"[matrix] {p}: deny-irreversible should be native")
-    # never-stop: native except cursor + windsurf
+    # never-stop: native except cursor + windsurf (and the v1.1 soft platforms hermes + aider)
     for p in ("claude", "gemini", "codex", "copilot"):
         if not C.is_native(p, NEVER_STOP):
             failures.append(f"[matrix] {p}: never-stop should be native")
-    for p in ("cursor", "windsurf"):
+    for p in ("cursor", "windsurf", "hermes", "aider"):
         if C.is_native(p, NEVER_STOP):
             failures.append(f"[matrix] {p}: never-stop should be DEGRADED")
-    # never-ASK: native only on claude + copilot
-    for p in ("claude", "copilot"):
+    # never-ASK: native only on claude + copilot + hermes (clarify behind the pre_tool hook)
+    for p in ("claude", "copilot", "hermes"):
         if not C.is_native(p, NEVER_ASK):
             failures.append(f"[matrix] {p}: never-ASK should be native")
-    for p in ("gemini", "codex", "cursor", "windsurf"):
+    for p in ("gemini", "codex", "cursor", "windsurf", "aider"):
         if C.is_native(p, NEVER_ASK):
             failures.append(f"[matrix] {p}: never-ASK should be DEGRADED")
+    # v1.1 adapter-shape distinction
+    if C.adapter_shape("hermes") != C.IN_PROCESS or C.adapter_shape("aider") != C.WRAPPER:
+        failures.append("[matrix] hermes should be in_process, aider should be wrapper")
+    if set(C.dispatcher_platforms()) != {"claude", "gemini", "codex", "copilot", "cursor", "windsurf"}:
+        failures.append(f"[matrix] dispatcher platforms wrong: {C.dispatcher_platforms()}")
+    # aider: deny-irreversible explicitly NOT native (the invariant-break)
+    if C.is_native("aider", DENY_IRREVERSIBLE):
+        failures.append("[matrix] aider deny-irreversible must be DEGRADED (no hook API)")
 
 
 def test_detect(failures):
@@ -57,6 +68,13 @@ def test_degradation_notes(failures):
             failures.append(f"[notes] {p} should have 2 degradation notes (never-stop + never-ASK): {notes}")
         if not any("never-stop" in n for n in notes) or not any("never-ASK" in n for n in notes):
             failures.append(f"[notes] {p} notes should name never-stop AND never-ASK: {notes}")
+    # v1.1: hermes has exactly one (never-stop); aider has all three (no hook API at all)
+    hn = C.degradation_notes("hermes")
+    if len(hn) != 1 or "never-stop" not in hn[0]:
+        failures.append(f"[notes] hermes should have exactly one never-stop note: {hn}")
+    an = C.degradation_notes("aider")
+    if len(an) != 3:
+        failures.append(f"[notes] aider should have 3 degradation notes (all soft): {an}")
     # notes must read as actionable blind spots
     if not all("prose contract" in n for n in C.degradation_notes("windsurf")):
         failures.append("[notes] degradation notes should mention the prose-contract fallback")
