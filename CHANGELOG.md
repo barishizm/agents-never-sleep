@@ -24,6 +24,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `agents_never_sleep.capabilities`: adapter-shape distinction (`dispatcher`/`in_process`/`wrapper`,
   `adapter_shape()`, `dispatcher_platforms()`); `_ASK_TOOLS` now includes `clarify`.
 - Hermetic tests `acceptance/test_enforce_hermes.py` + `acceptance/test_aider_launcher.py`.
+- Smoke-tested (2026-06-28): the Hermes deny+never-ASK flow end-to-end through Hermes's real
+  `get_pre_tool_call_block_message`; the aider headless preset on real `aider 0.86.2` — which
+  found onboarding/network hang paths `stdin=/dev/null` does not close, driving the
+  `--no-show-model-warnings` flag + a documented mandatory wall-clock timeout
+  (`RECOMMENDED_TIMEOUT_SECONDS`) + key pre-flight for never-stop.
 - No change to any Stable API surface — purely additive (new platforms + capability metadata).
 
 ## [1.0.0] — 2026-06-27

@@ -20,11 +20,16 @@ def main() -> int:
 
     argv = build_aider_argv(".unattended/ticket-7.prompt", ["app.ts", "lib/x.ts"])
 
-    # never-ASK + deny-irreversible-PREVENTION flags must be present
+    # never-ASK + deny-irreversible-PREVENTION + the smoke-test headless flags must be present
     for flag in ("--yes-always", "--no-suggest-shell-commands", "--no-auto-test",
-                 "--no-auto-lint", "--no-detect-urls"):
+                 "--no-auto-lint", "--no-detect-urls", "--no-show-model-warnings"):
         if flag not in argv:
             failures.append(f"[aider] preset missing hardening flag {flag}")
+
+    # the caller-enforced wall-clock cap (how never-stop is enforced for aider) is exported
+    from agents_never_sleep.aider_launcher import RECOMMENDED_TIMEOUT_SECONDS
+    if not isinstance(RECOMMENDED_TIMEOUT_SECONDS, int) or RECOMMENDED_TIMEOUT_SECONDS <= 0:
+        failures.append("[aider] RECOMMENDED_TIMEOUT_SECONDS must be a positive int")
 
     # the prompt goes via --message-file (NOT a positional), argv[0] is aider
     if argv[0] != "aider":

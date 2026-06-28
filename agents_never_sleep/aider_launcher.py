@@ -11,7 +11,13 @@ through enforce.py. Instead the adapter is a launch-preset + git-reversibility +
                   hook). Recovery is git-revert (below). The residual hole is reported as a
                   morning-report BLIND SPOT.
   * never-stop (soft) — aider is one-shot in `--message` mode (run() returns after one turn);
-                  continuation is the OUTER ANS loop re-invoking aider per ticket.
+                  continuation is the OUTER ANS loop re-invoking aider per ticket. BUT preset
+                  flags alone do NOT prevent hangs: a live smoke-test (2026-06-28) showed aider
+                  can hang on a NETWORK wait that stdin=/dev/null does not defuse — keyless it
+                  opens an OAuth browser onboarding ("Waiting up to 5 minutes…"), and an
+                  invalid/slow key stalls the LLM call. So never-stop for aider REQUIRES the
+                  caller to (a) run under a hard wall-clock timeout (kill → PARK) and (b)
+                  pre-flight that a model + key are configured. RECOMMENDED_TIMEOUT_SECONDS below.
 
 Reversibility: aider auto-commits each change. The ANS driver records the pre-invocation HEAD
 SHA and reverts to THAT on a gate failure (never `HEAD~1` — one `--message` can emit multiple
@@ -23,6 +29,11 @@ from __future__ import annotations
 # (commands.py cmd_test/cmd_run). The preset refuses them even via `extra`.
 FORBIDDEN_FLAGS = frozenset({"--test-cmd", "--auto-test", "--lint-cmd", "--auto-lint"})
 
+# Hard wall-clock cap the CALLER must enforce around the aider subprocess (e.g. `timeout`,
+# subprocess timeout=). Live smoke-test finding: aider has network/onboarding hang paths that
+# no flag closes, so this kill-on-timeout is how never-stop is actually enforced for aider.
+RECOMMENDED_TIMEOUT_SECONDS = 600
+
 # The hardened base flags every unattended aider invocation carries.
 BASE_FLAGS = (
     "--yes-always",            # never-ASK: auto-answer prompts
@@ -30,6 +41,7 @@ BASE_FLAGS = (
     "--no-suggest-shell-commands",  # kill the LLM-suggested-shell path
     "--no-auto-test",          # never run an operator test command (un-interceptable shell)
     "--no-auto-lint",          # never run an operator lint command (un-interceptable shell)
+    "--no-show-model-warnings",  # smoke-test: the model-warnings prompt otherwise stalls headless
 )
 
 

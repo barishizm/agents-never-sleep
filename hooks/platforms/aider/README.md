@@ -11,11 +11,25 @@ breaks the old "deny-irreversible works on every platform" invariant.
 | Guarantee | Status | How (and the residual) |
 |---|---|---|
 | deny-irreversible | 🟡 soft | `--no-suggest-shell-commands` + never wiring `--test-cmd`/`--auto-test`/`--lint-cmd` closes the LLM-suggested shell and the operator-cmd shell paths. **Residual hole:** `cmd_test`/`cmd_run` (`commands.py`) run shell with no confirm and no hook — un-interceptable. Recovery = git-revert to the captured pre-SHA. Reported as a BLIND SPOT. |
-| never-stop | 🟡 soft (structurally strong) | aider is one-shot in `--message` mode (`run()` returns after one turn); continuation is the OUTER ANS loop, not a stop hook. |
-| never-ASK | 🟡 soft (structurally strong) | `--yes-always` auto-answers prompts; `stdin < /dev/null` makes any unanticipated prompt EOF to a clean exit. Aider structurally cannot hang waiting for a human. |
+| never-stop | 🟡 soft (needs a wall-clock timeout) | aider is one-shot in `--message` mode (`run()` returns after one turn); continuation is the OUTER ANS loop. **Live smoke-test (2026-06-28): preset flags do NOT prevent all hangs** — see below. never-stop is enforced by the driver's hard wall-clock timeout (kill → PARK), not by flags. |
+| never-ASK | 🟡 soft | `--yes-always` auto-answers stdin prompts; `stdin < /dev/null` EOFs any unanticipated stdin prompt. Closes *stdin* hangs — but NOT the network/onboarding hangs (below). |
 
-never-stop / never-ASK are *soft-but-structurally-strong*; deny-irreversible is the genuine
-🟡 with a residual hole.
+deny-irreversible is the genuine 🟡 with a residual hole; never-stop/never-ASK close the
+*stdin* paths but the smoke-test below shows network/onboarding paths still need the timeout.
+
+## ⚠️ Live smoke-test finding (2026-06-28) — aider has hang paths no flag closes
+
+Running the hardened preset with `stdin < /dev/null` still **hung** in two real cases:
+1. **No key configured** → aider opens an OpenRouter **OAuth browser flow** ("Waiting up to 5
+   minutes for you to finish in the browser…") — a *network* wait `stdin=/dev/null` does not defuse.
+2. **Invalid/slow key** → the LLM call stalls (and the model-warnings prompt stalled until
+   `--no-show-model-warnings` was added — now in the preset).
+
+**Therefore the ANS driver MUST, around the aider subprocess:**
+- run it under a **hard wall-clock timeout** (`agents_never_sleep.aider_launcher.RECOMMENDED_TIMEOUT_SECONDS`,
+  default 600s) and **kill → PARK** on expiry — this is how never-stop is actually enforced;
+- **pre-flight** that a model + key are configured (else the keyless OAuth onboarding hangs);
+  aider needs its OWN LLM key (e.g. `OPENROUTER_API_KEY`), outside ANS billing.
 
 ## The launch preset
 
@@ -53,6 +67,8 @@ Keep aider's **auto-commit ON** (the default) — it is the reversibility anchor
 ## Verification status
 
 Built to the documented behavioral contract + hermetically tested
-(`acceptance/test_aider_launcher.py`). **Not** in `LIVE_VERIFIED` — the live smoke-test (run a
-real unattended aider ticket; confirm an irreversible command can't escape and a question
-doesn't hang) is Mes-side.
+(`acceptance/test_aider_launcher.py`). The **headless launch behavior was live smoke-tested**
+(2026-06-28) on the real `aider 0.86.2` — that test FOUND the onboarding/network hang paths
+above and drove the `--no-show-model-warnings` + mandatory-timeout hardening. **Not** in
+`LIVE_VERIFIED`: a full keyed end-to-end ticket (real edit → auto-commit → revert to pre-SHA)
+needs aider's own LLM key + spend and is Mes-side.
