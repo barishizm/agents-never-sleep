@@ -119,6 +119,17 @@ def test_verification(failures):
         failures.append(f"[verify] claude should have empty report_notes: {C.report_notes('claude')}")
 
 
+def test_platform_caveats(failures):
+    # opencode's deny is native* but the #5894 subagent bypass is a COVERAGE hole on a native
+    # guarantee — it must surface as its own loud report line, not just in the hook contract.
+    rn = C.report_notes("opencode")
+    if not any("SUBAGENT" in n.upper() and "5894" in n for n in rn):
+        failures.append(f"[caveat] opencode report_notes must loudly name the subagent bypass: {rn}")
+    # platforms without a caveat get none
+    if C.caveat_notes("crush") or C.caveat_notes("claude"):
+        failures.append("[caveat] only opencode should carry a coverage caveat right now")
+
+
 def main() -> int:
     failures = []
     test_matrix(failures)
@@ -126,6 +137,7 @@ def main() -> int:
     test_degradation_notes(failures)
     test_status_line(failures)
     test_verification(failures)
+    test_platform_caveats(failures)
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — capability matrix not proven")

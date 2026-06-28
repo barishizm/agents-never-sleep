@@ -35,6 +35,10 @@ real `crush` CLI is Mes-side (Crush is not installed here).
 
 - Deny payload reuses the default dispatcher shape: Crush's stdin JSON is
   `{"tool_name":"bash","tool_input":{"command":"…"}}` — the dispatcher reads `tool_input.command`.
+- The hook deliberately has **no `matcher`** so it fires for every tool — a deny can't silently
+  no-op on a shell tool whose exact name we didn't anticipate (commandless tools are allowed, so
+  screening all is safe). If you add a `matcher` for performance, **confirm Crush's shell tool's
+  exact name is included** (verify against your Crush version) or the guard won't fire on it.
 - License: Crush is **FSL-1.1-MIT** (source-available, converts to MIT over time) — note for any
   OSS-strict consumer.
 - Do NOT make the hook emit exit 49 / `halt:true` — that halts the whole turn (the opposite of

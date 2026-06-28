@@ -163,10 +163,30 @@ def verification_note(platform: str):
             "the smoke-test (hooks/platforms/README.md) to confirm a deny actually registers.")
 
 
+# Per-platform COVERAGE CAVEATS on an otherwise-NATIVE guarantee — a known hole that a
+# degradation note can't express (the guarantee IS natively wired; it just doesn't cover
+# everything). Surfaced as its own loud report line so a coverage gap is as visible as a
+# missing guarantee (capabilities never give "active false assurance" on a native cell).
+_PLATFORM_CAVEATS = {
+    "opencode": ("enforcement on opencode: deny-irreversible is native for PRIMARY-agent tool "
+                 "calls but does NOT cover tools called by SUBAGENTS spawned via the `task` tool "
+                 "(upstream sst/opencode#5894) — an irreversible command from a subagent runs "
+                 "UNGUARDED. Review subagent-spawning runs accordingly."),
+}
+
+
+def caveat_notes(platform: str) -> list:
+    """Coverage-caveat line(s) for an otherwise-native guarantee on this platform (may be empty)."""
+    c = _PLATFORM_CAVEATS.get(platform)
+    return [c] if c else []
+
+
 def report_notes(platform: str) -> list:
-    """All enforcement blind-spots for the morning report: soft-enforced guarantees + the not-yet-verified
-    caveat for native-but-unproven platforms."""
+    """All enforcement blind-spots for the morning report: soft-enforced guarantees + per-platform
+    coverage caveats on native guarantees + the not-yet-verified caveat for native-but-unproven
+    platforms."""
     notes = degradation_notes(platform)
+    notes.extend(caveat_notes(platform))
     vn = verification_note(platform)
     if vn:
         notes.append(vn)
