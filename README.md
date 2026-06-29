@@ -100,10 +100,11 @@ SKILL.md                     the portable skill (read by the agent)
 AGENTS.md                    router for file-based agents
 bin/ans-run                  launcher: pre-token GO/NO-GO preflight + atomic working-tree lock,
                              TOFU config trust, known-CLI allowlist, capability probe
-harness/                     stdlib-Python engine (state machine, gates, driver, council, …)
+agents_never_sleep/          stdlib-Python engine (state machine, gates, driver, council, …)
   enforcement.py             shared cross-platform decision core
   enforce.py                 cross-platform hook dispatcher
   capabilities.py            per-platform capability matrix + degradation reporting
+harness/                     back-compat shim for the old `harness` import name (removed in 2.0)
 hooks/                       Claude bash hooks + platforms/ config snippets
 acceptance/                  hermetic acceptance tests (run each test_*.py; exit 0 = green)
 references/                  design docs

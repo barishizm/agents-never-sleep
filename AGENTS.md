@@ -14,10 +14,13 @@ to it.
 ## How to run
 
 ```
-python3 -m agents_never_sleep.run --repo <project> --tickets <dir-of-.md-tickets>
+python3 -m agents_never_sleep.run next     --repo <project> --tickets <dir-of-.md-tickets>
+python3 -m agents_never_sleep.run complete --repo <project> --attempted "what you did"
+#   repeat next/complete until it returns DRAINED / HALTED / LOW_YIELD
 ```
 
-(Run from this skill directory so the `harness` package is importable, or add it to `PYTHONPATH`.)
+(Run from this skill directory so the `agents_never_sleep` package is importable, or add it to
+`PYTHONPATH`. The old `harness` import name still works via a back-compat shim, removed in 2.0.)
 
 ## Platform notes
 

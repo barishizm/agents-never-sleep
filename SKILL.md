@@ -19,10 +19,11 @@ Run a backlog to completion overnight without the run ever soft-halting on a que
 part is not doing the work — it is **state durability + concrete park-vs-continue semantics +
 anti-starvation**, so that is what this skill is built around. The reliability spine shipped first
 (see `BUILD-PLAN.md`); the heavier multi-model review funnel was sequenced on top of it and is now
-built (status in "What is deferred to Phase 2" below).
+built (status in "The quality machinery layered on the spine" below).
 
 > Full rationale: `agents-never-sleep-design.md` (13 design threads + 3 council reviews).
-> The MVP spine is implemented as a small Python harness under `harness/` and proven by
+> The MVP spine is implemented as a small Python package under `agents_never_sleep/` (the old import
+> name `harness` still works via a back-compat shim through all of 1.x) and proven by
 > `acceptance/run_acceptance.py` (the only test that maps to the "stops at 2am" pain).
 
 ## The autonomy contract — three distinct states, never collapsed
@@ -156,8 +157,9 @@ The skill never schedules itself — running unattended (cron / `claude-run`) is
 explicit act, so the wizard always gets to run first. Unattended with no config → non-destructive
 only + a loud note in the report.
 
-> Legacy `python3 -m agents_never_sleep.run run` drives the loop in-process with a deterministic Worker; it is
-> only for the hermetic acceptance demo. Real runs use the `next`/`complete` flow above.
+> The hermetic acceptance demo (`acceptance/run_acceptance.py`) drives the loop in-process with a
+> deterministic `DemoWorker` for self-testing only — there is no in-process `run` subcommand. Real
+> runs always use the `next`/`complete` flow above.
 
 ## Launching a run — `bin/ans-run` (pre-token preflight + working-tree lock)
 
@@ -413,14 +415,15 @@ is a thin per-platform adapter; the Claude adapter lives in `hooks/` and is opt-
 `CLAUDE_UNATTENDED=1`).
 An `AGENTS.md` router lets file-based tools discover this skill.
 
-## What is deferred to Phase 2
+## The quality machinery layered on the spine (all built in 1.0)
 
+These were sequenced as "Phase 2" after the reliability spine; as of 1.0 they are all built.
 The agent-as-worker bridge, the multi-model council (diff-routed light/heavy review, advisory
 trust-gating), the never-ASK enforcement hook, the conditional specialist reviewers
 (architect/security/tenant-safety daylight-fold, diff-routed lenses), and shape-anchored secret
 redaction (scrubs credentials from the report, gate artifacts, Paperclip comments and emitted JSON;
 a literal-value registry the Vault slice will feed) are now built. Full Paperclip integration is
-also built (`harness/sources/paperclip.py` + `run.py` wiring, `acceptance/test_paperclip.py`): pull
+also built (`agents_never_sleep/sources/paperclip.py` + `run.py` wiring, `acceptance/test_paperclip.py`): pull
 open issues from a single configured project as the work-source, push per-ticket status transitions
 (todo→in_progress→done/blocked) and parked/daylight comments back, with the board token resolved via
 the keysource (`env:`/`vault:`) and graceful degrade-to-local + blind-spot when it can't be read.

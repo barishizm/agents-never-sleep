@@ -39,4 +39,4 @@ unless `CLAUDE_UNATTENDED=1` is set (which `claude-run`/cron sets for real unatt
 
 ## Uninstall
 
-Remove the two entries from the `"hooks"` block and restart. Nothing else persists.
+Remove the three entries from the `"hooks"` block and restart. Nothing else persists.

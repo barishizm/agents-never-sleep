@@ -136,7 +136,7 @@ _Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
 
 ### Notes
 - `.gitignore`: added Python packaging artifacts (`build/`, `dist/`, `*.egg-info/`, `*.whl`).
-- **Version stays `0.3.1`.** Ticket INT-1966's "bump to 0.2.0" was written before the 0.2.0→0.3.x
+- **Version stays `0.3.1`** (historical note — superseded by the released **1.0.0** above). Ticket INT-1966's "bump to 0.2.0" was written before the 0.2.0→0.3.x
   releases and is now a no-op (a downgrade); the next bump for these [Unreleased] changes is a
   deliberate **Mes-gated** action (per the policy at the top of this section), not part of this run.
 
@@ -243,9 +243,12 @@ _Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
 
 ---
 
-## Roadmap to v1.0
+## Roadmap to v1.0 — ✅ reached (v1.0.0 tagged 2026-06-27)
 
-A v1.0 release requires:
+> Historical record. v1.0.0 is released; `SEMVER.md` §4 is the live, machine-checkable version of
+> this list. Kept here for the SEMVER cross-reference.
+
+A v1.0 release required:
 
 1. **Stable API surface** — all items in ARCHITECTURE.md verified through at least one real
    production run (done via nightly ANS runs on tokonomix.ai backlog since 2026-06).

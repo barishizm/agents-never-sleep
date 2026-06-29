@@ -5,7 +5,8 @@ how this contract may change (the per-surface Stable-vs-Experimental classificat
 rules, and the checkable v1.0 roadmap) lives in **`SEMVER.md`**. Anything classified Stable there
 follows SemVer once 1.0 is tagged: breaking changes require a major version bump.
 
-Installed entry points (after `pip install agents-never-sleep`): `ans` = `python3 -m agents_never_sleep.run`
+Installed entry points (after `pip install` — `pip install .` from a checkout today, or
+`pip install agents-never-sleep` once published to PyPI): `ans` = `python3 -m agents_never_sleep.run`
 (the loop, §1); `ans-run` = the launcher (§6).
 
 ---

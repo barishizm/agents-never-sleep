@@ -7,9 +7,10 @@ never ASK, never irreversible unsupervised.
 ## Layout
 
 - `SKILL.md` — the agent-facing contract (start here).
-- `harness/` — deterministic stdlib engine (state machine, gates, council routing,
-  budget gate, ledger, report). No third-party deps; no network/LLM calls — the
-  agent makes those.
+- `agents_never_sleep/` — deterministic stdlib engine (state machine, gates, council
+  routing, budget gate, ledger, report). No third-party deps; no network/LLM calls — the
+  agent makes those. (The old import name `harness` still works via a back-compat shim,
+  removed in 2.0.)
 - `hooks/` — per-platform enforcement (Claude Code / Cursor / Gemini / Codex / …).
 - `acceptance/` — the test suite. `python3 acceptance/run_acceptance.py` must end
   `RESULT: ✅ GREEN`.
@@ -21,7 +22,7 @@ python3 acceptance/run_acceptance.py     # full acceptance — must stay GREEN
 python3 acceptance/test_budget.py        # a single suite
 ```
 
-Pure standard library, Python 3.10+. No build step.
+Pure standard library, Python 3.9+. No build step.
 
 ## Pull requests
 
