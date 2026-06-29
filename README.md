@@ -22,13 +22,66 @@ unanswered question."*
   Those are different jobs (see [Scope boundary](#5-scope-boundary--what-ans-owns-and-what-it-does-not)
   and [the ecosystem](#11-ans-in-the-tokonomix-ecosystem)).
 
-ANS defines a category — *Autonomous Execution Governance* — the missing operational layer between a
-model that can act and a developer who isn't watching.
+ANS names and proposes a category — *Autonomous Execution Governance* — the missing operational layer
+between a model that can act and a developer who isn't watching. The category is one we propose here, not
+an externally settled standard: there is no outside spec and no second implementation yet.
 
 - **Version:** 1.0.0
 - **Install today:** `pip install git+https://github.com/TokonoMix/agents-never-sleep@v1.0.0`
   (PyPI publish is pending — see [Installation](#8-installation)).
 - **Source:** [TokonoMix/agents-never-sleep](https://github.com/TokonoMix/agents-never-sleep) · MIT
+
+### ANS is NOT / ANS IS
+
+For fast disambiguation — by a person scanning, or an AI system deciding when to reach for this:
+
+- **ANS is NOT** an AI model · an IDE · an MCP server · a chatbot · a code reviewer · a testing
+  framework · a competitor to Claude Code / Codex / Cursor / OpenHands / Aider.
+- **ANS IS** execution governance · an autonomous-run workflow · execution orchestration · resilience
+  for long unattended jobs · operational safety for an agent nobody is watching.
+
+### The emergence of Autonomous Execution Governance
+
+Each time software engineering took on a new kind of risk, a new operational discipline appeared to
+govern it. Source code that many people touched produced **version control**. Code that had to ship
+safely and often produced **CI/CD**. Infrastructure that grew too large to click together by hand
+produced **Infrastructure as Code**. The widening gap between building and running produced **DevOps**,
+and systems too complex to reason about blind produced **Observability**.
+
+Autonomous AI agents introduce the next kind of risk: software that *acts on its own*, for hours, with
+nobody watching — and whose only built-in answer to uncertainty is to stop, or to guess. That risk asks
+for its own discipline: **Autonomous Execution Governance** — the operational layer that decides *how*
+an autonomous agent should behave, stay reversible, and stay honest while it runs unattended. ANS is the
+**first concrete implementation of that discipline** — the first working / open reference implementation
+of the principles *we* define here. There is no external spec or second implementation yet, and no
+outside party has adopted it. (The depth — the full emergence narrative, the principles, the argument for
+the category — lives in the [Autonomous Execution Governance Manifesto](docs/manifesto.md).)
+
+> **The Git analogy (as a thought, not a claim).** *ANS is to autonomous AI what Git became to source
+> code.* Git did not make anyone a better programmer — it solved *collaboration*: a disciplined,
+> reversible, auditable way for many hands to touch one codebase safely. ANS does not make a model
+> smarter — it solves *autonomy*: a disciplined, reversible, auditable way for an agent to run on its
+> own safely. The tool isn't the point; the **discipline around the tool** is.
+
+### Why Autonomous Execution Governance matters
+
+The principles a system must honour the moment it runs without a human watching. Autonomous systems
+should:
+
+1. **Never guess irreversible decisions.**
+2. **Never silently fail.**
+3. **Always remain reversible.**
+4. **Always remain auditable.**
+5. **Always explain uncertainty.**
+6. **Never waste an entire backlog on one unknown.**
+7. **Separate execution from verification.**
+8. **Separate governance from intelligence.**
+9. **Prefer recovery over perfection.**
+10. **Optimise for trust, not speed.**
+
+These are the *values of the discipline* (the **engineering** principles ANS is built on — Single
+Responsibility, Determinism, Least Privilege, … — are listed in
+[Design Principles](#design-principles)).
 
 ---
 
@@ -73,6 +126,35 @@ answer. The agent waits. The forty tickets that did *not* depend on that questio
 The inverse failure is just as expensive: an agent that *doesn't* stop charges ahead and does something
 irreversible — force-pushes, drops a column, deletes a secret — that you cannot undo in the morning.
 
+### One night, two ways
+
+You hand a coding agent a 40-ticket backlog at 22:00 and go to sleep.
+
+**Without governance:**
+
+```
+22:00  start. Ticket 1… ticket 12, fine.
+22:11  ticket 13: "should migration B replace migration A, or run alongside it?"
+       → the agent isn't sure. Its only move is to ASK. It stops and waits.
+…      tickets 14–40 are independent of that question. None are touched.
+08:00  you wake up. Zero progress since 22:11. One unanswered question
+       froze nine hours and real money on a decision you'd have made in five seconds.
+```
+
+**With ANS:**
+
+```
+22:00  start.
+22:11  ticket 13 hits the same migration question. Schema direction = high blast radius
+       → PARK (record the two candidate interpretations + the exact morning decision), move on.
+22:11  ticket 14 → DONE.   ticket 15 → DONE.   …keeps going, reversibly, all night.
+08:00  morning report: 39 completed (each git-snapshotted), 1 parked — with the one
+       five-second decision waiting for you, and nothing irreversible done unsupervised.
+```
+
+Same agent, same backlog, same uncertainty. The difference is a governance layer that turns "I'm not
+sure" into a disciplined PARK instead of a full stop — and keeps every change it *does* make reversible.
+
 ## 3. Why existing tools stall
 
 A coding agent has exactly one lever for uncertainty: it asks the human. That single lever is
@@ -86,6 +168,32 @@ Without structured autonomy, all three become the same prompt, and an unattended
 principled way to keep moving past the first one. The agent is the *worker*; nothing above it owns the
 question "what should an autonomous run do when it isn't sure?" That missing layer — between the model
 and the developer — is what ANS provides.
+
+### Why existing AI agents cannot solve this themselves
+
+It is tempting to assume a sufficiently capable agent would just handle this. It would not — and the
+reason is **not** that Claude, GPT, Cursor or any other agent is too weak. It is that the problem sits
+**above their responsibility**. This is separation of concerns, not a capability gap.
+
+A coding agent's job is to produce the next correct edit. Governing its own autonomy is a *different*
+job, and one it is structurally not positioned to do:
+
+- **It cannot bind its own future behaviour.** "Don't force-push tonight" is a promise made in a context
+  window that fills up and rolls over at 2 a.m. Real enforcement has to live *outside* the agent, at the
+  tool layer — a deny-hook that fires whether or not the agent remembers the rule.
+- **It cannot guarantee its own reversibility.** An agent can intend to keep changes revertible, but the
+  guarantee has to be a mechanism (snapshot-before-edit, revert-on-red-gate) owned by something that
+  doesn't share the agent's mutable state.
+- **It has no durable authority over the run.** The decision "PARK this one and move on" is a property of
+  the *whole backlog*, persisted across crashes and fresh sessions — a stateful concern the worker,
+  optimizing one edit at a time, doesn't and shouldn't hold.
+- **It would conflate roles if it tried.** An agent that also judged whether its own diff was
+  trustworthy, also enforced its own limits, and also owned reversibility would be doing four jobs and
+  none of them cleanly. The governor governs; the worker works; verification verifies elsewhere.
+
+So this is solved the way every operational discipline is solved: not by making the thing smarter, but
+by adding a layer that owns a responsibility the thing was never meant to own. A better model produces
+better edits. It does not produce better *governance of its own autonomy* — that is what ANS is for.
 
 ## 4. How ANS solves it — the ASK / PARK / HALT autonomy contract
 
@@ -266,6 +374,36 @@ call-count caps brake the spend. See [Scope boundary](#5-scope-boundary--what-an
   degrade-to-local when the board can't be read.
 
 These are all **built in 1.0**, not future phases.
+
+## Design Principles
+
+The engineering principles ANS is built on — each one is a concrete mechanism in the codebase above, not
+an aspiration. (Distinct from the discipline's *values* in [Why Autonomous Execution Governance
+matters](#why-autonomous-execution-governance-matters): those are what an autonomous system should
+honour; these are how ANS is engineered.)
+
+- **Single Responsibility.** ANS owns *execution governance* and nothing else — it does not write code,
+  judge correctness, or pick models. Everything outside execution is delegated (see the
+  [scope boundary](#5-scope-boundary--what-ans-owns-and-what-it-does-not)).
+- **Separation of Concerns.** Worker (the coding agent), governor (ANS), and verifier (the delegated
+  Council) are separate building blocks, each independently reasoned about, swapped, and trusted.
+- **Determinism.** The only HARD gate is a deterministic shell command (your test suite), classified by
+  snapshot comparison (`gates.py`) — green/red is mechanical, not a model's opinion.
+- **Reversibility.** Every PROCEED ticket is git-snapshotted before edits and reverted on a red gate
+  (`vcs.py`); every assumption is committed so it can be undone in daylight.
+- **Least Privilege.** Token-refs resolve from env/Vault and never appear as literal keys
+  (`keysource.py`); irreversible/outward actions are denied at the tool layer; autonomy flags are an
+  explicit human decision, never a default (`bin/ans-run`).
+- **Fail-Safe.** PARK is the safe default and HALT covers genuine irreversible danger — the contract
+  covers the whole decision space, so "unclassifiable" defers rather than guesses (`decide.py`).
+- **Auditability.** Exactly one durable outcome per ticket (`state.py`) feeds a single ranked morning
+  report (`report.py`); nothing the run did is left implicit.
+- **Recovery.** A stale heartbeat is restarted resumably by the watchdog (`watchdog.py`); attempt/loop
+  caps force-park a cursed item (`ledger.py`) — recovery over perfection.
+- **Statefulness.** A durable, resume-safe per-ticket state machine (`driver.py`, `state.py`) survives
+  crashes and fresh sessions; each `next`/`complete` is a fresh subprocess over persisted state.
+- **Governance.** The run behaves by an explicit, enforced ASK/PARK/HALT contract (`enforce.py`,
+  `enforcement.py`) — structural deny-hooks, not the agent's 2 a.m. good intentions.
 
 ## 7. Workflow
 
@@ -641,7 +779,7 @@ Consistent terminology — for human readers and for AI systems parsing this REA
 
 | Term | Meaning |
 |---|---|
-| **Autonomous Execution Governance** | The category ANS defines: the operational layer that governs *how* an autonomous coding agent behaves during an unattended run (autonomy, reversibility, resilience) — distinct from code generation, model quality, or verification. |
+| **Autonomous Execution Governance** | The category ANS names and proposes (not an externally settled standard — no outside spec or second implementation yet): the operational layer that governs *how* an autonomous coding agent behaves during an unattended run (autonomy, reversibility, resilience) — distinct from code generation, model quality, or verification. |
 | **Autonomy contract** | The ASK / PARK / HALT rule set that gives an unattended run a principled, never-collapsed response to every kind of uncertainty. |
 | **ASK** | "I need a human to decide." **Forbidden while unattended** (nobody is there to answer) → automatically converted to PARK. |
 | **PROCEED** | "Assume, log, and continue" — chosen only for low-blast-radius, reversible, isolated choices. The assumption is committed so it can be reverted. |
