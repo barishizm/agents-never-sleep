@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 380" font-family="'JetBrains Mono', ui-monospace, monospace" role="img" aria-labelledby="t d">
+  <title id="t">ANS scheduling and anti-starvation</title>
+  <desc id="d">The scheduler picks the next independent ticket whose contamination scope does not intersect a parked ticket. Anti-starvation has three guards: the attempt cap force-parks a ticket attempted past its cap, loop detection force-parks a ticket failing with the same signature, and the low-yield breaker stops the whole run when at least eight tickets are processed and the bad ratio reaches 0.75. For long backlogs, fresh-session-every spawns a fresh agent session every N tickets.</desc>
+  <rect width="760" height="380" fill="#0b1220"/>
+  <text x="380" y="30" fill="#e2e8f0" font-size="17" text-anchor="middle">Scheduling — keep the night productive</text>
+
+  <!-- backlog -->
+  <rect x="40" y="80" width="120" height="150" rx="8" fill="#11182a" stroke="#334155" stroke-width="1.5"/>
+  <text x="100" y="104" fill="#cbd5e1" font-size="12" text-anchor="middle">backlog</text>
+  <rect x="56" y="116" width="88" height="22" rx="4" fill="#0e1730" stroke="#475569"/><text x="100" y="131" fill="#94a3b8" font-size="10" text-anchor="middle">ticket A</text>
+  <rect x="56" y="144" width="88" height="22" rx="4" fill="#0e1730" stroke="#475569"/><text x="100" y="159" fill="#94a3b8" font-size="10" text-anchor="middle">ticket B</text>
+  <rect x="56" y="172" width="88" height="22" rx="4" fill="#0e1730" stroke="#475569"/><text x="100" y="187" fill="#94a3b8" font-size="10" text-anchor="middle">ticket C</text>
+  <rect x="56" y="200" width="88" height="22" rx="4" fill="#0e1730" stroke="#475569"/><text x="100" y="215" fill="#94a3b8" font-size="10" text-anchor="middle">ticket D</text>
+
+  <defs>
+    <marker id="c2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22d3ee"/></marker>
+  </defs>
+
+  <!-- scheduler -->
+  <rect x="220" y="110" width="180" height="90" rx="10" fill="#0e1730" stroke="#22d3ee" stroke-width="2"/>
+  <text x="310" y="138" fill="#22d3ee" font-size="13" text-anchor="middle">scheduler</text>
+  <text x="310" y="160" fill="#94a3b8" font-size="10" text-anchor="middle">pick next INDEPENDENT</text>
+  <text x="310" y="176" fill="#94a3b8" font-size="10" text-anchor="middle">ticket (scope-disjoint</text>
+  <text x="310" y="190" fill="#94a3b8" font-size="10" text-anchor="middle">from any park)</text>
+  <line x1="160" y1="155" x2="216" y2="155" stroke="#22d3ee" stroke-width="2" marker-end="url(#c2)"/>
+
+  <!-- anti-starvation guards -->
+  <rect x="450" y="70" width="280" height="40" rx="6" fill="#1a1530" stroke="#fbbf24" stroke-width="1.3"/>
+  <text x="590" y="88" fill="#fbbf24" font-size="11" text-anchor="middle">attempt cap → force-park</text>
+  <text x="590" y="103" fill="#94a3b8" font-size="9" text-anchor="middle">don't burn the night on one ticket</text>
+
+  <rect x="450" y="120" width="280" height="40" rx="6" fill="#1a1530" stroke="#fbbf24" stroke-width="1.3"/>
+  <text x="590" y="138" fill="#fbbf24" font-size="11" text-anchor="middle">loop detection → force-park</text>
+  <text x="590" y="153" fill="#94a3b8" font-size="9" text-anchor="middle">same failure signature recurs</text>
+
+  <rect x="450" y="170" width="280" height="48" rx="6" fill="#2a1414" stroke="#f87171" stroke-width="1.5"/>
+  <text x="590" y="190" fill="#f87171" font-size="11" text-anchor="middle">low-yield breaker → STOP run</text>
+  <text x="590" y="206" fill="#94a3b8" font-size="9" text-anchor="middle">processed ≥ 8 AND bad ratio ≥ 0.75</text>
+
+  <line x1="400" y1="140" x2="446" y2="120" stroke="#475569" stroke-width="1.3" marker-end="url(#c2)"/>
+  <line x1="400" y1="160" x2="446" y2="190" stroke="#475569" stroke-width="1.3" marker-end="url(#c2)"/>
+
+  <!-- fresh session -->
+  <rect x="120" y="270" width="520" height="64" rx="8" fill="#0b1426" stroke="#334155" stroke-width="1.5"/>
+  <text x="380" y="294" fill="#cbd5e1" font-size="12" text-anchor="middle">long backlogs: fresh-session-every = N (default 0 = off)</text>
+  <text x="380" y="314" fill="#94a3b8" font-size="10" text-anchor="middle">spawn a fresh agent session every N tickets so ticket 40 gets ticket 1's quality —</text>
+  <text x="380" y="328" fill="#94a3b8" font-size="10" text-anchor="middle">durable state means the harness never degrades; never a mid-task %-compaction</text>
+</svg>

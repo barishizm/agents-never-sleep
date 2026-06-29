@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 380" font-family="'JetBrains Mono', ui-monospace, monospace" role="img" aria-labelledby="t d">
+  <title id="t">Unattended workflow — one night, end to end</title>
+  <desc id="d">At 22:00 a developer hands a backlog to ANS and walks away. The launcher runs a pre-token GO/NO-GO gate, then the loop runs unattended: each ticket is decided, implemented, gated, and recorded, with high-risk decisions parked instead of guessed and any hung run restarted by the watchdog. At 08:00 the developer reads the morning report: completed and trusted work, items needing daylight review, parked decisions with their next actions, and any blind spots.</desc>
+  <rect width="760" height="380" fill="#0b1220"/>
+  <text x="380" y="30" fill="#e2e8f0" font-size="17" text-anchor="middle">One night, unattended — 22:00 → 08:00</text>
+
+  <defs>
+    <marker id="u2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22d3ee"/></marker>
+  </defs>
+
+  <!-- 22:00 -->
+  <rect x="40" y="80" width="150" height="80" rx="8" fill="#11182a" stroke="#334155" stroke-width="1.5"/>
+  <text x="115" y="106" fill="#22d3ee" font-size="13" text-anchor="middle">22:00</text>
+  <text x="115" y="128" fill="#cbd5e1" font-size="11" text-anchor="middle">hand a backlog,</text>
+  <text x="115" y="144" fill="#cbd5e1" font-size="11" text-anchor="middle">walk away</text>
+
+  <!-- launcher -->
+  <rect x="220" y="80" width="150" height="80" rx="8" fill="#0e1730" stroke="#22d3ee" stroke-width="2"/>
+  <text x="295" y="106" fill="#22d3ee" font-size="12" text-anchor="middle">launcher</text>
+  <text x="295" y="128" fill="#94a3b8" font-size="10" text-anchor="middle">pre-token GO/NO-GO</text>
+  <text x="295" y="144" fill="#94a3b8" font-size="10" text-anchor="middle">trust · lock · creds</text>
+
+  <!-- loop -->
+  <rect x="400" y="80" width="320" height="80" rx="8" fill="#0e1730" stroke="#22d3ee" stroke-width="2"/>
+  <text x="560" y="104" fill="#22d3ee" font-size="12" text-anchor="middle">the loop runs all night</text>
+  <text x="560" y="124" fill="#cbd5e1" font-size="10" text-anchor="middle">decide → implement → gate → record → next</text>
+  <text x="560" y="142" fill="#94a3b8" font-size="10" text-anchor="middle">park high-risk · revert red · watchdog restarts hangs</text>
+
+  <line x1="190" y1="120" x2="216" y2="120" stroke="#22d3ee" stroke-width="2" marker-end="url(#u2)"/>
+  <line x1="370" y1="120" x2="396" y2="120" stroke="#22d3ee" stroke-width="2" marker-end="url(#u2)"/>
+
+  <!-- night progress strip -->
+  <rect x="120" y="190" width="520" height="30" rx="6" fill="#0b1426" stroke="#334155"/>
+  <text x="380" y="210" fill="#94a3b8" font-size="10" text-anchor="middle">22:11 PARK "should migration B replace A?" → ticket 14 → 15 → … (never stalls the rest)</text>
+
+  <!-- 08:00 report -->
+  <rect x="180" y="250" width="400" height="90" rx="10" fill="#0f2018" stroke="#34d399" stroke-width="2"/>
+  <text x="380" y="276" fill="#34d399" font-size="13" text-anchor="middle">08:00 — morning report</text>
+  <text x="380" y="298" fill="#cbd5e1" font-size="11" text-anchor="middle">done &amp; trusted · needs daylight review · parked (with</text>
+  <text x="380" y="314" fill="#cbd5e1" font-size="11" text-anchor="middle">next actions) · blocked · blind spots</text>
+  <text x="380" y="333" fill="#94a3b8" font-size="10" text-anchor="middle">a night of autonomy → a few quick human decisions</text>
+  <line x1="560" y1="160" x2="420" y2="246" stroke="#475569" stroke-width="1.3" marker-end="url(#u2)"/>
+</svg>

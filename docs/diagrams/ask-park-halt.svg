@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" font-family="'JetBrains Mono', ui-monospace, monospace" role="img" aria-labelledby="t d">
+  <title id="t">The ASK / PARK / HALT autonomy contract</title>
+  <desc id="d">When an unattended run hits uncertainty it has three responses. ASK the human is forbidden and is converted to PARK. PARK defers this one decision and keeps the run moving to the next independent ticket. HALT stops the whole run, only on irreversible danger. PROCEED is chosen for low-blast-radius reversible decisions. The blast radius decides PROCEED versus PARK.</desc>
+  <rect width="760" height="360" fill="#0b1220"/>
+  <text x="380" y="32" fill="#e2e8f0" font-size="17" text-anchor="middle">ASK / PARK / HALT — three responses to uncertainty</text>
+
+  <!-- uncertainty -->
+  <rect x="300" y="60" width="160" height="44" rx="8" fill="#11182a" stroke="#334155" stroke-width="1.5"/>
+  <text x="380" y="80" fill="#e2e8f0" font-size="12" text-anchor="middle">uncertainty during</text>
+  <text x="380" y="96" fill="#e2e8f0" font-size="12" text-anchor="middle">an unattended run</text>
+
+  <defs>
+    <marker id="p2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/></marker>
+  </defs>
+
+  <!-- ASK (forbidden) -->
+  <rect x="40" y="170" width="160" height="90" rx="8" fill="#1c1418" stroke="#f87171" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="120" y="196" fill="#f87171" font-size="13" text-anchor="middle">ASK</text>
+  <text x="120" y="216" fill="#94a3b8" font-size="10" text-anchor="middle">forbidden unattended</text>
+  <text x="120" y="232" fill="#94a3b8" font-size="10" text-anchor="middle">(nobody to answer)</text>
+  <text x="120" y="250" fill="#fbbf24" font-size="10" text-anchor="middle">→ converted to PARK</text>
+
+  <!-- PARK -->
+  <rect x="220" y="170" width="160" height="90" rx="8" fill="#1a1530" stroke="#fbbf24" stroke-width="2"/>
+  <text x="300" y="196" fill="#fbbf24" font-size="13" text-anchor="middle">PARK</text>
+  <text x="300" y="216" fill="#94a3b8" font-size="10" text-anchor="middle">defer THIS decision,</text>
+  <text x="300" y="232" fill="#94a3b8" font-size="10" text-anchor="middle">keep the run moving</text>
+  <text x="300" y="250" fill="#cbd5e1" font-size="10" text-anchor="middle">high blast-radius</text>
+
+  <!-- PROCEED -->
+  <rect x="400" y="170" width="160" height="90" rx="8" fill="#0e1730" stroke="#22d3ee" stroke-width="2"/>
+  <text x="480" y="196" fill="#22d3ee" font-size="13" text-anchor="middle">PROCEED</text>
+  <text x="480" y="216" fill="#94a3b8" font-size="10" text-anchor="middle">assume + log +</text>
+  <text x="480" y="232" fill="#94a3b8" font-size="10" text-anchor="middle">continue, reversibly</text>
+  <text x="480" y="250" fill="#cbd5e1" font-size="10" text-anchor="middle">low + reversible</text>
+
+  <!-- HALT -->
+  <rect x="580" y="170" width="160" height="90" rx="8" fill="#2a1414" stroke="#f87171" stroke-width="2"/>
+  <text x="660" y="196" fill="#f87171" font-size="13" text-anchor="middle">HALT</text>
+  <text x="660" y="216" fill="#94a3b8" font-size="10" text-anchor="middle">stop the WHOLE run</text>
+  <text x="660" y="232" fill="#94a3b8" font-size="10" text-anchor="middle">irreversible danger</text>
+  <text x="660" y="250" fill="#cbd5e1" font-size="10" text-anchor="middle">(rare)</text>
+
+  <line x1="340" y1="104" x2="130" y2="166" stroke="#64748b" stroke-width="1.3" marker-end="url(#p2)"/>
+  <line x1="360" y1="104" x2="305" y2="166" stroke="#64748b" stroke-width="1.5" marker-end="url(#p2)"/>
+  <line x1="400" y1="104" x2="475" y2="166" stroke="#64748b" stroke-width="1.5" marker-end="url(#p2)"/>
+  <line x1="420" y1="104" x2="650" y2="166" stroke="#64748b" stroke-width="1.3" marker-end="url(#p2)"/>
+
+  <text x="380" y="300" fill="#34d399" font-size="12" text-anchor="middle">Unattended, the agent only ever chooses PROCEED · PARK · HALT — never ASK.</text>
+  <text x="380" y="328" fill="#475569" font-size="10" text-anchor="middle">Enforced structurally: the deny_ask hook denies the ask-tool under CLAUDE_UNATTENDED=1.</text>
+</svg>

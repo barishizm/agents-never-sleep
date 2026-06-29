@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 380" font-family="'JetBrains Mono', ui-monospace, monospace" role="img" aria-labelledby="t d">
+  <title id="t">The governance layer — separation of concerns between worker, governor, and verifier</title>
+  <desc id="d">Three separate building blocks with distinct responsibilities. The coding agent is the worker that generates code. ANS is the governor that decides how the unattended run behaves and keeps it reversible and auditable. The Tokonomix Council MCP is the verifier that gives an advisory second opinion. ANS governs the worker and delegates verification; it owns neither code generation nor correctness judgement.</desc>
+  <rect width="760" height="380" fill="#0b1220"/>
+  <text x="380" y="32" fill="#e2e8f0" font-size="17" text-anchor="middle">Governance is "how the AI behaves", not the AI</text>
+  <text x="380" y="54" fill="#64748b" font-size="11" text-anchor="middle">separation of concerns — three building blocks, each swappable and independently trusted</text>
+
+  <!-- worker -->
+  <rect x="50" y="100" width="190" height="150" rx="10" fill="#11182a" stroke="#334155" stroke-width="2"/>
+  <text x="145" y="128" fill="#e2e8f0" font-size="14" text-anchor="middle">WORKER</text>
+  <text x="145" y="150" fill="#94a3b8" font-size="11" text-anchor="middle">the coding agent</text>
+  <text x="145" y="172" fill="#cbd5e1" font-size="11" text-anchor="middle">generates code</text>
+  <text x="145" y="194" fill="#94a3b8" font-size="10" text-anchor="middle">Claude Code / Codex /</text>
+  <text x="145" y="208" fill="#94a3b8" font-size="10" text-anchor="middle">Cursor / Aider …</text>
+  <text x="145" y="234" fill="#64748b" font-size="10" text-anchor="middle">= intelligence</text>
+
+  <!-- governor -->
+  <rect x="285" y="100" width="190" height="150" rx="10" fill="#0e1730" stroke="#22d3ee" stroke-width="2.5"/>
+  <text x="380" y="128" fill="#22d3ee" font-size="14" text-anchor="middle">GOVERNOR</text>
+  <text x="380" y="150" fill="#94a3b8" font-size="11" text-anchor="middle">ANS</text>
+  <text x="380" y="172" fill="#cbd5e1" font-size="11" text-anchor="middle">decides how the run</text>
+  <text x="380" y="186" fill="#cbd5e1" font-size="11" text-anchor="middle">behaves; keeps it</text>
+  <text x="380" y="200" fill="#cbd5e1" font-size="11" text-anchor="middle">reversible + auditable</text>
+  <text x="380" y="234" fill="#64748b" font-size="10" text-anchor="middle">= governance</text>
+
+  <!-- verifier -->
+  <rect x="520" y="100" width="190" height="150" rx="10" fill="#160e2a" stroke="#a78bfa" stroke-width="2"/>
+  <text x="615" y="128" fill="#a78bfa" font-size="14" text-anchor="middle">VERIFIER</text>
+  <text x="615" y="150" fill="#94a3b8" font-size="11" text-anchor="middle">Council MCP</text>
+  <text x="615" y="172" fill="#cbd5e1" font-size="11" text-anchor="middle">advisory second</text>
+  <text x="615" y="186" fill="#cbd5e1" font-size="11" text-anchor="middle">opinion (delegated)</text>
+  <text x="615" y="234" fill="#64748b" font-size="10" text-anchor="middle">= verification</text>
+
+  <defs>
+    <marker id="g2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22d3ee"/></marker>
+    <marker id="g3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#a78bfa"/></marker>
+  </defs>
+  <line x1="285" y1="175" x2="244" y2="175" stroke="#22d3ee" stroke-width="2" marker-end="url(#g2)"/>
+  <text x="264" y="167" fill="#64748b" font-size="9" text-anchor="middle">governs</text>
+  <line x1="475" y1="175" x2="516" y2="175" stroke="#a78bfa" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#g3)"/>
+  <text x="496" y="167" fill="#7c6bb0" font-size="9" text-anchor="middle">delegates</text>
+
+  <rect x="190" y="290" width="380" height="56" rx="8" fill="#0b1426" stroke="#334155" stroke-width="1.5"/>
+  <text x="380" y="314" fill="#cbd5e1" font-size="11" text-anchor="middle">ANS produces: durable outcomes · reversibility · a morning report</text>
+  <text x="380" y="334" fill="#94a3b8" font-size="10" text-anchor="middle">turning a night of autonomy into a few quick human decisions</text>
+</svg>

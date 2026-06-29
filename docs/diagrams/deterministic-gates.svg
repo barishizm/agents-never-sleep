@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" font-family="'JetBrains Mono', ui-monospace, monospace" role="img" aria-labelledby="t d">
+  <title id="t">The deterministic gate and its failure attribution</title>
+  <desc id="d">After the diff, ANS runs the project's deterministic gate (the test suite or type-check) and compares a baseline run before the edit to the run after. Baseline green and after green is PASS leading to DONE. Baseline green and after red is FAIL_INTRODUCED_BY_DIFF, a hard block that reverts. Baseline red and after red is FAIL_PREEXISTING, which downgrades confidence and continues. A timeout or un-runnable command is FAIL_ENV leading to BLOCKED_ENV. The gate is the only hard gate; verification is delegated.</desc>
+  <rect width="760" height="360" fill="#0b1220"/>
+  <text x="380" y="30" fill="#e2e8f0" font-size="17" text-anchor="middle">Deterministic gate — the only HARD gate</text>
+  <text x="380" y="52" fill="#64748b" font-size="11" text-anchor="middle">ANS catches regressions exactly as well as your tests do — no more, no less</text>
+
+  <!-- baseline vs after -->
+  <rect x="60" y="90" width="200" height="56" rx="8" fill="#11182a" stroke="#334155" stroke-width="1.5"/>
+  <text x="160" y="113" fill="#cbd5e1" font-size="12" text-anchor="middle">baseline (before edit)</text>
+  <text x="160" y="132" fill="#94a3b8" font-size="10" text-anchor="middle">green or red?</text>
+  <rect x="60" y="170" width="200" height="56" rx="8" fill="#11182a" stroke="#334155" stroke-width="1.5"/>
+  <text x="160" y="193" fill="#cbd5e1" font-size="12" text-anchor="middle">after the diff</text>
+  <text x="160" y="212" fill="#94a3b8" font-size="10" text-anchor="middle">green or red?</text>
+
+  <defs>
+    <marker id="d2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/></marker>
+  </defs>
+
+  <!-- outcomes -->
+  <rect x="340" y="74" width="380" height="34" rx="6" fill="#0f2018" stroke="#34d399" stroke-width="1.5"/>
+  <text x="530" y="96" fill="#34d399" font-size="11" text-anchor="middle">green → green  =  PASS → DONE</text>
+
+  <rect x="340" y="116" width="380" height="34" rx="6" fill="#2a1414" stroke="#f87171" stroke-width="1.5"/>
+  <text x="530" y="138" fill="#f87171" font-size="11" text-anchor="middle">green → red  =  FAIL_INTRODUCED_BY_DIFF → revert</text>
+
+  <rect x="340" y="158" width="380" height="34" rx="6" fill="#26210f" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="530" y="180" fill="#fbbf24" font-size="11" text-anchor="middle">red → red  =  FAIL_PREEXISTING → continue</text>
+
+  <rect x="340" y="200" width="380" height="34" rx="6" fill="#16202e" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="530" y="222" fill="#93c5fd" font-size="11" text-anchor="middle">timeout / can't run  =  FAIL_ENV → BLOCKED_ENV</text>
+
+  <line x1="260" y1="160" x2="336" y2="91" stroke="#475569" stroke-width="1.2" marker-end="url(#d2)"/>
+  <line x1="260" y1="180" x2="336" y2="133" stroke="#475569" stroke-width="1.2" marker-end="url(#d2)"/>
+  <line x1="260" y1="195" x2="336" y2="175" stroke="#475569" stroke-width="1.2" marker-end="url(#d2)"/>
+  <line x1="260" y1="210" x2="336" y2="217" stroke="#475569" stroke-width="1.2" marker-end="url(#d2)"/>
+
+  <rect x="120" y="270" width="520" height="56" rx="8" fill="#0b1426" stroke="#334155" stroke-width="1.5"/>
+  <text x="380" y="294" fill="#cbd5e1" font-size="11" text-anchor="middle">runs with a per-step timeout + non-interactive env (stdin=/dev/null) — never hangs on a TTY</text>
+  <text x="380" y="314" fill="#f87171" font-size="10" text-anchor="middle">NEVER delete or skip a failing test to go green — that is a blocking blind-spot</text>
+</svg>

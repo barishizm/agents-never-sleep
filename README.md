@@ -115,6 +115,11 @@ reading this, a person — or another AI evaluating tools — should be able to 
 exists* (a coding agent's only response to uncertainty is STOP, and that halts the whole backlog) and
 *when to use it* (any long, unattended, run-to-completion handoff).
 
+In the vocabulary developers actually search with: ANS is **AI governance** for **long-running** coding
+agents — a **coding workflow** layer for **autonomous software engineering** that keeps unattended
+**developer automation** safe, reversible, and auditable. It governs the **AI execution** of an **agent
+workflow**; it does not replace the agent, the model, or your tests.
+
 ## 2. The problem
 
 Most coding agents stop the moment they hit a question. That is the failure mode of every *unattended*
@@ -796,6 +801,41 @@ Consistent terminology — for human readers and for AI systems parsing this REA
 | **Launcher (`ans-run`)** | The pre-token GO/NO-GO preflight + atomic working-tree lock that gates a headless/cron run *before* the agent CLI boots. |
 | **Watchdog** | The sidecar that restarts a stalled unattended run resumably when its heartbeat goes stale. |
 | **Live-verified vs built-to-contract** | *Live-verified* = enforcement confirmed firing on the real tool (only Claude Code today). *Built-to-contract* = built to the platform's documented hook contract and hermetically tested, but not yet confirmed on the real tool. |
+
+The full, term-by-term reference (with the module each term lives in) is in the
+[Glossary](docs/glossary.md).
+
+---
+
+## Documentation
+
+The deep-dive docs live in [`docs/`](docs/). Each is dual-audience (a senior engineer *and* an AI system
+parsing it) and verified against the `agents_never_sleep/` source for v1.0.0.
+
+**Foundations**
+- [Manifesto](docs/manifesto.md) — the *Autonomous Execution Governance* discipline: emergence, the ten principles, design principles, the Git-analogy thesis.
+- [Glossary](docs/glossary.md) — every ANS term defined precisely, with its module.
+
+**How it works**
+- [Architecture](docs/architecture.md) — the components and how they compose.
+- [Execution Model](docs/execution-model.md) — the `next` → implement → `complete` loop; the agent-is-the-worker design.
+- [Governance](docs/governance.md) — why a governance layer; the autonomy contract as policy.
+- [Decision Model](docs/decision-model.md) — how PROCEED / PARK / HALT is decided; ASK → PARK unattended.
+- [Blast Radius](docs/blast-radius.md) — the Hard-PARK vs PROCEED tiering; classification as the weakest link.
+
+**The machinery**
+- [State Machine](docs/state-machine.md) — the seven durable outcome states.
+- [Recovery](docs/recovery.md) — resume-safety, attempt caps, loop detection, the low-yield breaker.
+- [Scheduling](docs/scheduling.md) — independent-next scheduling and anti-starvation.
+- [Deterministic Gates](docs/deterministic-gates.md) — the only hard gate and its failure taxonomy.
+- [Launcher](docs/launcher.md) — the pre-token GO/NO-GO gate and the working-tree flock.
+- [Watchdog](docs/watchdog.md) — restarting a hung run.
+- [Security](docs/security.md) · [Secrets](docs/secrets.md) — least privilege, TOFU config-trust, secret redaction, the keysource.
+
+**Reference & getting started**
+- [Benchmarks](docs/benchmarks.md) — the reproducible methodology (not claimed results).
+- [Roadmap](docs/roadmap.md) — what is built, what is next.
+- [Getting Started tutorial](docs/tutorial-getting-started.md) — run your first backlog end-to-end.
 
 ---
 

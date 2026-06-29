@@ -1,0 +1,89 @@
+# ANS Security
+
+> **30-second version.** An unsupervised agent that can edit files and run shells is a real security
+> surface. ANS bounds it with four design guarantees: **never ASK** unattended (an ask-tool is denied),
+> **never do something irreversible** unsupervised (force-push, remote branch/tag delete, destructive SQL,
+> `mkfs`/`dd of=/dev/…`/`shred` are denied by hooks), **never leak a secret** into a log or report
+> ([secret redaction](secrets.md)), and **least privilege** (resolve credentials from a server-managed
+> source, never run as root). These are guarantees to *test against*, not aspirations. See
+> [launcher](launcher.md), [secrets](secrets.md), [glossary](glossary.md).
+
+## The threat model: an agent that runs for hours with no one watching
+
+The thing ANS governs is dangerous precisely because it is autonomous and capable: it edits files, runs
+commands, and decides for itself for hours. So ANS's security posture is **fail-safe by default** — the
+safe action (deny, revert, park, flag) is the default, and a risky action requires either an explicit
+human-confirmed grant or is blocked outright. Security here is not a feature bolted on; it is the same
+governance discipline applied to "what is this agent allowed to do unsupervised".
+
+## The four design guarantees
+
+These are stated in `SECURITY.md` as the things to test against; if you can break one, that is a
+vulnerability.
+
+1. **Never-ASK in unattended mode.** Under `CLAUDE_UNATTENDED=1`, the `deny_ask` PreToolUse hook denies the
+   `AskUserQuestion` tool; the run PARKs or PROCEEDs, never blocks. A blocking question at 2am is both a
+   stall and an availability problem; ANS removes the possibility structurally.
+2. **Never-irreversible unsupervised.** The deny-hooks block the operations that cannot be undone in
+   daylight: `git push --force`, remote branch/tag deletion, destructive SQL, and disk-destructive
+   commands (`mkfs`, `dd of=/dev/…`, `shred`). The reversibility safety net (git snapshot/revert) handles
+   the reversible mistakes; the hooks handle the ones no revert can fix.
+3. **Secret redaction.** `redact.py` strips keys, tokens, and connection-string passwords from everything
+   the night writes out — the morning report, gate artefacts, Paperclip comments, emitted JSON, even the
+   free-text `attempted` / `exact_blocker` fields. See [secrets](secrets.md) for how (shape-anchored
+   matching + a literal-value registry).
+4. **Least-privilege key source.** Credentials resolve from env or a server-managed source (Vault), never
+   committed and never a literal in the config. See [secrets](secrets.md).
+
+## Least privilege in the launcher
+
+The launcher (`launcher.py`) is where privilege is bounded *before* the agent runs:
+
+- **Never as root.** Started as root with a configured `launcher.target_user` → re-exec as that user;
+  started as root with none → NO-GO. An unattended run must never own the night as root.
+- **Run as the target user.** The recommended setup is a cron/systemd job that runs *as* the target user
+  (no sudo at all). Where the root-guard re-exec is genuinely required, use a **command-scoped** sudoers
+  rule (`ops ALL=(ansrunner) NOPASSWD: /usr/local/bin/ans-run`) — **never `NOPASSWD: ALL`**, which would
+  hand an autonomous shell-executing agent a passwordless privilege-escalation primitive.
+- **TOFU config-trust.** A repo's config describes commands the launcher will execute; it must be trusted
+  once per user and re-trusted on any change, so a malicious or altered config never runs headless. See
+  [launcher](launcher.md).
+
+## Cross-platform enforcement — honest status
+
+The never-ASK and never-irreversible guarantees are enforced by a hook layer. ANS ships a shared
+decision core (`enforce.py` / `enforcement.py`) and a per-platform capability matrix (`capabilities.py`).
+**Only Claude Code is live-verified** — the enforcement is confirmed firing on the real tool. The other
+platforms (Gemini, Codex, Copilot, Cursor, Windsurf) are **built to each platform's documented hook
+contract** and hermetically tested, but not yet confirmed firing on the real tool. Where a platform cannot
+natively enforce a guarantee, the degradation is surfaced as a **blind spot** in the morning report —
+never a silent gap. This distinction is stated everywhere it matters; ANS does not claim live verification
+it does not have.
+
+## Defense-in-depth, not a single wall
+
+The guarantees compose: the deny-hooks stop the irreversible; the snapshot/revert makes the reversible
+cheap to undo; the launcher bounds privilege before the run; redaction stops leaks on the way out; and the
+blast-radius classifier keeps high-stakes decisions out of the agent's hands entirely. No single mechanism
+is the whole defense — which is the point.
+
+## Boundary
+
+ANS secures the *execution* of an unattended run (what the agent may do, what cannot leak, what runs as
+root). It does not verify the *code's* security (that is a delegated review lens — `security` — sent to
+the external Tokonomix Council MCP, advisory only) and it does not choose models. See the
+[glossary](glossary.md) ecosystem table.
+
+## Limitations
+
+The deny-hooks block an enumerated set of irreversible operations; a novel destructive command outside the
+patterns could slip through (the patterns are a backstop, the broader defense is least privilege + running
+in a constrained user/container). Live verification exists only on Claude Code today. Redaction is
+shape-anchored + registry-based and stdlib-only — it is robust but not a proof that no secret in any shape
+can ever appear. Report vulnerabilities per `SECURITY.md`.
+
+---
+
+*Verified against `agents_never_sleep/` (v1.0.0): `redact.py`, `keysource.py`, `enforce.py`,
+`enforcement.py`, `capabilities.py`, the `deny_ask` / `deny_irreversible` / Stop hooks in `hooks/`,
+`launcher.py` (root-guard, TOFU), `SECURITY.md`.*

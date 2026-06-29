@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 460" font-family="'JetBrains Mono', ui-monospace, monospace" role="img" aria-labelledby="t d">
+  <title id="t">ANS architecture — the governance layer between a coding agent and a developer</title>
+  <desc id="d">A developer hands a backlog to ANS. ANS (the launcher gate, preflight, and the per-ticket loop of decide, snapshot, gate, record, schedule) governs a coding agent that does the file edits. For a high-risk diff ANS optionally delegates an advisory second opinion to the external Tokonomix Council MCP. ANS owns execution only; verification is delegated.</desc>
+  <rect width="760" height="460" fill="#0b1220"/>
+  <text x="380" y="34" fill="#e2e8f0" font-size="18" text-anchor="middle">ANS — Autonomous Execution Governance</text>
+  <text x="380" y="54" fill="#64748b" font-size="12" text-anchor="middle">the layer ABOVE the coding agent · execution only</text>
+
+  <!-- Developer -->
+  <rect x="40" y="90" width="150" height="60" rx="8" fill="#11182a" stroke="#334155" stroke-width="1.5"/>
+  <text x="115" y="118" fill="#e2e8f0" font-size="13" text-anchor="middle">Developer</text>
+  <text x="115" y="136" fill="#94a3b8" font-size="11" text-anchor="middle">hands a backlog,</text>
+  <text x="115" y="150" fill="#94a3b8" font-size="11" text-anchor="middle">walks away</text>
+
+  <!-- ANS governor box -->
+  <rect x="240" y="80" width="300" height="300" rx="10" fill="#0e1730" stroke="#22d3ee" stroke-width="2"/>
+  <text x="390" y="104" fill="#22d3ee" font-size="14" text-anchor="middle">ANS (the governor)</text>
+
+  <rect x="262" y="118" width="256" height="40" rx="6" fill="#11182a" stroke="#334155"/>
+  <text x="390" y="135" fill="#e2e8f0" font-size="11" text-anchor="middle">bin/ans-run — pre-token GO/NO-GO</text>
+  <text x="390" y="150" fill="#94a3b8" font-size="10" text-anchor="middle">trust · identity · flock · credentials</text>
+
+  <rect x="262" y="166" width="256" height="30" rx="6" fill="#11182a" stroke="#334155"/>
+  <text x="390" y="185" fill="#e2e8f0" font-size="11" text-anchor="middle">preflight — measure capabilities</text>
+
+  <rect x="262" y="206" width="256" height="158" rx="6" fill="#0b1426" stroke="#334155"/>
+  <text x="390" y="224" fill="#cbd5e1" font-size="11" text-anchor="middle">per-ticket loop</text>
+  <text x="390" y="246" fill="#e2e8f0" font-size="11" text-anchor="middle">decide (blast radius)</text>
+  <text x="390" y="266" fill="#e2e8f0" font-size="11" text-anchor="middle">snapshot → [agent edits] → gate</text>
+  <text x="390" y="286" fill="#e2e8f0" font-size="11" text-anchor="middle">record outcome (state machine)</text>
+  <text x="390" y="306" fill="#e2e8f0" font-size="11" text-anchor="middle">schedule next · attempt caps</text>
+  <text x="390" y="334" fill="#34d399" font-size="11" text-anchor="middle">never stop · never ASK · reversible</text>
+  <text x="390" y="352" fill="#94a3b8" font-size="10" text-anchor="middle">→ morning report</text>
+
+  <!-- Coding agent (worker) -->
+  <rect x="590" y="120" width="140" height="70" rx="8" fill="#11182a" stroke="#334155" stroke-width="1.5"/>
+  <text x="660" y="148" fill="#e2e8f0" font-size="12" text-anchor="middle">Coding agent</text>
+  <text x="660" y="165" fill="#94a3b8" font-size="10" text-anchor="middle">(the worker)</text>
+  <text x="660" y="180" fill="#94a3b8" font-size="10" text-anchor="middle">edits files</text>
+
+  <!-- Delegated Council -->
+  <rect x="590" y="270" width="140" height="80" rx="8" fill="#160e2a" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="660" y="296" fill="#a78bfa" font-size="12" text-anchor="middle">Council MCP</text>
+  <text x="660" y="313" fill="#94a3b8" font-size="10" text-anchor="middle">verification /</text>
+  <text x="660" y="327" fill="#94a3b8" font-size="10" text-anchor="middle">consensus</text>
+  <text x="660" y="343" fill="#c4b5fd" font-size="10" text-anchor="middle">(separate block)</text>
+
+  <!-- arrows -->
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#22d3ee"/></marker>
+    <marker id="arrv" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#a78bfa"/></marker>
+  </defs>
+  <line x1="190" y1="120" x2="236" y2="120" stroke="#22d3ee" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="540" y1="155" x2="586" y2="155" stroke="#22d3ee" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="563" y="146" fill="#64748b" font-size="9" text-anchor="middle">hands</text>
+  <text x="563" y="207" fill="#64748b" font-size="9" text-anchor="middle">edits back</text>
+  <line x1="586" y1="178" x2="540" y2="200" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="540" y1="300" x2="586" y2="300" stroke="#a78bfa" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arrv)"/>
+  <text x="563" y="292" fill="#7c6bb0" font-size="9" text-anchor="middle">delegate</text>
+  <text x="563" y="335" fill="#7c6bb0" font-size="8" text-anchor="middle">advisory only</text>
+
+  <text x="380" y="406" fill="#64748b" font-size="11" text-anchor="middle">execution → ANS · decision/verification → Council · provider-selection → Routing · measurement → Benchmark</text>
+  <text x="380" y="430" fill="#475569" font-size="10" text-anchor="middle">ANS does not write code, judge correctness, or pick models — those are delegated</text>
+</svg>
