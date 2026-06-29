@@ -1,37 +1,79 @@
 # Agents Never Sleep (ANS)
 
-**A governance/workflow layer that sits *above* a coding agent so it can make real progress on a
-backlog unattended — without one unanswered question stalling the rest of the work.**
+**Autonomous Execution Governance** — the governance layer between autonomous coding agents and
+software engineers.
 
-ANS is not a model, an IDE, or a coding agent. It **composes with** Claude Code, OpenAI Codex,
-Cursor, OpenHands, Aider and CI/CD: they do the work; ANS governs *how the agent behaves when it
-works autonomously for hours*. It is a portable
-[Agent Skill](https://www.agensi.io/learn/agent-skills-open-standard) (`SKILL.md`) plus a small
-zero-dependency Python harness.
+> **Mission:** *Enable autonomous AI agents to complete meaningful work safely, predictably,
+> transparently and without unnecessary human interruption.*
+
+ANS governs **how an AI agent behaves while it works autonomously** — not the AI itself. It is not a
+model, an IDE, or a coding agent, and it does not write code. It sits *above* Claude Code, OpenAI
+Codex, Cursor, OpenHands, Aider and CI/CD: they do the work; ANS decides what an unattended run should
+do when it is unsure, keeps every change reversible, and never lets one unanswerable question stall the
+rest of the backlog.
+
+**The 20-second version:** *"My AI agent no longer has to halt the entire backlog because of one
+unanswered question."*
+
+- **Use it when:** you hand a coding agent a backlog or milestone and walk away — overnight, "while
+  I'm out", a long CI job, a run-to-completion handoff — and you need it to make real, *reversible*
+  progress without a human babysitting every prompt.
+- **Do not use it for:** writing the code, judging whether the code is correct, or choosing a model.
+  Those are different jobs (see [Scope boundary](#5-scope-boundary--what-ans-owns-and-what-it-does-not)
+  and [the ecosystem](#11-ans-in-the-tokonomix-ecosystem)).
+
+ANS defines a category — *Autonomous Execution Governance* — the missing operational layer between a
+model that can act and a developer who isn't watching.
 
 - **Version:** 1.0.0
 - **Install today:** `pip install git+https://github.com/TokonoMix/agents-never-sleep@v1.0.0`
-  (PyPI publish is pending — see [Installation](#7-installation)).
+  (PyPI publish is pending — see [Installation](#8-installation)).
 - **Source:** [TokonoMix/agents-never-sleep](https://github.com/TokonoMix/agents-never-sleep) · MIT
 
 ---
 
-## 1. The problem
+## 1. Why ANS exists — the mission story
 
-Most coding agents stop the moment they hit a question. That is fine when you are sitting there to
-answer it. It is the failure mode of every *unattended* run — overnight, "while I'm away", a long CI
-job, a milestone you handed off and walked away from.
+A coding agent that hits uncertainty has exactly one move: **stop and ask the human.** That is fine
+when you are sitting there. It is the defining failure of every *unattended* run. The moment the agent
+meets a single ambiguous ticket — "which migration direction?", "is this the intended interface?" — it
+collapses the whole session into a blocking prompt that nobody is there to answer. The agent waits.
+The other forty tickets that did *not* depend on that question are never touched. You return to a run
+that burned eight hours, and real money, frozen on one decision a human could have made in five seconds.
 
-A single ambiguous ticket ("which migration direction?", "is this the intended interface?") collapses
-the whole session into a blocking prompt that nobody is there to answer. The agent waits. The other
-forty tickets that did *not* depend on that question never get touched. You come back to a run that
-spent eight hours, and real money, stalled on one decision a human could have made in five seconds.
+The inverse is just as expensive: an agent that *doesn't* stop charges ahead and does something
+irreversible — force-pushes, drops a column, deletes a secret — that you cannot undo in the morning.
 
-The inverse failure is just as expensive: an agent that *doesn't* stop charges ahead and does
-something irreversible — force-pushes, drops a column, deletes a secret — that you cannot undo in the
-morning.
+**This is a governance problem, not an AI problem.** A smarter model does not fix it. No matter how
+capable the model becomes, "I'm uncertain" still maps to a binary — *stop* or *guess* — and neither is
+right for autonomous work. What is missing is a layer that turns that binary into a disciplined
+decision: *which* uncertainties a run may resolve on its own (because the choice is reversible and
+isolated), *which* it must defer to a human (because the blast radius is large), and *which* must halt
+the whole run (because the action is genuinely irreversible). The coding agent cannot supply this layer
+itself — it is the *worker*, optimizing the next edit; it has no durable, structural authority over its
+own autonomy, no enforced reversibility, and no memory of the contract once its context fills up at
+2 a.m.
 
-## 2. Why existing tools stall
+ANS is that layer. It gives the run an **ASK / PARK / HALT autonomy contract**, enforces it
+*structurally* (deny-hooks at the tool layer, not the agent's good intentions), keeps every change it
+permits **reversible** (git-backed snapshot/revert), and produces a ranked **morning report** so the
+night's work is honest about what got done, what is parked, and what needs a human in daylight. After
+reading this, a person — or another AI evaluating tools — should be able to state plainly *why ANS
+exists* (a coding agent's only response to uncertainty is STOP, and that halts the whole backlog) and
+*when to use it* (any long, unattended, run-to-completion handoff).
+
+## 2. The problem
+
+Most coding agents stop the moment they hit a question. That is the failure mode of every *unattended*
+run — overnight, "while I'm away", a long CI job, a milestone you handed off and walked away from.
+
+A single ambiguous ticket collapses the whole session into a blocking prompt that nobody is there to
+answer. The agent waits. The forty tickets that did *not* depend on that question never get touched.
+
+The inverse failure is just as expensive: an agent that *doesn't* stop charges ahead and does something
+irreversible — force-pushes, drops a column, deletes a secret — that you cannot undo in the morning.
+
+## 3. Why existing tools stall
 
 A coding agent has exactly one lever for uncertainty: it asks the human. That single lever is
 overloaded to mean three completely different things, and collapsing them is the root cause:
@@ -41,11 +83,11 @@ overloaded to mean three completely different things, and collapsing them is the
 - *"This is irreversibly dangerous."* — the one case where stopping is correct.
 
 Without structured autonomy, all three become the same prompt, and an unattended agent has no
-principled way to keep moving past the first one. The agent is the *worker*; nothing above it owns
-the question "what should an autonomous run do when it isn't sure?" That missing layer — between the
-model and the developer — is what ANS provides.
+principled way to keep moving past the first one. The agent is the *worker*; nothing above it owns the
+question "what should an autonomous run do when it isn't sure?" That missing layer — between the model
+and the developer — is what ANS provides.
 
-## 3. How ANS solves it — the ASK / PARK / HALT autonomy contract
+## 4. How ANS solves it — the ASK / PARK / HALT autonomy contract
 
 ANS gives the agent a contract with three distinct, never-collapsed responses to uncertainty. While
 unattended the agent only ever chooses **PROCEED**, **PARK**, or **HALT** — it never **ASK**s.
@@ -57,8 +99,8 @@ unattended the agent only ever chooses **PROCEED**, **PARK**, or **HALT** — it
 | **HALT** | Stop the *whole run*. Only on genuinely irreversible danger with no safety net (e.g. read-only filesystem, no VCS and none creatable). | Run ends; operator must intervene. |
 | ~~**ASK**~~ | **Forbidden while unattended** — nobody is there to answer. Converted to PARK. | — |
 
-The discipline that keeps "unsure" rare is **deciding PROCEED vs PARK by blast radius**, made
-concrete so the agent isn't guessing about whether to guess:
+The discipline that keeps "unsure" rare is **deciding PROCEED vs PARK by blast radius**, made concrete
+so the agent isn't guessing about whether to guess:
 
 - **Hard-PARK (never guess):** DB schema / migration direction, public or shared API contract,
   security / auth / tenant-isolation boundary, money / billing / pricing, a cross-ticket interface
@@ -70,22 +112,72 @@ concrete so the agent isn't guessing about whether to guess:
 
 A wrongly-parked small item costs a five-second morning decision; a wrongly-assumed big one costs a
 night of wrong work. **PARK is the safe default:** anything that does not clearly meet the PROCEED bar
-(or the HALT bar) is parked, so the contract covers the whole decision space rather than leaving a
-gap. Blast-radius classification is the system's weakest link — it is the agent's judgment, helped by
-the harness auto-classifier — which is exactly why every PROCEED change is made reversible (below).
+(or the HALT bar) is parked, so the contract covers the whole decision space rather than leaving a gap.
+Blast-radius classification is the system's weakest link — it is the agent's judgment, helped by the
+harness auto-classifier — which is exactly why every PROCEED change is made reversible (below).
 
 This contract is enforced **structurally**, not by trusting the agent's 2 a.m. discipline — see the
 architecture below. The guarantees are opt-in and env-gated (`CLAUDE_UNATTENDED=1`), completely inert
 in normal interactive sessions.
 
-## 4. Architecture
+## 5. Scope boundary — what ANS owns, and what it does NOT
+
+This boundary is the most important thing to understand about ANS, because it is what makes the rest of
+the design coherent. **ANS owns execution only.**
+
+**ANS is responsible for:**
+
+- **Execution governance** — the ASK/PARK/HALT contract and how an autonomous run behaves.
+- **Scheduling & autonomy** — when work proceeds, defers, or halts; the per-ticket state machine.
+- **Resilience & recoverability** — resume-safe state, attempt/loop caps, watchdog restarts.
+- **Reversibility** — git-backed snapshot/revert; every PROCEED assumption committed.
+- **Workflow continuity** — one unanswerable question never stalls the rest of the backlog.
+- **Deterministic execution** — the gate (your test suite) is the only HARD block; outcomes are
+  recorded atomically.
+- **Operational safety** — deny-hooks that block irreversible/outward actions at the tool layer;
+  secret redaction.
+
+**ANS is explicitly NOT responsible for:**
+
+- **Code generation** — the coding agent writes the code; ANS never does.
+- **Model quality or AI reasoning** — ANS does not make the agent smarter or judge its thinking.
+- **Consensus** — multi-model agreement is a separate concern, owned elsewhere.
+- **Verification / correctness** — ANS does not decide whether a diff is *right*. Your deterministic
+  gate catches regressions; a second opinion on a high-risk diff is *delegated* (next section).
+
+When ANS needs any of these, it **delegates** them to a separate building block and uses only the
+result — it never absorbs the responsibility. Clean separation of concerns: the governor governs; the
+worker works; verification verifies; each is independently reasoned about, swapped, and trusted.
+
+### Delegated second opinion (NOT an ANS capability)
+
+ANS does **not** verify code or reason about correctness. For a genuinely high-risk diff it can
+optionally **delegate** a second opinion to an external verification/consensus layer — the **Tokonomix
+Council MCP**, a separate, standalone building block — and it uses that verdict for **one** purpose
+only: deciding whether to mark the ticket `DONE` (trusted) or `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT
+REVIEW**.
+
+What ANS owns here is purely deterministic governance, *not* verification:
+
+- It **routes** the risk tier from the actual diff (changed files + content), not the ticket text.
+- It applies a **budget gate** (per-night € cap, call-count cap, balance) before any delegation.
+- It **disposes** the returned verdict: convert "concerns / errored / never ran" on a HEAVY-risk diff
+  into `DONE_LOW_CONFIDENCE` instead of a silent `DONE`.
+
+The multi-model reasoning itself happens **outside ANS**, in the Council MCP (reached by the agent
+through the Tokonomix gateway — the harness is stdlib Python and cannot call LLMs). The delegated
+review is **advisory: it never blocks the run and never reverts.** It can only withhold the "trusted"
+stamp. Model agreement is not correctness — frontier models share training data and can be uniformly
+wrong — so this is a recall amplifier and a flag, never a truth oracle. *Verification lives in the
+Council; ANS governs the trust-or-flag decision around it.*
+
+## 6. Architecture
 
 The agent **is** the worker. ANS owns scheduling, safety, reversibility and bookkeeping. The pieces:
 
 ### Per-ticket state machine
 
-Every ticket runs through a durable, resume-safe loop (`agents_never_sleep/driver.py`,
-`state.py`):
+Every ticket runs through a durable, resume-safe loop (`agents_never_sleep/driver.py`, `state.py`):
 
 1. **Preflight** (`preflight.py`) measures capabilities — VCS/reversibility, platform, gates,
    execution mode, optional Tokonomix/Vault/Paperclip. A missing capability never stops the run; it
@@ -105,22 +197,21 @@ The harness classifies a red as *introduced-by-the-diff* (revert to last green +
 *pre-existing / flaky / env* (downgrade confidence, keep the work, note it as a blind spot) via
 snapshot comparison. Every gate runs with a per-step timeout and a non-interactive environment, so it
 can never hang on a TTY prompt; a timeout yields `BLOCKED_ENV`, never a run halt. **The deterministic
-gate is the only thing that can hard-block a ticket** — the review council (below) is advisory and
-never reverts. ANS never deletes or skips a failing test to go green; doing so is a blocking blind
-spot.
+gate is the only thing that can hard-block a ticket** — the delegated review (§5) is advisory and never
+reverts. ANS never deletes or skips a failing test to go green; doing so is a blocking blind spot.
 
 ### Git-backed snapshot / revert
 
 Each PROCEED ticket is snapshotted before edits (`vcs.py`); a red gate reverts to the last green
-commit. If the snapshot commit cannot be made (git lock / timeout / read-only object store), the
-ticket is recorded `BLOCKED_ENV` rather than edited unrevertibly. Every PROCEED assumption is
-committed so it can be reverted in daylight.
+commit. If the snapshot commit cannot be made (git lock / timeout / read-only object store), the ticket
+is recorded `BLOCKED_ENV` rather than edited unrevertibly. Every PROCEED assumption is committed so it
+can be reverted in daylight.
 
 ### Attempt / loop caps
 
 `ledger.py` enforces a cross-resume attempt cap per ticket and detects provable loops, force-parking
-anything that would otherwise burn the night on one cursed item. A low-yield breaker halts the run
-and alerts when most outcomes are parks/blocks.
+anything that would otherwise burn the night on one cursed item. A low-yield breaker halts the run and
+alerts when most outcomes are parks/blocks.
 
 ### The launcher (`bin/ans-run`) — preflight + working-tree flock
 
@@ -129,10 +220,10 @@ are spent. For headless/cron launches, `bin/ans-run` (installed as `ans-run`) is
 GO/NO-GO gate that runs **before** the agent CLI boots:
 
 - **Config trust (TOFU):** `.claude/agents-never-sleep.json` travels with the repo and describes
-  commands the launcher will execute. A new/changed config must be trusted once per user (keyed on
-  its SHA-256, recorded outside the repo). Headless + untrusted = NO-GO.
-- **Identity / root-guard:** configurable `launcher.target_user`; started as root with a target user
-  → re-exec as that user; as root with none configured → NO-GO.
+  commands the launcher will execute. A new/changed config must be trusted once per user (keyed on its
+  SHA-256, recorded outside the repo). Headless + untrusted = NO-GO.
+- **Identity / root-guard:** configurable `launcher.target_user`; started as root with a target user →
+  re-exec as that user; as root with none configured → NO-GO.
 - **Agent selection:** named, human-confirmed presets (`--agent`). No launch-time platform detection
   (env markers are spoofable and gone under cron). Each preset must pass a 5 s `--version` capability
   probe (catches flag drift before tokens are spent) and carry `autonomy_confirmed: true`.
@@ -141,40 +232,42 @@ GO/NO-GO gate that runs **before** the agent CLI boots:
   (`--permission-mode acceptEdits`, `--sandbox workspace-write`, `--yolo`, `--allow-all-tools`). The
   wizard shows what the flag grants before the preset can be marked launchable.
 - **Atomic mutual exclusion:** a non-blocking `flock(2)` on `<repo>/.unattended/ans-run.lock`, held by
-  the long-lived agent process and released by the kernel on any crash/kill. Two simultaneous starts
-  → exactly one winner (no TOCTOU-racy pidfiles). Exit codes: `0` GO, `64` NO-GO, `65` tree busy.
-- **Token-refs, never literal keys:** a preset's `env` can point the CLI at a gateway via `env:VAR`
-  or `vault:<mount>/<path>[#field]`, resolved through the keysource and registered for redaction. A
-  failed resolution is a blocking NO-GO, never a silent empty value.
+  the long-lived agent process and released by the kernel on any crash/kill. Two simultaneous starts →
+  exactly one winner (no TOCTOU-racy pidfiles). Exit codes: `0` GO, `64` NO-GO, `65` tree busy.
+- **Token-refs, never literal keys:** a preset's `env` can point the CLI at a gateway via `env:VAR` or
+  `vault:<mount>/<path>[#field]`, resolved through the keysource and registered for redaction. A failed
+  resolution is a blocking NO-GO, never a silent empty value.
 
-### Optional advisory review — council & specialists
+### Delegated review hook — council & specialists (advisory; see §5)
 
-When configured (and a Tokonomix gateway is reachable), high-risk diffs are reviewed by a multi-model
-**council** (`council.py`) and specialist **lenses** (`specialists.py`: architect/security always,
-plus tenant-safety/mobile/ux/i18n/performance/seo when the diff touches them). This is **advisory and
-never blocks the run** — it only withholds the "trusted" stamp: a HEAVY-risk diff whose council raised
-concerns, errored, or never ran is recorded `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT REVIEW**. The
-council is a recall amplifier (proposers blind+parallel, an independent cross-family judge), not a
-truth oracle — agreement is not correctness. Per-night euro and call-count caps brake the spend.
+When configured (and a Tokonomix gateway is reachable), a high-risk diff's second opinion is
+**delegated** to the multi-model **council** (`council.py`) and specialist **lenses**
+(`specialists.py`: architect/security always, plus tenant-safety/mobile/ux/i18n/performance/seo when
+the diff touches them). This is a *delegated integration with the external verification layer, not an
+ANS verification capability* — the harness owns only the deterministic budget/route/disposition
+scaffolding; the model reasoning happens in the Council MCP. It is **advisory and never blocks the
+run:** it only withholds the "trusted" stamp, recording a HEAVY-risk diff whose review raised concerns,
+errored, or never ran as `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT REVIEW**. Per-night euro and
+call-count caps brake the spend. See [Scope boundary](#5-scope-boundary--what-ans-owns-and-what-it-does-not).
 
 ### Watchdog, secret redaction, key source, Paperclip
 
-- **Watchdog** (`watchdog.py`) — a sidecar that runs the unattended command as a child and restarts
-  it resumably when the heartbeat goes stale (the hang a Stop-hook can't see); on exhausted restarts
-  it alerts and exits 75. Composes with `claude-run`; never rewrites it.
+- **Watchdog** (`watchdog.py`) — a sidecar that runs the unattended command as a child and restarts it
+  resumably when the heartbeat goes stale (the hang a Stop-hook can't see); on exhausted restarts it
+  alerts and exits 75. Composes with `claude-run`; never rewrites it.
 - **Secret redaction** (`redact.py`) — every report, log, saved gate-output, Paperclip comment and
   emitted JSON is scrubbed of credentials by *shape* (tokens, JWTs, private keys, connection-string
   passwords) plus a registry of known secret values, without mangling ordinary text or git SHAs.
 - **Vault key source** (`keysource.py`) — optional tokens resolve from env or HashiCorp Vault
-  (AppRole / `VAULT_TOKEN`, KV-v2); a resolved value is auto-registered for redaction and degrades to
-  a morning-report blind spot, never a hard stop, when unreadable.
-- **Paperclip integration** (`sources/paperclip.py`) — optionally pull open issues from one project
-  as the work source and push per-ticket status transitions + parked/daylight comments back, with
-  graceful degrade-to-local when the board can't be read.
+  (AppRole / `VAULT_TOKEN`, KV-v2); a resolved value is auto-registered for redaction and degrades to a
+  morning-report blind spot, never a hard stop, when unreadable.
+- **Paperclip integration** (`sources/paperclip.py`) — optionally pull open issues from one project as
+  the work source and push per-ticket status transitions + parked/daylight comments back, with graceful
+  degrade-to-local when the board can't be read.
 
 These are all **built in 1.0**, not future phases.
 
-## 5. Workflow
+## 7. Workflow
 
 The harness cannot call the agent from inside a Python loop, so the agent drives a two-command loop
 until the backlog drains. Each command prints one JSON object to stdout.
@@ -190,7 +283,7 @@ python3 -m agents_never_sleep.run complete --repo . --attempted "one-line summar
 `next` reads the JSON `status`:
 
 - **`PROCEED`** → implement the ticket, then call `complete`. If the payload carried a `council` /
-  `specialists` block, feed the review results back on `complete`
+  `specialists` block (a delegated-review request — §5), feed the returned verdict back on `complete`
   (`--council-verdict pass|concerns|error --council-cost <€>`, `--specialist-concerns …`), or the
   advisory trust-gating silently never fires.
 - **`DRAINED` / `HALTED` / `LOW_YIELD`** → the run is over; the morning report is written. Stop.
@@ -199,7 +292,8 @@ python3 -m agents_never_sleep.run complete --repo . --attempted "one-line summar
 `next` owns the never-stop sentinel that blocks a premature stop; never invent your own loop or stop
 early. Operator escapes for a confused resume: `reset-attempts <id>` (clear one ticket's attempt
 counter), `reset-spend` (zero the per-night spend accounting), `parked` (protect/restore parked WIP),
-`report` (re-write the morning report from the store).
+`report` (re-write the morning report from the store). (There is **no `run` subcommand** — real runs
+use `next`/`complete`.)
 
 ### Outcome states
 
@@ -208,7 +302,7 @@ Exactly one durable outcome is recorded per ticket:
 | State | Meaning |
 |---|---|
 | `DONE` | Implemented, gate green. |
-| `DONE_LOW_CONFIDENCE` | Implemented, gate green, but a HEAVY-risk diff's review raised concerns / errored / never ran. **Needs daylight review.** |
+| `DONE_LOW_CONFIDENCE` | Implemented, gate green, but a HEAVY-risk diff's *delegated* review raised concerns / errored / never ran. **Needs daylight review.** |
 | `PARKED_DECISION` | Requires a human decision before implementation. Parked cleanly. |
 | `PARKED_FOUNDATIONAL` | Depends on a not-yet-completed prerequisite. |
 | `BLOCKED_ENV` | Gate timed out / environment issue — not a code bug. |
@@ -222,7 +316,68 @@ A single ranked report (`report.py`): what's **done & trusted**, what **needs da
 **blind spots** (a degraded guarantee, a missing review credential, an unresolved secret). A LOW-YIELD
 night is flagged loudly so "the run finished" is never mistaken for "the work got done".
 
-## 6. Examples
+## 8. Installation
+
+The harness is pure Python standard library — **zero runtime dependencies**.
+
+**Today (PyPI not yet live):**
+
+```bash
+# From the tagged GitHub release:
+pip install git+https://github.com/TokonoMix/agents-never-sleep@v1.0.0
+
+# Or from a checkout (editable, to hack on it):
+git clone https://github.com/TokonoMix/agents-never-sleep
+cd agents-never-sleep
+pip install .          # or: pip install -e .
+```
+
+**Once published to PyPI** (publish is a pending, deliberate release step — not yet available):
+
+```bash
+pip install agents-never-sleep      # ← will work after the PyPI publish; not yet
+```
+
+Either install puts two console scripts on PATH: `ans` (= `python3 -m agents_never_sleep.run`, the
+per-ticket loop) and `ans-run` (the preflight launcher). A checkout also works without installing — run
+`bin/ans-run` and `python3 -m agents_never_sleep.run` directly (set `PYTHONPATH` to the skill root for
+the latter).
+
+> **Migration note (pre-1.0 → 1.0):** the import package was renamed `harness` → `agents_never_sleep`.
+> A back-compat `harness` shim keeps the old form working (`import harness`, `python3 -m harness.run`,
+> `-m harness.enforce`) **through all of 1.x** — it emits one `DeprecationWarning` and is removed in
+> 2.0. New code should use `agents_never_sleep`.
+
+## 9. Quick Start
+
+Five minutes from zero to a first unattended run.
+
+1. **Install** (above) — `pip install git+https://github.com/TokonoMix/agents-never-sleep@v1.0.0`.
+2. **Understand the contract:** unattended, the agent only ever **PROCEEDs** (assume + log + continue,
+   reversibly), **PARKs** (defer this one ticket, keep going), or **HALTs** (only on irreversible
+   danger). It never **ASKs** — there's nobody to answer. PARK keeps the run moving; that's the whole
+   point.
+3. **Write a few tickets** as `.md` files in a directory (see §10 for the format). The body is the only
+   required content; the harness auto-classifies blast radius.
+4. **First (interactive) run** to create the per-project config via the wizard, then drive the loop:
+
+   ```bash
+   cd /path/to/project
+   python3 -m agents_never_sleep.run next     --repo . --tickets ./backlog
+   #   …implement the ticket it hands you…
+   python3 -m agents_never_sleep.run complete --repo . --attempted "what you did"
+   #   …repeat until DRAINED.
+   ```
+
+5. **Integrate / go unattended:** install the Claude Code enforcement hooks (opt-in, `hooks/README.md`)
+   so the contract is enforced structurally, then launch detached through `ans-run` (§10). For other
+   platforms, see `hooks/platforms/README.md`.
+6. **Read the morning report** (`python3 -m agents_never_sleep.run report --repo .`): done & trusted,
+   needs-daylight-review, parked, blocked, blind spots.
+
+## 10. Examples & integration
+
+### Drive a local backlog
 
 Drive a backlog of local `.md` tickets from the repo root (`--repo .` keeps the never-stop sentinel
 path auto-aligned):
@@ -273,79 +428,20 @@ for t in acceptance/test_*.py acceptance/run_acceptance.py; do
 done
 ```
 
-## 7. Installation
-
-The harness is pure Python standard library — **zero runtime dependencies**.
-
-**Today (PyPI not yet live):**
-
-```bash
-# From the tagged GitHub release:
-pip install git+https://github.com/TokonoMix/agents-never-sleep@v1.0.0
-
-# Or from a checkout (editable, to hack on it):
-git clone https://github.com/TokonoMix/agents-never-sleep
-cd agents-never-sleep
-pip install .          # or: pip install -e .
-```
-
-**Once published to PyPI** (publish is a pending, deliberate release step — not yet available):
-
-```bash
-pip install agents-never-sleep      # ← will work after the PyPI publish; not yet
-```
-
-Either install puts two console scripts on PATH: `ans` (= `python3 -m agents_never_sleep.run`, the
-per-ticket loop) and `ans-run` (the preflight launcher). A checkout also works without installing —
-run `bin/ans-run` and `python3 -m agents_never_sleep.run` directly (set `PYTHONPATH` to the skill root
-for the latter).
-
-> **Migration note (pre-1.0 → 1.0):** the import package was renamed `harness` → `agents_never_sleep`.
-> A back-compat `harness` shim keeps the old form working (`import harness`, `python3 -m harness.run`,
-> `-m harness.enforce`) **through all of 1.x** — it emits one `DeprecationWarning` and is removed in
-> 2.0. New code should use `agents_never_sleep`.
-
-## 8. Quick Start
-
-Five minutes from zero to a first unattended run.
-
-1. **Install** (above) — `pip install git+https://github.com/TokonoMix/agents-never-sleep@v1.0.0`.
-2. **Understand the contract:** unattended, the agent only ever **PROCEEDs** (assume + log + continue,
-   reversibly), **PARKs** (defer this one ticket, keep going), or **HALTs** (only on irreversible
-   danger). It never **ASKs** — there's nobody to answer. PARK keeps the run moving; that's the whole
-   point.
-3. **Write a few tickets** as `.md` files in a directory (see §6 for the format). The body is the only
-   required content; the harness auto-classifies blast radius.
-4. **First (interactive) run** to create the per-project config via the wizard, then drive the loop:
-
-   ```bash
-   cd /path/to/project
-   python3 -m agents_never_sleep.run next     --repo . --tickets ./backlog
-   #   …implement the ticket it hands you…
-   python3 -m agents_never_sleep.run complete --repo . --attempted "what you did"
-   #   …repeat until DRAINED.
-   ```
-
-5. **Integrate / go unattended:** install the Claude Code enforcement hooks (opt-in, `hooks/README.md`)
-   so the contract is enforced structurally, then launch detached through `ans-run` (§9). For other
-   platforms, see `hooks/platforms/README.md`.
-6. **Read the morning report** (`python3 -m agents_never_sleep.run report --repo .`): done & trusted,
-   needs-daylight-review, parked, blocked, blind spots.
-
-## 9. Integration
+### How a platform plugs in
 
 ANS composes with coding agents — it is the governor, they are the worker. There are three distinct
 ways a platform plugs in. **Be precise about which:** *live-verified*, *built-to-contract*, or
 *portable preset*.
 
-- **Hook-enforced platforms** (the enforcement matrix in §4 / the table below) — the never-ASK /
-  deny-irreversible / never-stop guarantees are wired into the platform's native hook system from one
-  shared decision core (`agents_never_sleep/enforce.py`). **Claude Code is live-verified;** Gemini /
-  Codex / Copilot / Cursor / Windsurf are **built to each platform's documented hook contract** (run
-  `acceptance/` on the real tool to promote a cell).
-- **Launcher-preset platforms** — selected via `--agent <preset>` in `bin/ans-run`, with autonomy
-  flags confirmed once by a human. The shipped preset map (`agents_never_sleep/agent_clis.py`) keeps
-  the autonomy flag and what it grants explicit:
+- **Hook-enforced platforms** (the enforcement matrix below) — the never-ASK / deny-irreversible /
+  never-stop guarantees are wired into the platform's native hook system from one shared decision core
+  (`agents_never_sleep/enforce.py`). **Claude Code is live-verified;** Gemini / Codex / Copilot /
+  Cursor / Windsurf are **built to each platform's documented hook contract** (run `acceptance/` on the
+  real tool to promote a cell).
+- **Launcher-preset platforms** — selected via `--agent <preset>` in `bin/ans-run`, with autonomy flags
+  confirmed once by a human. The shipped preset map (`agents_never_sleep/agent_clis.py`) keeps the
+  autonomy flag and what it grants explicit:
 
   | CLI | unattended invocation | the autonomy flag grants |
   |---|---|---|
@@ -363,13 +459,13 @@ ways a platform plugs in. **Be precise about which:** *live-verified*, *built-to
 **Aider** is a launcher-preset/**wrapper** adapter (`agents_never_sleep/aider_launcher.py`): Aider
 0.86.2 has no hook/plugin API, so the guarantees are approximated with launch flags (`--yes-always`,
 `stdin < /dev/null`, `--no-suggest-shell-commands`), git-revert reversibility, and the SKILL.md prose
-contract. **Honest caveat:** a 2026-06-28 smoke-test showed Aider can hang on a network/OAuth wait
-that stdin redirection does not defuse, so the Aider preset **requires** a hard wall-clock timeout
-(kill → PARK) and a pre-flight that a model + key are configured. It is built-to-contract, **not**
-live-verified to the standard of the hook-enforced platforms.
+contract. **Honest caveat:** a 2026-06-28 smoke-test showed Aider can hang on a network/OAuth wait that
+stdin redirection does not defuse, so the Aider preset **requires** a hard wall-clock timeout (kill →
+PARK) and a pre-flight that a model + key are configured. It is built-to-contract, **not** live-verified
+to the standard of the hook-enforced platforms.
 
-**CI/CD:** run `ans-run` as a step (or the `next`/`complete` loop directly) as the job's user; gate
-on `ans-run --check`; the working-tree flock makes concurrent jobs safe.
+**CI/CD:** run `ans-run` as a step (or the `next`/`complete` loop directly) as the job's user; gate on
+`ans-run --check`; the working-tree flock makes concurrent jobs safe.
 
 ### Enforcement capability matrix
 
@@ -384,39 +480,60 @@ on `ans-run --check`; the working-tree flock makes concurrent jobs safe.
 
 ✅ = the platform's native hook enforces the guarantee at the tool layer. 🟡 prose = the platform
 exposes **no native hook** for that guarantee (a limitation of the host CLI, not of ANS) → the skill
-falls back to the SKILL.md written contract and reports any residual gap as a loud BLIND SPOT.
-**Only Claude Code is live-verified on the real tool** (`capabilities.py: LIVE_VERIFIED`); the other
-five are built to the platform's documented hook contract and verified by the hermetic test suite —
-run `acceptance/` there to promote a cell.
+falls back to the SKILL.md written contract and reports any residual gap as a loud BLIND SPOT. **Only
+Claude Code is live-verified on the real tool** (`capabilities.py: LIVE_VERIFIED`); the other five are
+built to the platform's documented hook contract and verified by the hermetic test suite — run
+`acceptance/` there to promote a cell.
 
 Two further built-to-contract adapters ship under `hooks/platforms/` — **Crush** and **OpenCode**
 (deny-irreversible native, never-stop / never-ASK in the prose-fallback class, same as Cursor/Windsurf;
 OpenCode has a documented caveat that subagent/task-tool calls bypass the deny hook). An internal
 **Hermes** in-process adapter also exists. None of these are live-verified yet.
 
-## 10. Best Practices
+## 11. ANS in the Tokonomix ecosystem
 
-- **Backlog shape.** Independent tickets parallelize cleanly across the run; coupled tickets that
-  share an interface should name the interface explicitly (or Hard-PARK the interface decision so it
-  isn't guessed differently by two tickets).
+ANS is one of a planned family of specialized Tokonomix building blocks — each standalone-usable, each
+owning a single responsibility, each composable with the others. The point of the [scope
+boundary](#5-scope-boundary--what-ans-owns-and-what-it-does-not) is that ANS stays inside *execution*
+and delegates everything else to the block that owns it:
+
+| Building block | Responsibility |
+|---|---|
+| **ANS** | **execution** — autonomous-run governance, scheduling, resilience, reversibility (this repo) |
+| **Council** | **decision-making** — multi-model deliberation; a *delegated second opinion* on a high-risk diff (Tokonomix Council MCP) |
+| **Media QC** | **verification** — quality control of generated media |
+| **Benchmark** | **measurement** — reproducible evaluation harnesses |
+| **Routing** | **provider-selection** — choosing which model/provider serves a call |
+| **Memory** | **long-term context** — durable knowledge across sessions |
+
+Each block is usable on its own, but states its place. The seam that matters for ANS: when a run wants
+a second opinion on whether a high-risk diff is sound, ANS does not reason about correctness itself — it
+**delegates to Council** and consumes only the verdict (trust → `DONE`, or flag →
+`DONE_LOW_CONFIDENCE`). **For verification / decision-making, look to Council, not ANS.** This is
+deliberate: a governor that also tried to be a judge would be neither cleanly.
+
+## 12. Best Practices
+
+- **Backlog shape.** Independent tickets parallelize cleanly across the run; coupled tickets that share
+  an interface should name the interface explicitly (or Hard-PARK the interface decision so it isn't
+  guessed differently by two tickets).
 - **When to PARK vs PROCEED.** PROCEED only when the choice is *locally reversible and isolated*
   (naming, internal structure, equivalent local implementations). Hard-PARK anything in the
   high-blast-radius classes (schema/migration, auth/tenant boundary, money, public API, cross-ticket
   interface, unclear requirement meaning). When genuinely unclassifiable → PARK.
-- **Fresh session per N for long backlogs.** A single agent session degrades as it accumulates
-  context (empirically around ticket ~19 it starts deferring large work and losing earlier
-  constraints). The *harness state* never degrades — each `next`/`complete` is a fresh subprocess —
-  but the driving agent context does. For long, independent backlogs set
-  `launcher.fresh_session_every: N` (opt-in, default 0/off) so a fresh agent session takes over every
-  N tickets and re-reads the durable state, giving ticket 40 the same quality as ticket 1. Never use a
-  mid-task %-compaction trigger — it summarizes lossily, busts the prompt cache, and drops design
-  constraints.
-- **Council cadence.** When the advisory council is enabled, the default caps are sized for ~3 calls
-  per ticket (plan / mid / diff review). Per-call review on every change is possible but only worth it
-  when explicitly requested, given the per-night euro and call caps. Always report the real charged
-  cost (`--council-cost`) so the spend brake stays accurate.
+- **Fresh session per N for long backlogs.** A single agent session degrades as it accumulates context
+  (empirically around ticket ~19 it starts deferring large work and losing earlier constraints). The
+  *harness state* never degrades — each `next`/`complete` is a fresh subprocess — but the driving agent
+  context does. For long, independent backlogs set `launcher.fresh_session_every: N` (opt-in,
+  default 0/off) so a fresh agent session takes over every N tickets and re-reads the durable state,
+  giving ticket 40 the same quality as ticket 1. Never use a mid-task %-compaction trigger — it
+  summarizes lossily, busts the prompt cache, and drops design constraints.
+- **Delegated-review cadence.** When the delegated council review (§5) is enabled, the default caps are
+  sized for ~3 calls per ticket (plan / mid / diff review). Per-call review on every change is possible
+  but only worth it when explicitly requested, given the per-night euro and call caps. Always report
+  the real charged cost (`--council-cost`) so the spend brake stays accurate.
 
-## 11. FAQ
+## 13. FAQ
 
 **Does ANS replace Claude Code / Codex / Cursor / Aider?**
 No. ANS is a layer *above* them. They are the worker that writes the code; ANS governs how that worker
@@ -427,15 +544,21 @@ and it is not a model or an IDE.
 No. "Overnight" is the obvious case, but it works just as well during the day — hand off the backlog
 and do other work while it runs, without watching every step.
 
+**Does ANS verify that my code is correct?**
+No — and that is by design (§5). ANS owns execution governance, not verification. Your deterministic
+gate (test suite) catches regressions; for a high-risk diff, a second opinion is *delegated* to the
+Tokonomix Council MCP and used only to flag `DONE_LOW_CONFIDENCE` / NEEDS DAYLIGHT REVIEW. ANS never
+claims a diff is correct.
+
 **Does it need an LLM API key of its own?**
 No. The harness is provider-neutral stdlib Python. The *agent* you drive has whatever credentials it
-already uses. The optional review council needs the Tokonomix gateway (or your own provider keys); the
-DIY path stays fully functional without it.
+already uses. The optional delegated review needs the Tokonomix gateway (or your own provider keys);
+the DIY path stays fully functional without it.
 
 **What happens if it can't undo something?**
 It doesn't get there. Deny-hooks block irreversible/outward actions at the source (force-push, remote
-branch deletes, destructive SQL, secret deletion, disk wipes). If there's no reversibility safety net
-at all and none creatable, the run HALTs rather than proceed.
+branch deletes, destructive SQL, secret deletion, disk wipes). If there's no reversibility safety net at
+all and none creatable, the run HALTs rather than proceed.
 
 **Can I run two at once on the same repo?**
 The launcher's atomic working-tree lock yields exactly one winner per working tree. For intentionally
@@ -445,13 +568,14 @@ disjoint worktrees, opt out with `ANS_RUN_NO_LOCK=1`.
 
 ANS is a governance layer, not a correctness oracle. Concretely:
 
-- **It does not guarantee the code is correct.** The deterministic gate (your test suite) is the
-  **only HARD gate**, and ANS does not replace it — regression-catching is exactly your tests' job.
-  What ANS adds is orthogonal: it governs *whether an autonomous agent should have touched a given
-  surface at all*, and keeps every change it does make reversible.
-- **The review council is advisory.** It can raise concerns and withhold the "trusted" stamp
-  (`DONE_LOW_CONFIDENCE` + NEEDS DAYLIGHT REVIEW), but it never blocks the run and never reverts.
-  Model agreement is not correctness — frontier models share training data and can be uniformly wrong.
+- **It does not guarantee the code is correct.** The deterministic gate (your test suite) is the **only
+  HARD gate**, and ANS does not replace it — regression-catching is exactly your tests' job. What ANS
+  adds is orthogonal: it governs *whether an autonomous agent should have touched a given surface at
+  all*, and keeps every change it does make reversible.
+- **The delegated review is advisory.** The Tokonomix Council second opinion (§5) can raise concerns
+  and withhold the "trusted" stamp (`DONE_LOW_CONFIDENCE` + NEEDS DAYLIGHT REVIEW), but it never blocks
+  the run and never reverts. Model agreement is not correctness — frontier models share training data
+  and can be uniformly wrong. Verification is delegated, not guaranteed.
 - **PARK can defer real work.** A run that parks heavily is honest about it (LOW-YIELD flag, ranked
   report), but you can still come back to a night where most tickets are waiting on your decisions.
 - **A wrong PROCEED assumption is possible.** Blast-radius tiering reduces the odds, but a misjudged
@@ -463,7 +587,7 @@ ANS is a governance layer, not a correctness oracle. Concretely:
   the platform's documented hook contract and hermetically tested, but not yet confirmed on the real
   tool.
 
-## 12. Benchmarks — methodology, not claimed results
+## 14. Benchmarks — methodology, not claimed results
 
 > **Honesty note:** the autonomy metrics below are a **reproducible methodology**, not results we are
 > claiming. Most are **not yet measured**. This section describes *how to measure* unattended-run
@@ -486,30 +610,54 @@ end-to-end with a deterministic worker.
 **What each metric does and doesn't prove:** continuous runtime and zero-interruption show the
 never-stop/never-ASK contract held; tickets-completed and unfinished-tickets show *throughput vs
 deferral* (a high park rate is honest, not necessarily a win); recovery-after-failure shows the
-durability spine works. None of these is a code-correctness measure — that is the gate's job, and it is
-out of scope for an autonomy benchmark.
+durability spine works. None of these is a code-correctness measure — that is the gate's job (and the
+delegated Council's concern), and it is out of scope for an autonomy benchmark.
 
 A controlled "normal-agent vs ANS on a backlog" comparison is scoped as the **first reproducible
 experiment** (tracked internally as Paperclip `18eee818`); it will be folded in here *when run*, with
 its setup, not before.
 
-## 13. Roadmap
+## 15. Roadmap
 
 Direction, not promises. The current published state is the baseline.
 
 - **PyPI publish.** 1.0.0 is distributed via the GitHub release today; a bare
   `pip install agents-never-sleep` becomes available once the package is published to PyPI (a
   deliberate, separate release step).
-- **More live-verified platforms.** Today only Claude Code is live-verified. Gemini / Codex / Copilot
-  / Cursor / Windsurf are built-to-contract; promoting each to live-verified is a ~5-minute smoke-test
-  on the real tool (`hooks/platforms/README.md`). Aider (wrapper preset) hardening — particularly the
+- **More live-verified platforms.** Today only Claude Code is live-verified. Gemini / Codex / Copilot /
+  Cursor / Windsurf are built-to-contract; promoting each to live-verified is a ~5-minute smoke-test on
+  the real tool (`hooks/platforms/README.md`). Aider (wrapper preset) hardening — particularly the
   network/OAuth hang — is on the same track.
-- **Run the benchmark methodology for real** (§12) and publish a dated, reproducible appendix.
-- **Deprecation cleanup:** the `harness` back-compat shim is removed in 2.0; `agents_never_sleep` is
-  the going-forward import name.
+- **Run the benchmark methodology for real** (§14) and publish a dated, reproducible appendix.
+- **Deprecation cleanup:** the `harness` back-compat shim is removed in 2.0; `agents_never_sleep` is the
+  going-forward import name.
 
 The exact, checkable surface-stability policy is in `SEMVER.md`; the per-version record is in
 `CHANGELOG.md`.
+
+## 16. Glossary
+
+Consistent terminology — for human readers and for AI systems parsing this README.
+
+| Term | Meaning |
+|---|---|
+| **Autonomous Execution Governance** | The category ANS defines: the operational layer that governs *how* an autonomous coding agent behaves during an unattended run (autonomy, reversibility, resilience) — distinct from code generation, model quality, or verification. |
+| **Autonomy contract** | The ASK / PARK / HALT rule set that gives an unattended run a principled, never-collapsed response to every kind of uncertainty. |
+| **ASK** | "I need a human to decide." **Forbidden while unattended** (nobody is there to answer) → automatically converted to PARK. |
+| **PROCEED** | "Assume, log, and continue" — chosen only for low-blast-radius, reversible, isolated choices. The assumption is committed so it can be reverted. |
+| **PARK** | "Defer *this one* ticket/decision and move to the next." Keeps the run moving; records the reason, candidate interpretations, the exact human next-action, and the contamination scope. Not a stop. |
+| **HALT** | "Stop the *whole run*." Reserved for genuinely irreversible danger with no reversibility safety net. |
+| **Blast radius** | How far a wrong choice can spread. Large blast radius (schema, auth, money, public API, shared interface, unclear requirement) → Hard-PARK; small + reversible + isolated → PROCEED. The primary PROCEED-vs-PARK discriminator. |
+| **Deterministic gate** | A shell command (your test suite) run after every edit: exit 0 = green, non-zero = red. **The only HARD gate** — the one thing that can block a ticket. |
+| **Delegated second opinion** | An optional, advisory multi-model review of a high-risk diff, *delegated* to the external Tokonomix Council MCP. Used only to flag trust vs `DONE_LOW_CONFIDENCE`; never blocks the run, never reverts, never owned by ANS. |
+| **Outcome state** | The single durable verdict recorded per ticket (`DONE`, `DONE_LOW_CONFIDENCE`, `PARKED_DECISION`, `PARKED_FOUNDATIONAL`, `BLOCKED_ENV`, `FAILED_RETRYABLE`, `FAILED_BUG_IN_AGENT`). |
+| **DONE_LOW_CONFIDENCE** | A green-gated diff that the delegated review flagged (concerns / errored / never ran) on a HEAVY-risk change → **NEEDS DAYLIGHT REVIEW** rather than a silent `DONE`. |
+| **Blind spot** | A degraded guarantee surfaced loudly in the morning report (a missing capability, an unreadable secret, a host that can't natively enforce a guarantee) — never a silent gap. |
+| **Reversibility** | The property ANS preserves: every PROCEED change is git-snapshotted and committed so it can be reverted in daylight; irreversible operations are blocked outright. |
+| **Morning report** | The single ranked end-of-run summary: done & trusted, needs-daylight-review, parked (with next actions), blocked, blind spots. |
+| **Launcher (`ans-run`)** | The pre-token GO/NO-GO preflight + atomic working-tree lock that gates a headless/cron run *before* the agent CLI boots. |
+| **Watchdog** | The sidecar that restarts a stalled unattended run resumably when its heartbeat goes stale. |
+| **Live-verified vs built-to-contract** | *Live-verified* = enforcement confirmed firing on the real tool (only Claude Code today). *Built-to-contract* = built to the platform's documented hook contract and hermetically tested, but not yet confirmed on the real tool. |
 
 ---
 
