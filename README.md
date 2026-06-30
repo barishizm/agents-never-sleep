@@ -115,6 +115,13 @@ reading this, a person — or another AI evaluating tools — should be able to 
 exists* (a coding agent's only response to uncertainty is STOP, and that halts the whole backlog) and
 *when to use it* (any long, unattended, run-to-completion handoff).
 
+**Your infra, your data policy.** ANS is MIT-licensed stdlib Python that runs inside your own
+execution environment — your laptop, your CI runner, your server. No code leaves your machine through
+ANS itself. This is a deliberate architectural choice and an answer to cloud-based autonomous agents
+that execute on vendor VMs: if your data policy or compliance posture requires that code stays on your
+infrastructure, ANS doesn't add a new data-egress path. (The optional delegated Council review sends
+a diff excerpt to the Tokonomix gateway — that path is explicit, opt-in, and budget-gated.)
+
 In the vocabulary developers actually search with: ANS is **AI governance** for **long-running** coding
 agents — a **coding workflow** layer for **autonomous software engineering** that keeps unattended
 **developer automation** safe, reversible, and auditable. It governs the **AI execution** of an **agent
@@ -729,6 +736,27 @@ ANS is a governance layer, not a correctness oracle. Concretely:
 - **Cross-platform enforcement is live-verified only on Claude Code.** Everywhere else it is built to
   the platform's documented hook contract and hermetically tested, but not yet confirmed on the real
   tool.
+
+### Safety posture — honest status
+
+ANS is a governance layer, not a security product. Here is what each protection actually is:
+
+- **Primary protection: your execution environment.** Run the agent in a container, a throwaway
+  checkout, or a least-privilege CI user. ANS cannot substitute for that; it assumes you have it.
+- **Deny-hooks (secondary):** on Claude Code (live-verified), the hook fires at the tool layer and
+  blocks irreversible/outward actions (force-push, destructive SQL, secret deletion, disk wipes)
+  before they execute. On other platforms (built-to-contract, not yet live-verified on the real tool),
+  the same decision core runs but whether the native hook fires is not confirmed. Any gap is reported
+  as a loud BLIND SPOT, never a silent one.
+- **Secret redaction:** scrubs credentials from all reports, logs, and Paperclip comments — by shape
+  and by a registry of known values. It does not guarantee zero-leakage; it is a defence-in-depth
+  layer.
+- **Config trust (TOFU):** `.claude/agents-never-sleep.json` must be explicitly trusted before a
+  headless run; a changed config re-gates. This prevents a compromised config from silently changing
+  what the launcher executes, but it is not a cryptographic supply-chain guarantee.
+- **The state machine is verified by the acceptance suite** (`acceptance/test_*.py`) — the
+  PROCEED/PARK/HALT/ASK enforcement is mechanically tested. Architecture and governance are
+  well-reasoned; correctness of the implementation is what the hermetic tests check.
 
 ## 14. Benchmarks — methodology, not claimed results
 
