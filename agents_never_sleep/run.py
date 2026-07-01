@@ -309,9 +309,23 @@ def cmd_complete(args) -> int:
     ctx = _Context(args)
     concerns = [s for s in (args.specialist_concerns or "").split(",") if s.strip()]
     http_status = getattr(args, "council_http_status", None)
+    # ticket 03: optional machine-readable gateway verdict (x_council.verdict). Parsed
+    # tolerantly — a bad/absent JSON is ignored (falls back to the --council-verdict
+    # self-report), never crashes `complete`.
+    structured = None
+    raw_json = getattr(args, "council_verdict_json", None)
+    if raw_json:
+        try:
+            import json as _json
+            parsed = _json.loads(raw_json)
+            if isinstance(parsed, dict):
+                structured = parsed
+        except (ValueError, TypeError):
+            structured = None
     out = ctx.driver.complete_ticket(
         attempted=args.attempted, cannot_implement=args.cannot_implement,
         review_coverage=args.review_coverage, council_verdict=args.council_verdict,
+        council_verdict_structured=structured,
         council_cost_eur=args.council_cost, council_http_status=http_status,
         specialist_concerns=concerns, specialist_cost_eur=args.specialist_cost)
     # INT-1675 P2: surface the resolved source so a `complete` run against the wrong --tickets dir
@@ -409,6 +423,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="coverage tag: which proposers/councils ran (incl errors) + cost")
     pc.add_argument("--council-verdict", default=None, choices=["pass", "concerns", "error"],
                     help="council outcome on this change (omit if no council was run)")
+    pc.add_argument("--council-verdict-json", default=None,
+                    help="the gateway's machine-readable x_council.verdict JSON "
+                         "({overall,issues[]}); honored DOWNGRADE-ONLY when "
+                         "config.council.structured_verdict is on (ticket 03)")
     pc.add_argument("--council-cost", type=float, default=0.0,
                     help="real € charged for this ticket's council (feeds the per-night cost brake)")
     pc.add_argument("--specialist-concerns", default=None,

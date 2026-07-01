@@ -739,6 +739,7 @@ class StepDriver:
     def complete_ticket(self, *, attempted: str, cannot_implement: bool = False,
                         review_coverage: str | None = None,
                         council_verdict: str | None = None,
+                        council_verdict_structured: dict | None = None,
                         council_cost_eur: float = 0.0,
                         council_http_status: int | None = None,
                         specialist_concerns: list | None = None,
@@ -814,6 +815,7 @@ class StepDriver:
             ticket, pending, attempted or "(no summary provided)",
             cannot_implement=cannot_implement, review_coverage=review_coverage,
             council_config=self.config, council_verdict=council_verdict,
+            council_verdict_structured=council_verdict_structured,
             specialist_concerns=specialist_concerns, credits_degrade=degrade_active)
         self._clear_pending()
         self._bump_progress(is_bad=outcome.state in BAD_STATES)

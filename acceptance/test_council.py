@@ -70,6 +70,38 @@ def test_plan_and_cost(failures):
         failures.append("[plan] NONE tier summary should say SKIP")
 
 
+def test_verdict_from_structured(failures):
+    """Ticket 03: the gateway's independent verdict folds in DOWNGRADE-ONLY."""
+    P, C, E = (CouncilVerdict.PASS, CouncilVerdict.CONCERNS, CouncilVerdict.ERROR)
+    vfs = council.verdict_from_structured
+    cases = [
+        (P, None, P),                                             # no signal → unchanged
+        (P, "not-a-dict", P),                                     # junk → unchanged
+        (P, {"overall": "weird"}, P),                             # unrecognized → unchanged
+        (P, {"overall": "concerns", "issues": []}, C),           # gateway tightens PASS→CONCERNS
+        (P, {"overall": "error"}, E),                            # gateway tightens PASS→ERROR
+        (P, {"overall": "pass", "issues": []}, P),               # clean pass confirms
+        (P, {"overall": "pass",
+             "issues": [{"severity": "high", "status": "open"}]}, C),      # pass+open-high = distrust
+        (P, {"overall": "pass",
+             "issues": [{"severity": "high", "status": "resolved"}]}, P),  # resolved doesn't tighten
+        # DOWNGRADE-ONLY: a structured PASS must NEVER upgrade a self-reported concern/error.
+        (C, {"overall": "pass", "issues": []}, C),
+        (E, {"overall": "concerns"}, E),
+        (E, {"overall": "pass", "issues": []}, E),
+        # but a stricter structured verdict DOES downgrade a rosy self-report.
+        (C, {"overall": "error"}, E),
+    ]
+    for self_v, structured, want in cases:
+        got = vfs(self_v, structured)
+        if got != want:
+            failures.append(f"[verdict_from_structured] {self_v.value}+{structured} -> {got.value} != {want.value}")
+    if council.structured_verdict_enabled({}):
+        failures.append("[structured_verdict_enabled] empty config must be OFF")
+    if not council.structured_verdict_enabled({"council": {"structured_verdict": True}}):
+        failures.append("[structured_verdict_enabled] opt-in config must be ON")
+
+
 def test_dispose(failures):
     LC = OutcomeState.DONE_LOW_CONFIDENCE
     cases = [
@@ -194,6 +226,7 @@ def main() -> int:
     test_routing(failures)
     test_plan_and_cost(failures)
     test_dispose(failures)
+    test_verdict_from_structured(failures)
     test_reconcile_and_coerce(failures)
     test_budget_brake(failures)
     test_enabled(failures)

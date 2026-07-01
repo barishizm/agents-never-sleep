@@ -171,6 +171,7 @@ class Orchestrator:
                             review_coverage: str | None = None,
                             council_config: dict | None = None,
                             council_verdict: str | None = None,
+                            council_verdict_structured: dict | None = None,
                             specialist_concerns: list | None = None,
                             credits_degrade: bool = False) -> TicketOutcome:
         """Gate the (already-applied) edits, classify, revert-or-commit, write + return the outcome.
@@ -186,6 +187,7 @@ class Orchestrator:
                                        review_coverage=review_coverage,
                                        council_config=council_config,
                                        council_verdict=council_verdict,
+                                       council_verdict_structured=council_verdict_structured,
                                        specialist_concerns=specialist_concerns,
                                        credits_degrade=credits_degrade)
         except GitError as exc:
@@ -203,6 +205,7 @@ class Orchestrator:
                        review_coverage: str | None = None,
                        council_config: dict | None = None,
                        council_verdict: str | None = None,
+                       council_verdict_structured: dict | None = None,
                        specialist_concerns: list | None = None,
                        credits_degrade: bool = False) -> TicketOutcome:
         """`cannot_implement=True` means the agent could not implement the ticket: revert and record
@@ -240,6 +243,12 @@ class Orchestrator:
                 verdict = _coerce_verdict(council_verdict, tier)
                 # integrity cross-check: distrust a rosy PASS that contradicts its own summary
                 verdict = _council.reconcile(verdict, review_coverage or "")
+                # ticket 03: fold in the gateway's INDEPENDENT machine-readable verdict,
+                # DOWNGRADE-ONLY, when opted in (config.council.structured_verdict). This is
+                # the full fix reconcile() flagged — the judge's own verdict, not the agent's
+                # self-report. A structured PASS never upgrades a self-reported concern.
+                if _council.structured_verdict_enabled(council_config) and council_verdict_structured:
+                    verdict = _council.verdict_from_structured(verdict, council_verdict_structured)
                 disp = _council.dispose(tier, verdict, review_coverage, ticket_title=ticket.title)
                 state, coverage = disp.state, disp.review_coverage
                 human_action = disp.human_action_required

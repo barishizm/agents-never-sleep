@@ -267,6 +267,53 @@ def reconcile(verdict: CouncilVerdict, coverage_text: str) -> CouncilVerdict:
     return verdict
 
 
+# Trust ordering — higher = more trusted. PASS is the only trust-granting verdict (see dispose()).
+_TRUST_RANK = {
+    CouncilVerdict.PASS: 3, CouncilVerdict.SKIPPED: 2,
+    CouncilVerdict.CONCERNS: 1, CouncilVerdict.ERROR: 0,
+}
+_HIGH_SEV = {"critical", "high"}
+
+
+def structured_verdict_enabled(config: dict) -> bool:
+    """The harness honours the gateway's machine-readable verdict only when opted in
+    (config.council.structured_verdict). Default OFF = today's self-report-only behaviour."""
+    return bool((config.get("council", {}) or {}).get("structured_verdict"))
+
+
+def verdict_from_structured(self_verdict: "CouncilVerdict", structured: dict | None) -> "CouncilVerdict":
+    """Fold the gateway's INDEPENDENT structured verdict into the agent's self-reported one,
+    DOWNGRADE-ONLY. The full fix reconcile() flagged as "next hardening": the reviewed party
+    grades its own work, so a rosy self-report PASS is the weak spot. The gateway emits a
+    judge-derived {overall, issues[]} (proposers/judge are stamped gateway-side and IGNORED here).
+
+    Governance rule: the structured verdict may only make trust STRICTER, NEVER upgrade it. A
+    judge influenced by proposer prompt-injection could emit a false PASS, so a structured PASS
+    never lifts a self-reported CONCERNS/ERROR — it only ever confirms or tightens.
+
+    Backward-compatible: structured None / not a dict / unrecognized overall → self_verdict unchanged."""
+    if not structured or not isinstance(structured, dict):
+        return self_verdict
+    overall = str(structured.get("overall", "")).lower()
+    issues = structured.get("issues") if isinstance(structured.get("issues"), list) else []
+    if overall == "error":
+        derived = CouncilVerdict.ERROR
+    elif overall == "concerns":
+        derived = CouncilVerdict.CONCERNS
+    elif overall == "pass":
+        # a 'pass' that still carries an OPEN critical/high issue is self-contradictory → distrust.
+        open_high = any(
+            isinstance(it, dict)
+            and str(it.get("severity", "")).lower() in _HIGH_SEV
+            and str(it.get("status", "open")).lower() != "resolved"
+            for it in issues)
+        derived = CouncilVerdict.CONCERNS if open_high else CouncilVerdict.PASS
+    else:
+        return self_verdict  # no usable structured signal → leave the self-report as-is
+    # DOWNGRADE-ONLY: keep whichever verdict grants LESS trust; never let `derived` upgrade.
+    return self_verdict if _TRUST_RANK[self_verdict] <= _TRUST_RANK[derived] else derived
+
+
 def dispose(tier: CouncilTier, verdict: CouncilVerdict, coverage: str, *,
             ticket_title: str) -> Disposition:
     """Given a PASSED deterministic gate, decide the FINAL disposition. NEVER blocks the run — it only
