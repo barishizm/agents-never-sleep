@@ -181,9 +181,16 @@ class Git:
             tree = _g("write-tree")
             if not tree:
                 raise GitError("WIP backup produced no tree object — aborting reset to preserve WIP")
-            commit_args = ["commit-tree", tree, "-m", "ans-backup: pre-revert WIP (INT-1825)"]
+            # commit-tree needs an author/committer identity; unlike commit_all() and
+            # ensure_safety_net() this path lacked the inline `-c` flags, so in an
+            # identity-less env (cron / CI / claude-run) the backup commit failed →
+            # GitError → the whole reset aborted on BLOCKED_ENV. Inject the same
+            # identity (only commit-tree needs it; harmless on the tree ops above).
+            commit_args = ["-c", "user.email=agent@local", "-c", "user.name=unattended",
+                           "commit-tree"]
             if parent:
-                commit_args[1:1] = ["-p", parent]
+                commit_args += ["-p", parent]
+            commit_args += [tree, "-m", "ans-backup: pre-revert WIP (INT-1825)"]
             sha = _g(*commit_args)
         finally:
             try:
