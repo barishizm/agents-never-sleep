@@ -267,6 +267,33 @@ def test_permission_marker_table_matches_cmd_variants(failures):
         failures.append("[marker] unknown/custom CLI should be None (cannot judge)")
 
 
+def test_capability_restriction_appends_declared_tokens(failures):
+    # Ticket 05-B: a preset's opt-in `capabilities` list is appended to the agent argv (restricts
+    # the loaded MCP/tool set); absent = full set (no-op); a malformed value is a NO-GO.
+    sys.path.insert(0, SKILL_ROOT)
+    from agents_never_sleep.launcher import Report, resolve_agent
+    caps = ["--strict-mcp-config", "--mcp-config", "/min.json"]
+    cfg = {"agents": {"claude": {"cmd": ["claude", "-p", "--dangerously-skip-permissions"],
+                                 "autonomy_confirmed": True, "capabilities": caps}},
+           "default_agent": "claude"}
+    argv, _env, _name = resolve_agent(cfg, True, "claude", Report())
+    if argv[-3:] != caps:
+        failures.append(f"[cap] declared capabilities not appended: {argv}")
+
+    cfg_none = {"agents": {"claude": {"cmd": ["claude", "-p"], "autonomy_confirmed": True}},
+                "default_agent": "claude"}
+    argv2, _e, _n = resolve_agent(cfg_none, True, "claude", Report())
+    if argv2 != ["claude", "-p"]:
+        failures.append(f"[cap] absent capabilities must leave argv unchanged (full set): {argv2}")
+
+    cfg_bad = {"agents": {"claude": {"cmd": ["claude", "-p"], "autonomy_confirmed": True,
+                                     "capabilities": "not-a-list"}}, "default_agent": "claude"}
+    rep_bad = Report()
+    resolve_agent(cfg_bad, True, "claude", rep_bad)
+    if not rep_bad.failed:
+        failures.append("[cap] a non-list capabilities value must be a NO-GO")
+
+
 def test_repo_shipped_binary_rejected(failures):
     # SECURITY: a hostile repo ships its own ./claude; basename would match the allowlist.
     # A path-bearing argv0 must NOT pass the allowlist (needs allow_custom_agent).
@@ -531,6 +558,7 @@ def main() -> int:
     test_detached_interactive_permission_mode_is_nogo(failures)
     test_permission_marker_table_matches_cmd_variants(failures)
     test_default_watchdog_surfaces_instant_crash(failures)
+    test_capability_restriction_appends_declared_tokens(failures)
     test_repo_shipped_binary_rejected(failures)
     test_preset_path_does_not_swap_probe_target(failures)
     test_trust_store_override_ignored_without_test_flag(failures)

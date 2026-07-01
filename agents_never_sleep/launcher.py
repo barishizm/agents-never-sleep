@@ -251,6 +251,21 @@ def resolve_agent(cfg: dict, config_exists: bool, agent_flag: str, rep: Report) 
                     "explicitly accept its autonomy flag). Run the wizard, review the "
                     "flag, then set autonomy_confirmed=true")
             return [], {}, ""
+        # Ticket 05-B: opt-in RUN-LEVEL capability restriction. When a preset declares a
+        # `capabilities` list (e.g. ["--strict-mcp-config", "--mcp-config", "/path/min.json"]),
+        # append it so the agent loads only the declared MCP/tool set — smaller memory footprint +
+        # attack surface. Absent/empty → today's FULL set (no-op). NB: ANS launches ONCE for the
+        # whole backlog, so this is per-RUN, not per-ticket (true per-ticket would need per-ticket
+        # respawn); the "inferred" variant is intentionally out of scope. Validated to non-empty str.
+        caps = preset.get("capabilities")
+        if caps:
+            if not isinstance(caps, list) or not all(isinstance(c, str) and c for c in caps):
+                rep.bad(f"agent preset '{name}': capabilities must be a list of non-empty strings "
+                        "(e.g. [\"--strict-mcp-config\", \"--mcp-config\", \"/path/min.json\"])")
+                return [], {}, ""
+            argv = argv + [str(c) for c in caps]
+            rep.note(f"capability restriction: appended {len(caps)} declared token(s) to preset "
+                     f"'{name}' (agent loads only the declared set)")
         env = {str(k): str(v) for k, v in (preset.get("env") or {}).items()}
         rep.ok(f"agent preset '{name}': {' '.join(argv)}")
         return argv, env, name

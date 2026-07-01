@@ -10,6 +10,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — leaked-process reaping + opt-in capability restriction (MINOR, additive)
+- The watchdog now reaps a run's OWN child tree by PARENT-CHAIN lineage (new
+  `agents_never_sleep/reap.py`) — on restart, on a graceful SIGTERM/SIGINT, and via a rolling
+  snapshot on a spontaneous agent crash — so leaked MCP servers (context7, tokonomix-mcp, npm/sh)
+  no longer accumulate toward OOM (observed ~13 GB, 2026-06-17). NEVER a name-match `pkill`: every
+  reap is rooted at the agent's own pid, so it can only reach that subtree (verified against a live
+  other-user run), and `reap_pids` refuses pid <= 1. A SIGKILL'd watchdog cannot self-reap — that
+  residual leak is reduced, not eliminated.
+- Opt-in per-RUN capability restriction: a preset's `capabilities` list (e.g.
+  `["--strict-mcp-config", "--mcp-config", "…"]`) is appended to the agent argv to shrink the loaded
+  MCP/tool set; absent = today's full set (no-op). Per-RUN, not per-ticket (ANS launches once).
+
 ### Added — revert-surviving per-ticket scratchpad + do-not-repeat digest (MINOR, additive)
 - New `note --ticket --text` subcommand (Experimental) appends a redacted, timestamped progress
   note to `<state-dir>/<ticket>.notes.md`. The file lives under `.unattended/` (gitignored + in

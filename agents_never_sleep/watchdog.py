@@ -22,20 +22,30 @@ import sys
 import time
 
 from .heartbeat import Heartbeat
+from .reap import descendants, reap_pids
 
 
 def _terminate(proc: subprocess.Popen) -> None:
+    """SIGTERM the child (escalate to SIGKILL after ~5s) AND reap its own descendant tree — the
+    leaked MCP servers (context7, tokonomix-mcp, npm/sh). The tree is captured BEFORE the kill:
+    once the child dies its children reparent (ppid → vscode/init) and the lineage is erased, so a
+    post-kill walk would find nothing. Parent-chain only (reap.descendants rooted at the child pid),
+    NEVER a name match — a same-named process outside this tree is untouched (ticket 05)."""
     if proc.poll() is not None:
         return
+    tree = descendants(proc.pid)  # capture while the lineage is still intact
     try:
         proc.send_signal(signal.SIGTERM)
         for _ in range(20):
             if proc.poll() is not None:
-                return
+                break
             time.sleep(0.25)
-        proc.kill()
+        else:
+            proc.kill()
     except ProcessLookupError:
         pass
+    if tree:  # SIGTERM the captured descendants that outlived the agent (leaves-first)
+        reap_pids(list(reversed(tree)))
 
 
 def main(argv=None) -> int:
@@ -61,6 +71,23 @@ def main(argv=None) -> int:
         print("watchdog: no command given", file=sys.stderr)
         return 2
 
+    # Graceful-stop reaping: if an OPERATOR stops the run with SIGTERM/SIGINT, reap the current
+    # child's leaked MCP tree before exiting (a SIGKILL'd watchdog cannot self-reap — that residual
+    # leak is not closable in-process, see reap.py). `_current` holds the live child for the handler.
+    _current = {"proc": None}
+
+    def _on_signal(signum, _frame):
+        p = _current["proc"]
+        if p is not None:
+            _terminate(p)  # captures + reaps the child tree
+        raise SystemExit(128 + signum)
+
+    for _sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(_sig, _on_signal)
+        except (ValueError, OSError):
+            pass  # not in main thread / unsupported — degrade to no graceful reap
+
     restarts = 0
     # Poll the CHILD frequently (not on the slow --poll cadence) so an instant crash surfaces
     # fast: ans-run's post-spawn early-exit probe (a ~2s poll of THIS process) can then report
@@ -70,16 +97,29 @@ def main(argv=None) -> int:
     while True:
         env = dict(os.environ, CLAUDE_UNATTENDED="1", UE_HEARTBEAT=args.heartbeat)
         proc = subprocess.Popen(cmd, env=env)
+        _current["proc"] = proc
         started = time.time()
         last_stale_check = started
+        # Rolling snapshot of the child's descendant tree, refreshed on the --poll cadence. On a
+        # SPONTANEOUS crash the child's children reparent the instant it exits (lineage erased), so
+        # a post-exit walk finds nothing — the last snapshot (≤ --poll old, pids still valid) is what
+        # lets us reap a crashed agent's orphaned MCP servers.
+        last_tree: list = []
+        last_snap = 0.0
         while True:
             rc = proc.poll()
             if rc is not None:
-                # Child finished on its own — return its rc (ANY exit code). The watchdog
-                # restarts a HANG (stale heartbeat, below), NOT a clean exit; a genuine crash
-                # (rc != 0) surfaces here to the caller rather than being masked by a restart.
+                # Child finished on its own — return its rc (ANY exit code). The watchdog restarts
+                # a HANG (stale heartbeat, below), NOT a clean exit; a genuine crash (rc != 0)
+                # surfaces here. Reap the pre-exit snapshot: the agent's MCP children have just
+                # reparented and would otherwise leak.
+                if last_tree:
+                    reap_pids(list(reversed(last_tree)))
                 return rc
             now = time.time()
+            if now - last_snap >= args.poll:
+                last_snap = now
+                last_tree = descendants(proc.pid)
             if now - started >= args.grace and now - last_stale_check >= args.poll:
                 last_stale_check = now
                 age = Heartbeat.age_seconds(args.heartbeat)
