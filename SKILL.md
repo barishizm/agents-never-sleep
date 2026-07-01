@@ -369,6 +369,11 @@ Per ticket, when a `council` block is present:
 6. **Feed the result back** on `complete`:
    `... complete --council-verdict pass|concerns|error --council-cost <€charged> --review-coverage
    "<proposers that ran, who errored, € cost>"`. Omit `--council-verdict` only if you ran no council.
+   **If the council response carries `x_council.verdict`** (the gateway's own machine-readable judge
+   verdict), ALSO pass it verbatim: `--council-verdict-json '<the x_council.verdict JSON>'`. The harness
+   folds it in DOWNGRADE-ONLY — the judge's INDEPENDENT verdict can only tighten the trust-gate, never
+   upgrade your self-report — so it closes the "you grade your own work" gap. Absent/old gateways simply
+   omit it; the self-report path is unchanged.
 
 **Cost safety (unattended runs spend real money).** The harness enforces a per-night brake from
 `--council-cost`: once `budget.per_night_euro_cap` or `budget.max_council_calls_per_night` is reached,
