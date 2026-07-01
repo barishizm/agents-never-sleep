@@ -62,24 +62,34 @@ def main(argv=None) -> int:
         return 2
 
     restarts = 0
+    # Poll the CHILD frequently (not on the slow --poll cadence) so an instant crash surfaces
+    # fast: ans-run's post-spawn early-exit probe (a ~2s poll of THIS process) can then report
+    # a dead agent instead of a false "Started in background". Heartbeat STALENESS is still
+    # evaluated only on the --poll cadence (a cheap file read, no need to do it every second).
+    child_poll = min(1, args.poll) if args.poll and args.poll > 0 else 1
     while True:
         env = dict(os.environ, CLAUDE_UNATTENDED="1", UE_HEARTBEAT=args.heartbeat)
         proc = subprocess.Popen(cmd, env=env)
         started = time.time()
+        last_stale_check = started
         while True:
-            time.sleep(args.poll)
             rc = proc.poll()
             if rc is not None:
-                return rc  # child finished on its own — done
-            if time.time() - started < args.grace:
-                continue
-            age = Heartbeat.age_seconds(args.heartbeat)
-            if age is None or age > args.stale:
-                shown = "no heartbeat" if age is None else f"{age:.0f}s"
-                print(f"watchdog: heartbeat stale ({shown} > {args.stale}s) — restarting child",
-                      file=sys.stderr)
-                _terminate(proc)
-                break
+                # Child finished on its own — return its rc (ANY exit code). The watchdog
+                # restarts a HANG (stale heartbeat, below), NOT a clean exit; a genuine crash
+                # (rc != 0) surfaces here to the caller rather than being masked by a restart.
+                return rc
+            now = time.time()
+            if now - started >= args.grace and now - last_stale_check >= args.poll:
+                last_stale_check = now
+                age = Heartbeat.age_seconds(args.heartbeat)
+                if age is None or age > args.stale:
+                    shown = "no heartbeat" if age is None else f"{age:.0f}s"
+                    print(f"watchdog: heartbeat stale ({shown} > {args.stale}s) — restarting child",
+                          file=sys.stderr)
+                    _terminate(proc)
+                    break
+            time.sleep(child_poll)
         restarts += 1
         if restarts > args.max_restarts:
             print(f"watchdog: exhausted {args.max_restarts} restarts — alerting", file=sys.stderr)

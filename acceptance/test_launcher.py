@@ -446,7 +446,10 @@ def test_fg_propagates_rc_and_holds_lock(failures):
 def test_simultaneous_starts_exactly_one_wins(failures):
     repo = _trusted_repo(SLEEPER)
     env = dict(os.environ); env["ANS_TRUST_STORE"] = TRUST_STORE; env["ANS_TEST_MODE"] = "1"
-    procs = [subprocess.Popen([sys.executable, ANS_RUN, "--repo", repo, "go"],
+    # --no-watchdog: the winner's SLEEPER agent holds the lock directly and releases it the
+    # moment it exits (bare-spawn lifecycle), so the lock-release timing below is deterministic;
+    # the mutual-exclusion guarantee itself is watchdog-independent (lock taken in preflight).
+    procs = [subprocess.Popen([sys.executable, ANS_RUN, "--repo", repo, "--no-watchdog", "go"],
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                               env=env)
              for _ in range(2)]
@@ -469,14 +472,28 @@ def test_simultaneous_starts_exactly_one_wins(failures):
 
 
 def test_lock_released_after_agent_death(failures):
-    # An agent that dies instantly must not leave a stale lock behind (no pidfiles).
+    # BARE-spawn lifecycle (--no-watchdog): an agent that dies instantly surfaces its rc and
+    # must not leave a stale lock behind (no pidfiles). Under the DEFAULT watchdog wrap the
+    # supervisor absorbs the crash (its own lifecycle is proven in test_watchdog.py), so this
+    # immediate-rc/lock-release guarantee is asserted on the bare path.
     repo = _trusted_repo(INSTANT_FAIL)
-    res = _run(repo, "boom")
+    res = _run(repo, "--no-watchdog", "boom")
     if res.returncode != 7:
         failures.append(f"[crash] expected agent rc 7 surfaced, got {res.returncode}")
     res2 = _run(repo, "--check")
     if res2.returncode != 0:
         failures.append(f"[crash-release] lock stale after agent death: {res2.returncode}")
+
+
+def test_default_watchdog_surfaces_instant_crash(failures):
+    # Under the DEFAULT watchdog wrap, an agent that crashes instantly must still surface its
+    # non-zero rc from ans-run (the watchdog polls the child fast and passes a crash through) —
+    # NOT a false "Started in background". Proves the early-exit surfacing survives the wrap.
+    repo = _trusted_repo(INSTANT_FAIL)
+    res = _run(repo, "boom")
+    if res.returncode != 7:
+        failures.append(f"[wd-crash] default-wrap instant crash should surface rc 7, got "
+                        f"{res.returncode}: {res.stdout}{res.stderr}")
 
 
 def test_bg_start_reports_log_and_pid(failures):
@@ -487,9 +504,19 @@ def test_bg_start_reports_log_and_pid(failures):
         return
     if "Started in background" not in res.stdout or "watch:" not in res.stdout:
         failures.append(f"[bg] missing PID/log/watch hint: {res.stdout}")
+    # Ticket 03: the DEFAULT background launch is wrapped in the heartbeat watchdog.
+    if "watchdog" not in res.stdout:
+        failures.append(f"[bg] default launch should report the watchdog wrap: {res.stdout}")
     logs_dir = os.path.join(repo, ".unattended", "logs")
     if not (os.path.isdir(logs_dir) and os.listdir(logs_dir)):
         failures.append("[bg] no log file created under .unattended/logs")
+
+    # The opt-out reports the bare launch (watchdog OFF).
+    repo2 = _trusted_repo(SLEEPER)
+    res2 = _run(repo2, "--no-watchdog", "go")
+    if res2.returncode != 0 or "watchdog OFF" not in res2.stdout:
+        failures.append(f"[bg] --no-watchdog should report watchdog OFF: "
+                        f"{res2.returncode}: {res2.stdout}")
     time.sleep(5)  # let the sleeper finish so the tmp repo can be cleaned up
 
 
@@ -503,6 +530,7 @@ def main() -> int:
     test_known_cli_capability_probe(failures)
     test_detached_interactive_permission_mode_is_nogo(failures)
     test_permission_marker_table_matches_cmd_variants(failures)
+    test_default_watchdog_surfaces_instant_crash(failures)
     test_repo_shipped_binary_rejected(failures)
     test_preset_path_does_not_swap_probe_target(failures)
     test_trust_store_override_ignored_without_test_flag(failures)

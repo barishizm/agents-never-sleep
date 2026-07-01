@@ -681,6 +681,44 @@ def run_fresh_session_loop(repo, cfg, full_argv, child_env, fresh_n, lock_fd, re
         release()
 
 
+def compose_watchdog_argv(full_argv, heartbeat_path, wd_cfg, per_ticket_timeout_s,
+                          fix_iterations=3, *, disabled: bool = False):
+    """Wrap the agent argv in the heartbeat watchdog so a DETACHED run survives a sustained
+    529/overload wave — which manifests as a FROZEN heartbeat (the process is alive but wedged,
+    the gap the Stop-hook can't see). bin/ans-run otherwise spawns a BARE agent whose only
+    retries are the SDK's internal ~20×/~135s; a sustained wave exhausts them and the run wedges
+    for good, with no external restart (two real 2026-06-12 incidents, one dead ~7.5h). The
+    watchdog runs the agent as a child and, on a STALE heartbeat, restarts it RESUMABLE up to a
+    cap, then alerts (exit 75). A clean child exit — including a non-zero crash — is passed
+    through, NOT restarted (surfaced fast to the caller instead). Default-ON (ticket 03);
+    returns full_argv unchanged when disabled (--no-watchdog or launcher.watchdog.enabled=false).
+
+    --stale MUST exceed the real worst-case gap BETWEEN heartbeats or it false-restarts a healthy
+    run (→ re-stale → exhaust the cap → exit 75, killing a run that was fine). The agent only
+    beats at harness next/complete boundaries, so one ticket's whole implement→gate→review→
+    consensus→complete span passes with no beat: per_ticket_timeout_s bounds a SINGLE gate
+    subprocess, and a ticket runs up to fix_iterations gate rounds plus review/consensus. So
+    default stale ≈ per_ticket_timeout_s × (fix_iterations + 1) + a review/consensus margin.
+    Operators with lighter tickets can lower launcher.watchdog.stale_s to catch a hang sooner."""
+    wd_cfg = wd_cfg or {}
+    if disabled or wd_cfg.get("enabled") is False:
+        return list(full_argv)
+    budget = int(per_ticket_timeout_s or 1800)
+    iters = int(fix_iterations if fix_iterations is not None else 3)
+    default_stale = budget * (iters + 1) + 1800   # + 30min review/consensus margin
+    stale = int(wd_cfg.get("stale_s") or default_stale)
+    argv = [sys.executable, "-m", "agents_never_sleep.watchdog",
+            "--heartbeat", heartbeat_path,
+            "--stale", str(stale),
+            "--max-restarts", str(int(wd_cfg.get("max_restarts", 3))),
+            "--poll", str(int(wd_cfg.get("poll_s", 30))),
+            "--grace", str(int(wd_cfg.get("grace_s", 300)))]
+    alert = wd_cfg.get("alert")
+    if alert:
+        argv += ["--alert", str(alert)]
+    return argv + ["--"] + list(full_argv)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="ans-run", add_help=True)
     parser.add_argument("--repo", default=None, help="working tree (default: cwd)")
@@ -688,6 +726,9 @@ def main() -> int:
                         help="named agent preset from launcher.agents")
     parser.add_argument("--fg", action="store_true",
                         help="run in foreground (agent exit code is propagated)")
+    parser.add_argument("--no-watchdog", action="store_true",
+                        help="do NOT wrap the background launch in the heartbeat watchdog "
+                             "(default: wrapped, so a hang/overload restarts the run resumable)")
     parser.add_argument("--check", action="store_true", help="preflight report only")
     parser.add_argument("--trust", action="store_true",
                         help="record trust for the repo's current config and exit")
@@ -797,6 +838,31 @@ def main() -> int:
         return run_fresh_session_loop(
             repo, cfg, full_argv, child_env, fresh_n, lock_fd, _release, preset_name)
 
+    # Wrap the detached launch in the heartbeat watchdog by default (ticket 03): a bare
+    # `claude -p` has NO external restart, so a sustained 529/overload wave that FREEZES the
+    # heartbeat wedges the run for good. The watchdog restarts it RESUMABLE on a stale
+    # heartbeat, then alerts (a clean/crashed exit is surfaced fast, not restarted). The
+    # watchdog holds the tree-lock fd across restarts (its agent children don't inherit it,
+    # close_fds), so the lock stays held for the whole run and releases only when it exits.
+    watchdog_on = not (args.no_watchdog or (cfg.get("watchdog") or {}).get("enabled") is False)
+    # hb_path is the DEFAULT run.py heartbeat location; the watchdog forces UE_HEARTBEAT to it,
+    # and run.py prefers UE_HEARTBEAT over its own --state-dir fallback, so the agent always
+    # writes where the watchdog polls even if a preset overrode --state-dir.
+    hb_path = os.path.join(repo, ".unattended", "state", "heartbeat.json")
+    budget_cfg = full_config.get("budget") or {}
+    ptt = budget_cfg.get("per_ticket_timeout_s")
+    fix_iters = budget_cfg.get("per_ticket_fix_iterations", 3)
+    spawn_argv = compose_watchdog_argv(full_argv, hb_path, cfg.get("watchdog") or {}, ptt,
+                                       fix_iters, disabled=args.no_watchdog)
+    if watchdog_on:
+        # `python -m agents_never_sleep.watchdog` runs a FRESH interpreter — make sure the
+        # skill package is importable even if the preset sets no PYTHONPATH.
+        skill_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        pp = child_env.get("PYTHONPATH", "")
+        parts = pp.split(os.pathsep) if pp else []
+        if skill_root not in parts:
+            child_env["PYTHONPATH"] = os.pathsep.join([skill_root, *parts])
+
     log_path = open_log(repo, cfg)
     # 0600: the agent's raw, UNREDACTED stream may contain a resolved gateway key — never
     # world-readable. fchmod tightens it even if the file pre-existed looser.
@@ -807,7 +873,7 @@ def main() -> int:
         pass
     with os.fdopen(log_fd, "ab") as logf:
         proc = subprocess.Popen(
-            full_argv,
+            spawn_argv,
             stdout=logf, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
             start_new_session=True, env=child_env,
             pass_fds=(lock_fd,) if lock_fd is not None else (),
@@ -816,7 +882,8 @@ def main() -> int:
     time.sleep(2)
     early = proc.poll()
     if early is not None and early != 0:
-        print(f"ans-run: agent exited immediately (rc={early}) — last log lines:",
+        who = "run supervisor (watchdog)" if watchdog_on else "agent"
+        print(f"ans-run: {who} exited immediately (rc={early}) — last log lines:",
               file=sys.stderr)
         try:
             with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
@@ -825,8 +892,13 @@ def main() -> int:
         except OSError:
             pass
         return early
-    print(f"Started in background (PID {proc.pid}, preset '{preset_name}', "
-          "lock held by the run process)")
+    if watchdog_on:
+        print(f"Started in background under the heartbeat watchdog (PID {proc.pid}, preset "
+              f"'{preset_name}'; restarts the agent on hang/overload up to the cap, then "
+              "alerts). Opt out with --no-watchdog.")
+    else:
+        print(f"Started in background (PID {proc.pid}, preset '{preset_name}', "
+              "lock held by the run process; watchdog OFF)")
     print(f"  log:   {log_path}")
     print(f"  watch: tail -f {log_path}")
     return 0
