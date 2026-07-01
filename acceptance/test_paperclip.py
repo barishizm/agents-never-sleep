@@ -156,6 +156,33 @@ def main() -> int:
     if not r2 or r2["actions"] != 0 or r2["skipped_already_pushed"] < 1:
         failures.append(f"[idem] second push should skip the unchanged ticket, got {r2}")
 
+    # ---- c5994abe: paperclip_id parsed from body + per-ticket in_progress push ----------
+    from agents_never_sleep.tickets import load_tickets, _extract_paperclip_id
+    from agents_never_sleep.run import _push_in_progress_one
+    if _extract_paperclip_id({}, "text\nPaperclip: INT-2345\nmore") != "INT-2345":
+        failures.append("[c5994abe] body 'Paperclip:' line not parsed")
+    if _extract_paperclip_id({"paperclip": "INT-9"}, "Paperclip: INT-1") != "INT-9":
+        failures.append("[c5994abe] frontmatter paperclip must take precedence over body")
+    tdir = tempfile.mkdtemp(prefix="ue-pcp-id-")
+    with open(os.path.join(tdir, "01-x.md"), "w", encoding="utf-8") as fh:
+        fh.write("# Ticket\nDo the thing.\nPaperclip: INT-777\n")
+    tk = load_tickets(tdir)[0]
+    if tk.meta.get("paperclip_id") != "INT-777":
+        failures.append(f"[c5994abe] load_tickets did not set paperclip_id (got {tk.meta.get('paperclip_id')})")
+    # per-ticket in_progress push: fires once (idempotent), only for a mapped ticket, never crashes
+    sd2 = os.path.join(tempfile.mkdtemp(prefix="ue-pcp-ip-"), "state")
+    os.makedirs(sd2, exist_ok=True)
+    op_ip = _Opener(ISSUES)
+    client_ip = pc.PaperclipClient("http://x", "tok", "C", opener=op_ip, write_enabled=True)
+    ctx_ip = types.SimpleNamespace(paperclip=client_ip, pcp_id_by_ticket={"INF-1": "u-1"},
+                                   state_dir=sd2)
+    _push_in_progress_one(ctx_ip, "INF-1")
+    _push_in_progress_one(ctx_ip, "INF-1")     # idempotent — the marker suppresses the second
+    writes = [c for c in op_ip.calls if c[0] != "GET"]
+    if len(writes) != 1:
+        failures.append(f"[c5994abe] expected exactly ONE in_progress write (idempotent), got {writes}")
+    _push_in_progress_one(ctx_ip, "UNKNOWN")   # unmapped ticket → silent no-op (no crash)
+
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — paperclip adapter not proven")

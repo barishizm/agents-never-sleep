@@ -79,6 +79,20 @@ def _parse_frontmatter(text: str) -> tuple[dict, str]:
     return meta, text
 
 
+# A Paperclip issue id carried in the BODY as `Paperclip: INT-1234` / `Paperclip: <uuid8>`
+# (c5994abe) — so a curated tickets-dir run can write status back WITHOUT pulling Paperclip
+# as the source. Frontmatter `paperclip:`/`paperclip_id:` takes precedence over the body line.
+_PAPERCLIP_BODY_RE = re.compile(r"^\s*Paperclip:\s*([A-Za-z0-9][\w-]*)\s*$", re.IGNORECASE | re.MULTILINE)
+
+
+def _extract_paperclip_id(meta: dict, body: str) -> Optional[str]:
+    pid = meta.get("paperclip_id") or meta.get("paperclip")
+    if pid:
+        return str(pid).strip()
+    m = _PAPERCLIP_BODY_RE.search(body or "")
+    return m.group(1) if m else None
+
+
 def load_tickets(tickets_dir: str) -> list[Ticket]:
     tickets = []
     for name in sorted(os.listdir(tickets_dir)):
@@ -90,5 +104,8 @@ def load_tickets(tickets_dir: str) -> list[Ticket]:
         meta, body = _parse_frontmatter(text)
         tid = meta.get("id") or os.path.splitext(name)[0]
         title = meta.get("title") or tid
+        pid = _extract_paperclip_id(meta, body)
+        if pid:
+            meta["paperclip_id"] = pid
         tickets.append(Ticket(id=tid, title=title, body=body, meta=meta, path=path))
     return tickets

@@ -114,6 +114,9 @@ class _Context:
         if self.tickets is None:
             self.tickets_dir = os.path.join(self.repo, args.tickets)
             self.tickets = load_tickets(self.tickets_dir) if os.path.isdir(self.tickets_dir) else []
+        # c5994abe: decouple Paperclip WRITE from SOURCE — status-sync even for a curated
+        # tickets-dir run, when write_enabled + tickets carry a `paperclip_id`.
+        _init_paperclip_write_for(self)
         self.store = OutcomeStore(self.state_dir)
 
         gate = _primary_gate(self.config, self.repo)
@@ -204,6 +207,67 @@ def _load_paperclip_tickets_for(ctx) -> list | None:
     tickets = [to_ticket(i) for i in issues]
     ctx.pcp_id_by_ticket = {t.id: t.meta.get("paperclip_id") for t in tickets}
     return tickets
+
+
+def _init_paperclip_write_for(ctx) -> None:
+    """Decouple Paperclip WRITE from SOURCE (c5994abe). When the tickets came from the local
+    dir (Paperclip is NOT the source) but the config opts into `write_enabled` AND tickets carry
+    a `paperclip_id`, build a write client + the id map so per-ticket status still syncs to the
+    board. Reads/source stay independent; a missing token or no ids → silent degrade (no crash)."""
+    if ctx.paperclip is not None:            # source already built the client — nothing to do
+        return
+    pc_cfg = (ctx.config.get("integrations", {}).get("paperclip", {}) or {})
+    if not (pc_cfg.get("write_enabled") and pc_cfg.get("company_id") and pc_cfg.get("base_url")):
+        return
+    id_map = {t.id: t.meta.get("paperclip_id")
+              for t in (ctx.tickets or []) if t.meta.get("paperclip_id")}
+    if not id_map:
+        return
+    resolved = _resolve_paperclip_token(pc_cfg, ctx.config)
+    if not resolved.value:
+        print(f"[agents-never-sleep] Paperclip write_enabled but token unresolved "
+              f"({resolved.blind_spot or 'no token'}) — per-ticket status-sync degraded to a "
+              "blind spot (work still completes).", file=sys.stderr)
+        return
+    from .sources.paperclip import PaperclipClient
+    ctx.paperclip = PaperclipClient(pc_cfg["base_url"], resolved.value, pc_cfg["company_id"],
+                                    write_enabled=bool(pc_cfg.get("write_enabled")))
+    ctx.pcp_id_by_ticket = id_map
+
+
+def _push_in_progress_one(ctx, ticket_id: str) -> None:
+    """On hand-out (c5994abe): mark the ticket in_progress on the board, ONCE, before the agent
+    works it — so a run checks issues off AS IT GOES, not batched at the end. Idempotent via the
+    same paperclip-pushed.json marker (skip if any state was already pushed for this ticket, so a
+    resume never regresses a terminal state back to in_progress). Never blocks the run."""
+    if not ctx.paperclip or not ctx.pcp_id_by_ticket:
+        return
+    pid = ctx.pcp_id_by_ticket.get(ticket_id)
+    if not pid:
+        return
+    marker_path = os.path.join(ctx.state_dir, "paperclip-pushed.json")
+    pushed_state = {}
+    if os.path.exists(marker_path):
+        try:
+            with open(marker_path, "r", encoding="utf-8") as fh:
+                pushed_state = json.load(fh)
+        except (json.JSONDecodeError, OSError):
+            pushed_state = {}
+    if pushed_state.get(ticket_id):          # already pushed in_progress or a terminal state
+        return
+    try:
+        action = ctx.paperclip.set_status(pid, "in_progress")
+    except Exception as exc:  # noqa: BLE001 - status-sync must never crash the run
+        print(f"[agents-never-sleep] Paperclip in_progress push failed for {ticket_id}: {exc}",
+              file=sys.stderr)
+        return
+    if not action.dry_run:                   # only remember a state we actually wrote
+        pushed_state[ticket_id] = "in_progress"
+        try:
+            with open(marker_path, "w", encoding="utf-8") as fh:
+                json.dump(pushed_state, fh, indent=2, sort_keys=True)
+        except OSError:
+            pass
 
 
 def _sentinel_path_ok(ctx: "_Context") -> bool:
@@ -298,6 +362,8 @@ def cmd_next(args) -> int:
         summary = _push_paperclip(ctx)
         if summary is not None:
             result["paperclip"] = summary
+    elif result.get("status") == "PROCEED":             # c5994abe: mark it in_progress as we go
+        _push_in_progress_one(ctx, (result.get("ticket") or {}).get("id") or "")
     # INT-1675 P2: echo the resolved absolute repo/tickets paths so a stray `cd` + `--repo .`
     # mis-target (empty backlog -> spurious DRAINED in the wrong dir) is visible at a glance.
     result.setdefault("repo_abs", ctx.repo)
@@ -333,6 +399,11 @@ def cmd_complete(args) -> int:
     if isinstance(out, dict):
         out.setdefault("repo_abs", ctx.repo)
         out.setdefault("tickets_abs", getattr(ctx, "tickets_dir", None))
+    # c5994abe: push THIS ticket's terminal status (done/blocked) + outcome comment to the board
+    # now, not batched at run-end — so issues are checked off as the run goes. Idempotent + degrades.
+    pcp = _push_paperclip(ctx)
+    if isinstance(out, dict) and pcp is not None:
+        out["paperclip"] = pcp
     return _emit(out)
 
 
