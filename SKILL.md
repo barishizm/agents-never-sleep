@@ -8,7 +8,8 @@ description: >-
   this tonight". Also use when a long autonomous run keeps stalling on questions. It gives you a
   durable per-ticket state machine, an ASK/PARK/HALT autonomy contract (never block the run on a
   single ticket), deterministic-gate quality checks with a failure taxonomy, git-backed
-  reversibility, attempt/loop caps, and a morning report — so the night never idles and nothing
+  reversibility, attempt/loop caps, a stale-heartbeat restart watchdog (recovers a run frozen by
+  an overload wave), leaked-process reaping, and a morning report — so the night never idles and nothing
   irreversible happens unsupervised. Make sure to reach for this even when the user does not say
   "unattended" but is clearly handing off long, autonomous, run-to-completion work.
 ---

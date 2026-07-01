@@ -327,6 +327,14 @@ commit. If the snapshot commit cannot be made (git lock / timeout / read-only ob
 is recorded `BLOCKED_ENV` rather than edited unrevertibly. Every PROCEED assumption is committed so it
 can be reverted in daylight.
 
+**Revert-surviving scratchpad (opt-in).** A revert correctly rolls the *code* back to green — but the
+agent's reasoning for that ticket would be lost, so on resume it re-derives from scratch. With
+`autonomy.scratchpad.enabled`, the agent logs progress to a per-ticket `note` that lives outside the
+reverted set (under `.unattended/`, gitignored + protected), so it **survives the revert** and is
+re-injected — along with a compact *do-not-repeat* digest of the dead ends already tried this run —
+so a resumed or fresh session continues its reasoning instead of repeating it. Default off → the
+handout payload is byte-for-byte unchanged.
+
 ### Attempt / loop caps
 
 `ledger.py` enforces a cross-resume attempt cap per ticket and detects provable loops, force-parking
@@ -350,7 +358,13 @@ GO/NO-GO gate that runs **before** the agent CLI boots:
 - **Autonomy flags are an explicit human decision, never a default.** A detached run with permissions
   fully on stalls at the first approval prompt; the flag that prevents that grants real power
   (`--permission-mode acceptEdits`, `--sandbox workspace-write`, `--yolo`, `--allow-all-tools`). The
-  wizard shows what the flag grants before the preset can be marked launchable.
+  wizard shows what the flag grants before the preset can be marked launchable, and a detached launch
+  **preflight-verifies the resolved argv actually carries a non-interactive permission flag** — so a
+  hand-edited config that keeps `autonomy_confirmed: true` but drops the flag is refused (NO-GO)
+  instead of hanging silently at the first tool prompt.
+- **Opt-in capability restriction:** a preset may declare a `capabilities` list (e.g.
+  `--strict-mcp-config --mcp-config <file>`) so the agent loads only the MCP servers / tools a run
+  needs — smaller memory footprint and attack surface. Absent = the full set (today's behaviour).
 - **Atomic mutual exclusion:** a non-blocking `flock(2)` on `<repo>/.unattended/ans-run.lock`, held by
   the long-lived agent process and released by the kernel on any crash/kill. Two simultaneous starts →
   exactly one winner (no TOCTOU-racy pidfiles). Exit codes: `0` GO, `64` NO-GO, `65` tree busy.
@@ -372,9 +386,17 @@ call-count caps brake the spend. See [Scope boundary](#5-scope-boundary--what-an
 
 ### Watchdog, secret redaction, key source, Paperclip
 
-- **Watchdog** (`watchdog.py`) — a sidecar that runs the unattended command as a child and restarts it
-  resumably when the heartbeat goes stale (the hang a Stop-hook can't see); on exhausted restarts it
-  alerts and exits 75. Composes with `claude-run`; never rewrites it.
+- **Watchdog** (`watchdog.py`) — a sidecar that runs the agent as a child and restarts it resumably
+  when the heartbeat goes stale (the hang a Stop-hook can't see — e.g. a run wedged by a sustained
+  529/overload wave that freezes the heartbeat), up to a cap, then alerts and exits 75. **`ans-run`
+  wraps every detached launch in it by default** (opt out with `--no-watchdog`), so an overnight run
+  can recover from an overload freeze (a resumable restart, up to the cap) instead of sitting dead
+  until morning. It also **reaps its own
+  leaked child tree** — the agent's MCP servers (context7, etc.) that would otherwise accumulate
+  toward OOM on a long run — strictly by *parent-chain lineage from the run's own pid*, **never by a
+  name match** (a name match would also kill other users' / other projects' runs). Honest limit: a
+  force-*killed* (SIGKILL) supervisor can't self-reap, so that residual leak is reduced, not
+  eliminated. Composes with `claude-run`; never rewrites it.
 - **Secret redaction** (`redact.py`) — every report, log, saved gate-output, Paperclip comment and
   emitted JSON is scrubbed of credentials by *shape* (tokens, JWTs, private keys, connection-string
   passwords) plus a registry of known secret values, without mangling ordinary text or git SHAs.

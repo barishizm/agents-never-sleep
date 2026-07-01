@@ -24,6 +24,7 @@ authors = [{ name = "Tokonomix.ai" }]
 keywords = [
     "agent", "agents", "unattended", "autonomy", "coding-agent", "claude-code",
     "backlog", "overnight", "harness", "skill", "ans",
+    "execution-governance", "autonomous-execution-governance", "watchdog", "resilience",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
