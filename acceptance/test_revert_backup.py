@@ -98,6 +98,13 @@ def test_backup_failure_on_dirty_tree_aborts_reset(failures):
     for an environmental reason — full disk, lock, RO object store), revert_to must RAISE and must
     NOT proceed to the destructive reset. Silently returning None and resetting = data loss with no
     backup, the exact bug being fixed."""
+    # The fault is injected with `chmod 555` on the object store, which root IGNORES
+    # (euid 0 bypasses permission bits) → the backup would NOT fail → false RED. SKIP
+    # under root rather than report a spurious failure (mirrors launcher.py:213/658).
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        print("  SKIP test_backup_failure_on_dirty_tree_aborts_reset: chmod-555 fault-injection "
+              "is a no-op under root (euid 0); run as non-root to exercise this path")
+        return
     from agents_never_sleep.vcs import GitError
     repo = _new_repo()
     head = _git(repo, "rev-parse", "HEAD").stdout.strip()

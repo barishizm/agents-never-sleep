@@ -331,6 +331,11 @@ def test_low_disk_is_nogo(failures):
 
 
 def test_unwritable_repo_is_nogo(failures):
+    # root (euid 0) bypasses the write bit, so chmod 555 does not make the repo
+    # unwritable → false RED. SKIP under root (mirrors launcher.py:213/658).
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        print("  SKIP test_unwritable_repo_is_nogo: chmod-555 is a no-op under root (euid 0)")
+        return
     repo = _trusted_repo(SLEEPER)
     os.chmod(repo, 0o555)
     try:
