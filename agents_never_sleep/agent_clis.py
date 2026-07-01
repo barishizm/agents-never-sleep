@@ -58,6 +58,55 @@ AGENT_CLIS = {
     },
 }
 
+# Per-CLI argv markers whose presence means tool calls are NOT interactively gated — a
+# DETACHED run (stdin closed) won't stall on an approval prompt. Kept in lockstep with the
+# cmd_unattended vs cmd_safe delta above: cmd_unattended carries exactly these, cmd_safe none.
+# "flags" = bare autonomy flags; "pairs" = flag→accepted-values (a "--flag value" or
+# "--flag=value" whose value is non-interactive). Re-verify when a CLI's flags change.
+NONINTERACTIVE_MARKERS = {
+    "claude": {"flags": {"--dangerously-skip-permissions"},
+               "pairs": {"--permission-mode": {"acceptEdits", "bypassPermissions"}}},
+    "codex": {"flags": set(),
+              "pairs": {"--sandbox": {"workspace-write", "danger-full-access"}}},
+    "gemini": {"flags": {"--yolo"}, "pairs": {}},
+    "copilot": {"flags": {"--allow-all-tools"}, "pairs": {}},
+}
+
+
+def cli_for_argv(argv) -> str:
+    """Best-effort agent-CLI name from a resolved argv's basename; '' if unknown/custom.
+    A path-bearing argv0 still matches by basename here — this is a policy hint, not the
+    exec allowlist (is_allowlisted is the security gate for what may be executed)."""
+    if not argv:
+        return ""
+    base = os.path.basename(str(argv[0]))
+    return base if base in AGENT_CLIS else ""
+
+
+def is_noninteractive_permission(argv, cli: str = "") -> "bool | None":
+    """Does argv carry the CLI's non-interactive permission flag (safe to run detached)?
+
+    True  = a recognized autonomy flag/pair is present (won't stall on a tool prompt).
+    False = the CLI is known but argv has none of its autonomy markers (cmd_safe-style →
+            a detached run would hang on the first approval prompt).
+    None  = unknown/custom CLI — cannot judge from the table; the caller decides.
+    """
+    cli = cli or cli_for_argv(argv)
+    spec = NONINTERACTIVE_MARKERS.get(cli)
+    if spec is None:
+        return None
+    tokens = [str(a) for a in (argv or [])]
+    if any(flag in tokens for flag in spec["flags"]):
+        return True
+    for flag, values in spec["pairs"].items():
+        for i, tok in enumerate(tokens):
+            if tok == flag and i + 1 < len(tokens) and tokens[i + 1] in values:
+                return True
+            if tok.startswith(flag + "=") and tok.split("=", 1)[1] in values:
+                return True
+    return False
+
+
 # Session env markers, EXPLICIT keys only (no substring scans, no API-key heuristics —
 # an exported GEMINI_API_KEY does not mean the session runs inside Gemini CLI). Used as
 # a wizard-prefill HINT only; never to select a spawn target at launch time.

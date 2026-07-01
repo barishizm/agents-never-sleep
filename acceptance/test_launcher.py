@@ -184,8 +184,9 @@ def test_known_cli_capability_probe(failures):
                      "sleep 1\nexit 0\n")
         os.chmod(fake, 0o755)
         _write_config(repo, {
-            "agents": {"claude": {"cmd": ["claude", "-p"], "autonomy_confirmed": True,
-                                  "env": {}}},
+            "agents": {"claude": {"cmd": ["claude", "-p", "--permission-mode",
+                                          "acceptEdits"],
+                                  "autonomy_confirmed": True, "env": {}}},
             "default_agent": "claude", "min_disk_mb": 1,
         })
         _run(repo, "--trust")
@@ -194,6 +195,76 @@ def test_known_cli_capability_probe(failures):
         if res.returncode != want:
             failures.append(f"[probe rc={probe_rc}] expected {want}, got "
                             f"{res.returncode}: {res.stdout}")
+
+
+def _fake_claude_repo(cmd: list) -> tuple:
+    """A repo whose 'claude' preset runs a fake claude on PATH (probe passes). Returns
+    (repo, path_env) so a --check can resolve the fake binary."""
+    repo = _new_repo(SLEEPER)
+    bin_dir = os.path.join(repo, "fakebin")
+    os.makedirs(bin_dir, exist_ok=True)
+    fake = os.path.join(bin_dir, "claude")
+    with open(fake, "w") as fh:
+        fh.write("#!/bin/sh\n[ \"$1\" = \"--version\" ] && exit 0\nsleep 1\nexit 0\n")
+    os.chmod(fake, 0o755)
+    _write_config(repo, {
+        "agents": {"claude": {"cmd": cmd, "autonomy_confirmed": True, "env": {}}},
+        "default_agent": "claude", "min_disk_mb": 1,
+    })
+    _run(repo, "--trust")
+    return repo, {"PATH": bin_dir + os.pathsep + os.environ["PATH"]}
+
+
+def test_detached_interactive_permission_mode_is_nogo(failures):
+    # A detached run has stdin closed; a preset whose known-CLI argv keeps the CLI's own
+    # permission prompts on would hang on the first tool call. The guard inspects the argv
+    # (not just autonomy_confirmed) and refuses a detached launch — but a non-interactive
+    # flag proceeds, and --fg (human attached) is allowed.
+    repo, penv = _fake_claude_repo(["claude", "-p"])  # cmd_safe: permissions ON
+    res = _run(repo, "--check", env_extra=penv)
+    if res.returncode != EX_NOGO:
+        failures.append(f"[perm] detached interactive preset: expected {EX_NOGO}, got "
+                        f"{res.returncode}: {res.stdout}")
+    if "permission mode" not in res.stdout or "hang" not in res.stdout:
+        failures.append(f"[perm] refusal must explain the detached-hang reason: {res.stdout}")
+
+    # --fg = a human is attached → interactive is their choice → not blocked (note only).
+    res_fg = _run(repo, "--check", "--fg", env_extra=penv)
+    if res_fg.returncode != 0:
+        failures.append(f"[perm] --fg interactive preset should be GO, got "
+                        f"{res_fg.returncode}: {res_fg.stdout}")
+
+    # Both non-interactive flags are GO (won't hang), but the messaging must distinguish
+    # edit-only autonomy (acceptEdits: shell/network still gated → inert, not hung) from
+    # full autonomy (--dangerously-skip-permissions: functions end-to-end detached).
+    for ok_cmd, want_copy in (
+            (["claude", "-p", "--permission-mode", "acceptEdits"], "FILE EDITS only"),
+            (["claude", "-p", "--dangerously-skip-permissions"], "full autonomy")):
+        repo_ok, penv_ok = _fake_claude_repo(ok_cmd)
+        res_ok = _run(repo_ok, "--check", env_extra=penv_ok)
+        if res_ok.returncode != 0:
+            failures.append(f"[perm] non-interactive {ok_cmd}: expected GO, got "
+                            f"{res_ok.returncode}: {res_ok.stdout}")
+        if want_copy not in res_ok.stdout:
+            failures.append(f"[perm] {ok_cmd} should report '{want_copy}': {res_ok.stdout}")
+
+
+def test_permission_marker_table_matches_cmd_variants(failures):
+    # Unit: the marker check agrees with agent_clis' own cmd_safe/cmd_unattended split for
+    # every known CLI, handles the "--flag=value" form, and returns None for a custom CLI.
+    sys.path.insert(0, SKILL_ROOT)
+    from agents_never_sleep.agent_clis import (AGENT_CLIS, is_noninteractive_permission)
+    for name, spec in AGENT_CLIS.items():
+        if is_noninteractive_permission(spec["cmd_unattended"]) is not True:
+            failures.append(f"[marker] cmd_unattended for '{name}' should read non-interactive")
+        if is_noninteractive_permission(spec["cmd_safe"]) is not False:
+            failures.append(f"[marker] cmd_safe for '{name}' should read interactive")
+    if is_noninteractive_permission(["claude", "-p", "--permission-mode=acceptEdits"]) is not True:
+        failures.append("[marker] --permission-mode=acceptEdits (=form) should read non-interactive")
+    if is_noninteractive_permission(["claude", "-p", "--permission-mode", "plan"]) is not False:
+        failures.append("[marker] --permission-mode plan should read interactive")
+    if is_noninteractive_permission(["my-agent", "run"]) is not None:
+        failures.append("[marker] unknown/custom CLI should be None (cannot judge)")
 
 
 def test_repo_shipped_binary_rejected(failures):
@@ -229,7 +300,8 @@ def test_preset_path_does_not_swap_probe_target(failures):
         fh.write("#!/bin/sh\n[ \"$1\" = \"--version\" ] && exit 3\nexit 0\n")
     os.chmod(fake, 0o755)
     _write_config(repo, {
-        "agents": {"claude": {"cmd": ["claude", "-p"], "autonomy_confirmed": True,
+        "agents": {"claude": {"cmd": ["claude", "-p", "--permission-mode", "acceptEdits"],
+                              "autonomy_confirmed": True,
                               "env": {"PATH": evilbin + ":/usr/bin:/bin"}}},
         "default_agent": "claude", "min_disk_mb": 1,
     })
@@ -429,6 +501,8 @@ def main() -> int:
     test_no_config_launch_is_nogo(failures)
     test_preset_selection_and_autonomy_gate(failures)
     test_known_cli_capability_probe(failures)
+    test_detached_interactive_permission_mode_is_nogo(failures)
+    test_permission_marker_table_matches_cmd_variants(failures)
     test_repo_shipped_binary_rejected(failures)
     test_preset_path_does_not_swap_probe_target(failures)
     test_trust_store_override_ignored_without_test_flag(failures)

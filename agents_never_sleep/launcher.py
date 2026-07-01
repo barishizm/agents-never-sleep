@@ -47,7 +47,8 @@ import subprocess
 import sys
 import time
 
-from .agent_clis import AGENT_CLIS, is_allowlisted
+from .agent_clis import (AGENT_CLIS, cli_for_argv, is_allowlisted,
+                         is_noninteractive_permission)
 from .keysource import resolve_ref
 from .redact import register_secret
 from .trust import config_digest, is_trusted, record_trust
@@ -273,6 +274,60 @@ def resolve_agent(cfg: dict, config_exists: bool, agent_flag: str, rep: Report) 
         rep.bad(f"no {CONFIG_REL} — an unattended launch needs an explicit, human-"
                 f"confirmed agent choice. Run the wizard first (known CLIs: {known})")
     return [], {}, ""
+
+
+def check_detached_permission_mode(agent_argv, foreground: bool, rep: Report) -> None:
+    """A detached run has stdin closed (Popen stdin=DEVNULL / no --fg). If the agent CLI's
+    OWN permission system is still interactive, the first tool-approval prompt HANGS the run
+    silently — a gate ABOVE the agent that no prompt-instruction can bypass. resolve_agent
+    already checks the preset's autonomy_confirmed BOOLEAN, but that is a human-set flag a
+    hand-edited config can desync from the actual cmd; here we inspect the RESOLVED argv for
+    the CLI's real non-interactive permission flag. Blocking only for a detached launch
+    (foreground = a human is attached and interactive approvals are their explicit choice)."""
+    if not agent_argv:
+        return  # resolve_agent already recorded a NO-GO
+    verdict = is_noninteractive_permission(agent_argv)
+    cli = cli_for_argv(agent_argv) or os.path.basename(str(agent_argv[0]))
+    if verdict is True:
+        # "won't hang" is NOT "fully autonomous": claude --permission-mode acceptEdits
+        # auto-approves FILE EDITS only; in headless -p a gated Bash/network tool is
+        # auto-DENIED (not hung), so a bash-heavy backlog run makes no progress. Only a
+        # FULL-autonomy flag actually lets a detached run function end-to-end.
+        tokens = [str(a) for a in agent_argv]
+
+        def _pm_is(values: set) -> bool:
+            for i, tok in enumerate(tokens):
+                if tok == "--permission-mode" and i + 1 < len(tokens) and tokens[i + 1] in values:
+                    return True
+                if tok.startswith("--permission-mode=") and tok.split("=", 1)[1] in values:
+                    return True
+            return False
+
+        edits_only = (cli == "claude" and "--dangerously-skip-permissions" not in tokens
+                      and not _pm_is({"bypassPermissions"}) and _pm_is({"acceptEdits"}))
+        if edits_only:
+            rep.note(f"permission mode: '{cli}' auto-approves FILE EDITS only (won't hang), but "
+                     "shell/network tools stay gated → auto-denied in a detached run; a bash-"
+                     "heavy backlog may make no progress. Full autonomy = "
+                     "--dangerously-skip-permissions")
+        else:
+            rep.ok(f"permission mode: '{cli}' argv is non-interactive with full autonomy "
+                   "(safe to run detached)")
+    elif verdict is None:
+        rep.note(f"permission mode: cannot verify for custom agent '{cli}' — relying on the "
+                 "preset's autonomy_confirmed; make sure its flags don't gate tool calls "
+                 "interactively, or a detached run will hang on the first prompt")
+    elif foreground:
+        rep.note(f"permission mode: '{cli}' argv is interactive — fine with --fg (a human is "
+                 "attached), but a DETACHED launch of this preset would hang on the first "
+                 "tool prompt")
+    else:
+        rep.bad("detached run + interactive permission mode: the resolved '" + cli + "' argv "
+                "carries no non-interactive permission flag, so it would hang silently on the "
+                "first tool prompt (stdin is closed). Add the CLI's autonomy flag (claude: "
+                "--permission-mode acceptEdits or --dangerously-skip-permissions; codex: "
+                "--sandbox workspace-write; gemini: --yolo; copilot: --allow-all-tools), or "
+                "run foreground with --fg")
 
 
 # Env vars in a preset that change which code a "trusted" invocation actually runs. Even
@@ -693,6 +748,9 @@ def main() -> int:
     os.chdir(repo)
     agent_argv, agent_env, preset_name = resolve_agent(
         cfg, config_exists, args.agent, rep)
+    # A detached launch (no --fg) with an interactively-gated agent hangs on the first tool
+    # prompt — inspect the resolved argv, not just the autonomy_confirmed boolean.
+    check_detached_permission_mode(agent_argv, args.fg, rep)
     # Token-ref resolution (F4) happens HERE — before the capability probe — so the probe
     # and the spawn see the identical resolved environment.
     agent_env = resolve_preset_env(agent_env, full_config, rep)
