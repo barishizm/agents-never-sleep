@@ -24,7 +24,10 @@ from agents_never_sleep.state import OutcomeState          # noqa: E402
 
 # --- the frozen 1.0 Stable surface (mirror of SEMVER.md §2) ------------------------------
 
-FROZEN_SUBCOMMANDS = {"next", "complete", "report", "reset-attempts", "reset-spend", "parked"}
+# "note" added in the ticket-04 MINOR: a revert-surviving per-ticket progress note (its shape
+# --ticket/--text is simple and now part of the Stable surface). SEMVER.md §2 updated in lockstep.
+FROZEN_SUBCOMMANDS = {"next", "complete", "report", "reset-attempts", "reset-spend", "parked",
+                      "note"}
 
 # Core Stable flags per subcommand (SEMVER §2.1). Experimental flags (council/specialist on
 # `complete`) are deliberately NOT frozen here — they may change in a MINOR before stabilizing.

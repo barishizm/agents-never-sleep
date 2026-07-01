@@ -10,6 +10,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — revert-surviving per-ticket scratchpad + do-not-repeat digest (MINOR, additive)
+- New `note --ticket --text` subcommand (Experimental) appends a redacted, timestamped progress
+  note to `<state-dir>/<ticket>.notes.md`. The file lives under `.unattended/` (gitignored + in
+  the git protect set), so it **survives a gate-fail/crash revert** while the code correctly rolls
+  back to green. Gated by `autonomy.scratchpad.enabled` (default off): when on, the ticket's notes
+  and a compact `do_not_repeat` digest of dead ends tried this run are re-injected into the PROCEED
+  payload so a resumed/fresh agent CONTINUES its reasoning instead of re-deriving. With the flag
+  off the PROCEED payload is byte-identical. New module `agents_never_sleep/scratchpad.py`.
+
 ### Added — four new enforcement platforms (MINOR, additive; v1.1 + v1.2 target)
 - **Hermes** (`hermes-orch-beta`) — ANS's first **in-process** adapter. A native plugin
   (`hooks/platforms/hermes/`, logic in `agents_never_sleep.hermes_plugin.ans_pre_tool`) registers

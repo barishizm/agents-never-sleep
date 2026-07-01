@@ -638,6 +638,7 @@ class StepDriver:
                 return self._terminate("STOPPED_CREDITS", reason=reason)
             self._attach_specialist_hint(payload, ticket)
             self._attach_onboarding_hint(payload)
+            self._attach_scratchpad_hint(payload, ticket)
             return payload
 
         # No proceedable ticket remains -> the backlog is genuinely drained.
@@ -726,6 +727,40 @@ class StepDriver:
                          "via --specialist-cost. A concern in architect/security/tenant-safety forces "
                          "a daylight review; it never blocks the run."),
         }
+
+    def _attach_scratchpad_hint(self, payload: dict, ticket) -> None:
+        """Ticket 04 (flag: autonomy.scratchpad.enabled, default off → payload byte-identical).
+
+        Re-inject the ticket's revert-surviving notes so a resumed/fresh agent CONTINUES its
+        reasoning instead of re-deriving after a crash+revert, plus a compact do-not-repeat
+        digest of the dead ends already tried this run. Both are inert until the flag is set."""
+        if not (self.config.get("autonomy", {}).get("scratchpad", {}) or {}).get("enabled"):
+            return
+        from . import scratchpad
+        notes = scratchpad.read_notes(self.state_dir, ticket.id)
+        if notes:
+            payload["notes"] = notes
+            payload["notes_path"] = scratchpad.notes_path(self.state_dir, ticket.id)
+        digest = scratchpad.do_not_repeat_digest(
+            self.store, self._load_skip(), current_ticket_id=ticket.id)
+        if digest:
+            payload["do_not_repeat"] = digest
+        if notes or digest:
+            # Interpolate the ACTUAL --repo/--state-dir so the note lands where read_notes looks,
+            # even for a non-default run (a bare command would assume `--repo .` + default dir).
+            repo = getattr(self.orch, "repo_dir", ".")
+            try:
+                rel_state = os.path.relpath(self.state_dir, repo)
+            except ValueError:
+                rel_state = self.state_dir
+            payload.setdefault(
+                "scratchpad_note",
+                "Persistent context for this ticket is attached (payload.notes and/or "
+                "do_not_repeat). CONTINUE from it — do not re-derive prior reasoning or re-try "
+                "listed dead ends. Log new progress/decisions as you go with: "
+                f"python3 -m agents_never_sleep.run note --repo {repo} --state-dir {rel_state} "
+                f"--ticket {ticket.id} --text '...' (survives a gate-fail revert; code still "
+                "rolls back to green).")
 
     def _attach_onboarding_hint(self, payload: dict) -> None:
         """If tokonomix is configured but its credential is missing, surface the keyless onboard

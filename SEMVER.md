@@ -57,6 +57,7 @@ about the one seam it doesn't.
 | `report` subcommand | **Stable** | Re-emits the morning report. |
 | `reset-attempts`, `reset-spend` | **Stable** | Operator escapes. |
 | `parked protect|restore` | **Experimental** | WIP-protection surface (INT-1735). |
+| `note --ticket --text` | **Experimental** | Revert-surviving per-ticket scratchpad (ticket 04); tied to the flag-gated `autonomy.scratchpad` feature, still evolving. |
 | JSON output shapes in ARCHITECTURE.md §1 | **Stable** | Documented keys only; undocumented keys may appear/disappear. |
 
 ### 2.2 CLI — the launcher (`bin/ans-run` / `ans-run`)

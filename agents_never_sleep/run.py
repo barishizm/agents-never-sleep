@@ -47,6 +47,31 @@ def _primary_gate(config: dict, repo: str):
     return None
 
 
+def _register_creds_file_key() -> None:
+    """Register the well-known Tokonomix credentials-file key for redaction (and setdefault it as
+    the env fallback), so a PATTERN-LESS key never lands verbatim in a harness-written surface —
+    the shape-anchored pattern matcher cannot catch a bare Vault/creds value. Only harvests from
+    the file when TOKONOMIX_API_KEY is unset (an already-set value is registered by
+    register_env_secrets). Shared by _Context and cmd_note. Degrades silently on a missing/bad file."""
+    if os.environ.get("TOKONOMIX_API_KEY"):
+        return  # already set → register_env_secrets() harvests it (incl. pattern-less values)
+    _cred_path = os.path.expanduser(
+        os.environ.get("TOKONOMIX_CREDS_FILE", "~/.tokonomix/credentials.json"))
+    try:
+        import json as _json
+        with open(_cred_path) as _f:
+            _creds = _json.load(_f)
+        _key = _creds.get("api_key") or _creds.get("token")
+        if isinstance(_key, str):
+            _key = _key.strip()
+        if _key:
+            from .redact import register_secret
+            register_secret(_key)
+            os.environ.setdefault("TOKONOMIX_API_KEY", _key)
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass  # no file or parse error — degrade silently, onboarding gate handles it
+
+
 class _Context:
     """Everything a subcommand needs, built once from args (preflight is cached on disk)."""
 
@@ -89,22 +114,7 @@ class _Context:
         # Fallback: if TOKONOMIX_API_KEY is still unset (token_ref null or unresolved), read it
         # from the well-known credentials file so the council fires in launcher-env contexts where
         # only the file is guaranteed to exist (e.g. `claude -p` without the key in shell env).
-        if not os.environ.get("TOKONOMIX_API_KEY"):
-            _cred_path = os.path.expanduser(
-                os.environ.get("TOKONOMIX_CREDS_FILE", "~/.tokonomix/credentials.json"))
-            try:
-                import json as _json
-                with open(_cred_path) as _f:
-                    _creds = _json.load(_f)
-                _key = _creds.get("api_key") or _creds.get("token")
-                if isinstance(_key, str):
-                    _key = _key.strip()
-                if _key:
-                    from .redact import register_secret
-                    register_secret(_key)
-                    os.environ.setdefault("TOKONOMIX_API_KEY", _key)
-            except (OSError, ValueError, AttributeError, TypeError):
-                pass  # no file or parse error — degrade silently, onboarding gate handles it
+        _register_creds_file_key()
 
         # Ticket source: Paperclip (optional, site-specific) overrides the local .md dir when
         # configured. The adapter is quarantined to this entrypoint; the core never sees Paperclip.
@@ -464,6 +474,27 @@ def cmd_parked(args) -> int:
     return _emit({"status": "OK", "action": args.action, "result": result})
 
 
+def cmd_note(args) -> int:
+    """Ticket 04: append a revert-surviving progress note for a ticket to
+    <state-dir>/<ticket>.notes.md. The file lives under .unattended/ (gitignored + in the git
+    protect set), so it survives a gate-fail/crash revert while the CODE rolls back to green; it
+    is re-injected into the next PROCEED payload when autonomy.scratchpad.enabled is on, so a
+    resumed agent CONTINUES its reasoning instead of re-deriving. Deliberately does NOT build a
+    full run Context — a note write is a cheap, side-effect-free append the agent may call any
+    time mid-ticket. Note text is redacted (same scrubber as the outcome store)."""
+    from . import scratchpad
+    from .redact import register_env_secrets
+    # Populate the redaction registry exactly as _Context does — cmd_note skips _Context, but the
+    # append below MUST still scrub a pattern-less env/creds key (else it lands verbatim on disk).
+    register_env_secrets()
+    _register_creds_file_key()
+    # abspath (NOT realpath) to match _Context.state_dir, or a symlinked repo path would write the
+    # note where _attach_scratchpad_hint/read_notes won't look → silent non-re-injection.
+    state_dir = os.path.join(os.path.abspath(args.repo), args.state_dir)
+    path = scratchpad.append_note(state_dir, args.ticket, args.text)
+    return _emit({"status": "OK", "ticket": args.ticket, "notes_path": path})
+
+
 def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--repo", default=".", help="project working directory")
     p.add_argument("--tickets", default="tickets", help="dir of .md tickets")
@@ -530,6 +561,14 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("action", choices=["protect", "restore"],
                     help="protect = stash parked WIP before a run; restore = bring it back after")
     pp.set_defaults(func=cmd_parked)
+
+    pnote = sub.add_parser("note",
+                           help="append a revert-surviving progress note for a ticket (ticket 04)")
+    _add_common(pnote)
+    pnote.add_argument("--ticket", required=True, help="ticket id the note belongs to")
+    pnote.add_argument("--text", required=True,
+                       help="the note text (progress/decisions); survives a gate-fail revert")
+    pnote.set_defaults(func=cmd_note)
     return ap
 
 
