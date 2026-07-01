@@ -53,24 +53,36 @@ force-park it. The first-class fix is the `reset-attempts <ticket>` subcommand, 
 counter so the ticket can be picked up again. (This is a known operational edge, documented rather than
 hidden.)
 
+**Reasoning survives the revert (opt-in).** Reverting the *code* to last-green is correct, but the agent's
+reasoning for that ticket would be lost — so on resume it re-derives from scratch. With
+`autonomy.scratchpad.enabled`, the agent logs progress to a per-ticket `note` (the `note` subcommand) that
+lives under `.unattended/` — gitignored and in the revert protect-set — so it **survives the revert** while
+the code rolls back to green, and is re-injected into the next hand-out along with a compact *do-not-repeat*
+digest of the dead ends already tried this run. So a resumed or fresh session *continues* its reasoning
+instead of repeating it. Default off → the hand-out payload is byte-for-byte unchanged. Notes are redacted
+on write, so a pasted key never lands on disk.
+
 ## 4. Hung run → the watchdog (the gap the Stop-hook cannot see)
 
 The Stop-hook prevents a premature *stop*, but it cannot detect a *hang* — a run that is alive but making
 no progress (a wedged subprocess, a network call that never returns). That is the watchdog's job
 (`watchdog.py`):
 
-- It runs the unattended command as a **child** and polls the child's heartbeat file.
-- The heartbeat is beaten at `next`/`complete` boundaries; in the agent-driven loop a single ticket can
-  legitimately take up to the per-ticket budget (default 1800s) to implement. So the stale threshold
-  (`--stale`, **default 2400s**) must *exceed* that worst-case single-ticket time, or the watchdog would
-  false-restart a healthy run mid-ticket.
-- If the heartbeat goes stale past the threshold, the watchdog kills the child and **restarts it
-  resumable** — and because state is durable, the restart picks up exactly where the run was.
+- It runs the agent as a **child** and polls the child's heartbeat file.
+- The heartbeat is beaten at `next`/`complete` boundaries; in the agent-driven loop a single ticket's
+  *whole* span (implement → gate rounds → review → consensus → `complete`) passes with no beat. So the
+  stale threshold must *exceed* that worst-case gap or the watchdog false-restarts a healthy run; `ans-run`
+  sizes it off `per_ticket_timeout_s × (per_ticket_fix_iterations + 1) + margin` (the `watchdog.py` CLI
+  default stays a conservative 2400s; raise it, or `launcher.watchdog.stale_s`, for heavy review gates).
+- If the heartbeat goes stale past the threshold — e.g. a run frozen by a sustained 529/overload wave — the
+  watchdog kills the child and **restarts it resumable**; because state is durable, it picks up where the
+  run was.
 - On **exhausted restarts** (`--max-restarts`, default 3) it runs the optional `--alert` command (e.g. a
-  Paperclip issue creator) and **exits `75`**.
+  Paperclip issue creator) and **exits `75`**. It also reaps the run's own leaked child tree (the agent's
+  MCP servers) by parent-chain lineage so a long run doesn't creep toward OOM — see [watchdog](watchdog.md).
 
-Integrating the watchdog is **opt-in composition** — wrap the unattended command with it (see
-`WATCHDOG.md`); it is never a rewrite of any shared launcher/wrapper.
+`ans-run` composes the watchdog around every detached launch **by default** (opt out with `--no-watchdog`);
+it is never a rewrite of any shared launcher/wrapper.
 
 > Read the heartbeat correctly: heartbeat *age climbing during a ticket is normal* (the agent is
 > implementing). A real stall is high age **and** no commit **and** no file edits.

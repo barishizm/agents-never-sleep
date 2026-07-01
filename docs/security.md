@@ -48,6 +48,18 @@ The launcher (`launcher.py`) is where privilege is bounded *before* the agent ru
 - **TOFU config-trust.** A repo's config describes commands the launcher will execute; it must be trusted
   once per user and re-trusted on any change, so a malicious or altered config never runs headless. See
   [launcher](launcher.md).
+- **Verified non-interactive permission mode.** A detached launch is a NO-GO unless the *resolved argv*
+  actually carries a non-interactive permission flag — checked from the argv, not just the
+  `autonomy_confirmed` boolean a hand-edited config could desync — so a misconfigured preset fails loudly
+  instead of hanging at the first prompt. A preset can also declare a `capabilities` list to shrink the
+  loaded MCP/tool surface a run exposes.
+- **Reaps only its own process tree, never by name.** The watchdog reaps a run's leaked child processes
+  (the agent's MCP servers, which otherwise accumulate toward OOM) **strictly by parent-chain lineage from
+  the run's own pid** — never a name match. A `pkill -f claude` would match the reaping command itself and
+  kill other users' / other projects' runs; rooting the walk at the agent pid means it can only reach that
+  agent's own subtree (a cross-user signal fails with `EPERM` regardless), and the reaper refuses `pid ≤ 1`.
+  Honest limit: a `SIGKILL`'d watchdog can't self-reap, so the leak is reduced, not eliminated. See
+  [watchdog](watchdog.md).
 
 ## Cross-platform enforcement — honest status
 

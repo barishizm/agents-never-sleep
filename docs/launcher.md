@@ -38,13 +38,18 @@ running ANS instance.
    `NOPASSWD: ALL`.
 3. **Agent selection.** Named presets under `launcher.agents`, picked by `--agent` or
    `launcher.default_agent`. No platform auto-detection happens at launch (session env markers are
-   spoofable and gone under cron). Three sub-gates per preset:
+   spoofable and gone under cron). Four sub-gates per preset:
    - `argv[0]` must be a known agent CLI (`claude` / `codex` / `gemini` / `copilot`), unless the trusted
      config sets `launcher.allow_custom_agent`;
    - the binary must pass a **5-second `--version` capability probe** (catches CLI flag drift before tokens
      are spent — probe == spawn rule);
    - **`autonomy_confirmed` must be true** — a preset without it refuses to launch detached (a deliberate
      NO-GO instead of a silent stall at the first approval prompt). See the autonomy table below.
+   - **the resolved argv must carry a non-interactive permission flag** for a *detached* launch — verified
+     from the argv itself, not just the `autonomy_confirmed` boolean (which a hand-edited config can desync
+     from the cmd). A detached preset that would still hit the CLI's approval prompt is a NO-GO; `--fg`
+     (a human is attached) is allowed. A preset may also declare a `capabilities` list (e.g.
+     `--strict-mcp-config --mcp-config <file>`) to load only the MCP servers / tools a run needs.
 4. **Credentials.** `launcher.credentials_paths` is **blocking** when configured, **warn-only** when not
    (keychain / API-key setups have no credentials file; the default probe is `~/.claude/.credentials.json`).
    Token-ref credentials (`env:` / `vault:`) are resolved into the child env *before* the probe — a failed
@@ -69,6 +74,11 @@ grants *before* asking the human to confirm:
 | Copilot | `copilot --allow-all-tools -p` | everything (required for programmatic `-p`) |
 
 The map (`agent_clis.py`) is the single source for both the wizard and the launcher, so the two never drift.
+For a detached launch the launcher does **not** trust the `autonomy_confirmed` boolean alone: it inspects
+the resolved argv and refuses (NO-GO) if it carries no non-interactive permission flag — catching a
+hand-edited preset that would otherwise hang silently at the first tool prompt. (`--permission-mode
+acceptEdits` clears the hang but only auto-approves *edits*; shell/network stay gated, so a bash-heavy
+detached run makes little progress — full autonomy is `--dangerously-skip-permissions` / the CLI equivalent.)
 
 ## Atomic, pidfile-free mutual exclusion
 
