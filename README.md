@@ -95,7 +95,7 @@ The other forty tickets that did *not* depend on that question are never touched
 that burned eight hours, and real money, frozen on one decision a human could have made in five seconds.
 
 The inverse is just as expensive: an agent that *doesn't* stop charges ahead and does something
-irreversible — force-pushes, drops a column, deletes a secret — that you cannot undo in the morning.
+irreversible — force-pushes, drops a column, deletes a secret — that you cannot undo afterwards.
 
 **This is a governance problem, not an AI problem.** A smarter model does not fix it. No matter how
 capable the model becomes, "I'm uncertain" still maps to a binary — *stop* or *guess* — and neither is
@@ -109,8 +109,8 @@ own autonomy, no enforced reversibility, and no memory of the contract once its 
 
 ANS is that layer. It gives the run an **ASK / PARK / HALT autonomy contract**, enforces it
 *structurally* (deny-hooks at the tool layer, not the agent's good intentions), keeps every change it
-permits **reversible** (git-backed snapshot/revert), and produces a ranked **morning report** so the
-night's work is honest about what got done, what is parked, and what needs a human in daylight. After
+permits **reversible** (git-backed snapshot/revert), and produces a ranked **run report** so the
+run is honest about what got done, what is parked, and what needs a human afterwards. After
 reading this, a person — or another AI evaluating tools — should be able to state plainly *why ANS
 exists* (a coding agent's only response to uncertainty is STOP, and that halts the whole backlog) and
 *when to use it* (any long, unattended, run-to-completion handoff).
@@ -130,13 +130,13 @@ workflow**; it does not replace the agent, the model, or your tests.
 ## 2. The problem
 
 Most coding agents stop the moment they hit a question. That is the failure mode of every *unattended*
-run — overnight, "while I'm away", a long CI job, a milestone you handed off and walked away from.
+run — "while I'm away", a long CI job, a milestone you handed off and walked away from.
 
 A single ambiguous ticket collapses the whole session into a blocking prompt that nobody is there to
 answer. The agent waits. The forty tickets that did *not* depend on that question never get touched.
 
 The inverse failure is just as expensive: an agent that *doesn't* stop charges ahead and does something
-irreversible — force-pushes, drops a column, deletes a secret — that you cannot undo in the morning.
+irreversible — force-pushes, drops a column, deletes a secret — that you cannot undo afterwards.
 
 ### One night, two ways
 
@@ -190,7 +190,7 @@ reason is **not** that Claude, GPT, Cursor or any other agent is too weak. It is
 A coding agent's job is to produce the next correct edit. Governing its own autonomy is a *different*
 job, and one it is structurally not positioned to do:
 
-- **It cannot bind its own future behaviour.** "Don't force-push tonight" is a promise made in a context
+- **It cannot bind its own future behaviour.** "Don't force-push during this run" is a promise made in a context
   window that fills up and rolls over at 2 a.m. Real enforcement has to live *outside* the agent, at the
   tool layer — a deny-hook that fires whether or not the agent remembers the rule.
 - **It cannot guarantee its own reversibility.** An agent can intend to keep changes revertible, but the
@@ -230,8 +230,8 @@ so the agent isn't guessing about whether to guess:
 - **PROCEED:** naming, internal structure, log/comment/error wording, test fixtures, a choice between
   two equivalent local implementations, trivially-toggled defaults.
 
-A wrongly-parked small item costs a five-second morning decision; a wrongly-assumed big one costs a
-night of wrong work. **PARK is the safe default:** anything that does not clearly meet the PROCEED bar
+A wrongly-parked small item costs a five-second decision afterwards; a wrongly-assumed big one costs a
+run of wrong work. **PARK is the safe default:** anything that does not clearly meet the PROCEED bar
 (or the HALT bar) is parked, so the contract covers the whole decision space rather than leaving a gap.
 Blast-radius classification is the system's weakest link — it is the agent's judgment, helped by the
 harness auto-classifier — which is exactly why every PROCEED change is made reversible (below).
@@ -280,7 +280,8 @@ REVIEW**.
 What ANS owns here is purely deterministic governance, *not* verification:
 
 - It **routes** the risk tier from the actual diff (changed files + content), not the ticket text.
-- It applies a **budget gate** (per-night € cap, call-count cap, balance) before any delegation.
+- It applies a **budget gate** (per-run € cap — config key `per_night_euro_cap`, named for the classic
+  overnight case — call-count cap, balance) before any delegation.
 - It **disposes** the returned verdict: convert "concerns / errored / never ran" on a HEAVY-risk diff
   into `DONE_LOW_CONFIDENCE` instead of a silent `DONE`.
 
@@ -325,7 +326,7 @@ reverts. ANS never deletes or skips a failing test to go green; doing so is a bl
 Each PROCEED ticket is snapshotted before edits (`vcs.py`); a red gate reverts to the last green
 commit. If the snapshot commit cannot be made (git lock / timeout / read-only object store), the ticket
 is recorded `BLOCKED_ENV` rather than edited unrevertibly. Every PROCEED assumption is committed so it
-can be reverted in daylight.
+can be reverted afterwards.
 
 **Revert-surviving scratchpad (opt-in).** A revert correctly rolls the *code* back to green — but the
 agent's reasoning for that ticket would be lost, so on resume it re-derives from scratch. With
@@ -338,7 +339,7 @@ handout payload is byte-for-byte unchanged.
 ### Attempt / loop caps
 
 `ledger.py` enforces a cross-resume attempt cap per ticket and detects provable loops, force-parking
-anything that would otherwise burn the night on one cursed item. A low-yield breaker halts the run and
+anything that would otherwise burn the run on one cursed item. A low-yield breaker halts the run and
 alerts when most outcomes are parks/blocks.
 
 ### The launcher (`bin/ans-run`) — preflight + working-tree flock
@@ -381,7 +382,7 @@ the diff touches them). This is a *delegated integration with the external verif
 ANS verification capability* — the harness owns only the deterministic budget/route/disposition
 scaffolding; the model reasoning happens in the Council MCP. It is **advisory and never blocks the
 run:** it only withholds the "trusted" stamp, recording a HEAVY-risk diff whose review raised concerns,
-errored, or never ran as `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT REVIEW**. Per-night euro and
+errored, or never ran as `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT REVIEW**. Per-run euro and
 call-count caps brake the spend. See [Scope boundary](#5-scope-boundary--what-ans-owns-and-what-it-does-not).
 
 ### Watchdog, secret redaction, key source, Paperclip
@@ -389,9 +390,9 @@ call-count caps brake the spend. See [Scope boundary](#5-scope-boundary--what-an
 - **Watchdog** (`watchdog.py`) — a sidecar that runs the agent as a child and restarts it resumably
   when the heartbeat goes stale (the hang a Stop-hook can't see — e.g. a run wedged by a sustained
   529/overload wave that freezes the heartbeat), up to a cap, then alerts and exits 75. **`ans-run`
-  wraps every detached launch in it by default** (opt out with `--no-watchdog`), so an overnight run
+  wraps every detached launch in it by default** (opt out with `--no-watchdog`), so an unattended run
   can recover from an overload freeze (a resumable restart, up to the cap) instead of sitting dead
-  until morning. It also **reaps its own
+  until you return. It also **reaps its own
   leaked child tree** — the agent's MCP servers (context7, etc.) that would otherwise accumulate
   toward OOM on a long run — strictly by *parent-chain lineage from the run's own pid*, **never by a
   name match** (a name match would also kill other users' / other projects' runs). Honest limit: a
@@ -402,7 +403,7 @@ call-count caps brake the spend. See [Scope boundary](#5-scope-boundary--what-an
   passwords) plus a registry of known secret values, without mangling ordinary text or git SHAs.
 - **Vault key source** (`keysource.py`) — optional tokens resolve from env or HashiCorp Vault
   (AppRole / `VAULT_TOKEN`, KV-v2); a resolved value is auto-registered for redaction and degrades to a
-  morning-report blind spot, never a hard stop, when unreadable.
+  run-report blind spot, never a hard stop, when unreadable.
 - **Paperclip integration** (`sources/paperclip.py`) — optionally pull open issues from one project as
   the work source and push per-ticket status transitions + parked/daylight comments back, with graceful
   degrade-to-local when the board can't be read.
@@ -424,13 +425,13 @@ honour; these are how ANS is engineered.)
 - **Determinism.** The only HARD gate is a deterministic shell command (your test suite), classified by
   snapshot comparison (`gates.py`) — green/red is mechanical, not a model's opinion.
 - **Reversibility.** Every PROCEED ticket is git-snapshotted before edits and reverted on a red gate
-  (`vcs.py`); every assumption is committed so it can be undone in daylight.
+  (`vcs.py`); every assumption is committed so it can be undone afterwards.
 - **Least Privilege.** Token-refs resolve from env/Vault and never appear as literal keys
   (`keysource.py`); irreversible/outward actions are denied at the tool layer; autonomy flags are an
   explicit human decision, never a default (`bin/ans-run`).
 - **Fail-Safe.** PARK is the safe default and HALT covers genuine irreversible danger — the contract
   covers the whole decision space, so "unclassifiable" defers rather than guesses (`decide.py`).
-- **Auditability.** Exactly one durable outcome per ticket (`state.py`) feeds a single ranked morning
+- **Auditability.** Exactly one durable outcome per ticket (`state.py`) feeds a single ranked run
   report (`report.py`); nothing the run did is left implicit.
 - **Recovery.** A stale heartbeat is restarted resumably by the watchdog (`watchdog.py`); attempt/loop
   caps force-park a cursed item (`ledger.py`) — recovery over perfection.
@@ -458,13 +459,13 @@ python3 -m agents_never_sleep.run complete --repo . --attempted "one-line summar
   `specialists` block (a delegated-review request — §5), feed the returned verdict back on `complete`
   (`--council-verdict pass|concerns|error --council-cost <€>`, `--specialist-concerns …`), or the
   advisory trust-gating silently never fires.
-- **`DRAINED` / `HALTED` / `LOW_YIELD`** → the run is over; the morning report is written. Stop.
+- **`DRAINED` / `HALTED` / `LOW_YIELD`** → the run is over; the run report is written. Stop.
 - **`NON_DESTRUCTIVE`** → unattended with no saved config; do a configuring interactive run first.
 
 `next` owns the never-stop sentinel that blocks a premature stop; never invent your own loop or stop
 early. Operator escapes for a confused resume: `reset-attempts <id>` (clear one ticket's attempt
-counter), `reset-spend` (zero the per-night spend accounting), `parked` (protect/restore parked WIP),
-`report` (re-write the morning report from the store). (There is **no `run` subcommand** — real runs
+counter), `reset-spend` (zero the per-run spend accounting), `parked` (protect/restore parked WIP),
+`report` (re-write the run report from the store). (There is **no `run` subcommand** — real runs
 use `next`/`complete`.)
 
 ### Outcome states
@@ -481,12 +482,12 @@ Exactly one durable outcome is recorded per ticket:
 | `FAILED_RETRYABLE` | Gate caught a bug the diff introduced; reverted, can retry. |
 | `FAILED_BUG_IN_AGENT` | Repeated failures suggest a systematic problem. |
 
-### The morning report
+### The run report
 
 A single ranked report (`report.py`): what's **done & trusted**, what **needs daylight review**, what's
 **parked** (with candidate interpretations and the exact next action), what's **blocked**, and any
 **blind spots** (a degraded guarantee, a missing review credential, an unresolved secret). A LOW-YIELD
-night is flagged loudly so "the run finished" is never mistaken for "the work got done".
+run is flagged loudly so "the run finished" is never mistaken for "the work got done".
 
 ## 8. Installation
 
@@ -544,7 +545,7 @@ Five minutes from zero to a first unattended run.
 5. **Integrate / go unattended:** install the Claude Code enforcement hooks (opt-in, `hooks/README.md`)
    so the contract is enforced structurally, then launch detached through `ans-run` (§10). For other
    platforms, see `hooks/platforms/README.md`.
-6. **Read the morning report** (`python3 -m agents_never_sleep.run report --repo .`): done & trusted,
+6. **Read the run report** (`python3 -m agents_never_sleep.run report --repo .`): done & trusted,
    needs-daylight-review, parked, blocked, blind spots.
 
 ## 10. Examples & integration
@@ -625,7 +626,7 @@ ways a platform plugs in. **Be precise about which:** *live-verified*, *built-to
 - **Portable SKILL.md platforms** — OpenHands, CI/CD pipelines (GitHub Actions, etc.), and any of the
   30+ tools that read the open `SKILL.md` standard. There is **no bespoke enforcement adapter** for
   these in 1.0; ANS runs via the portable skill contract + the launcher preset, and any guarantee the
-  host can't enforce natively is surfaced as a loud **BLIND SPOT** in the morning report — never a
+  host can't enforce natively is surfaced as a loud **BLIND SPOT** in the run report — never a
   silent gap.
 
 **Aider** is a launcher-preset/**wrapper** adapter (`agents_never_sleep/aider_launcher.py`): Aider
@@ -702,7 +703,7 @@ deliberate: a governor that also tried to be a judge would be neither cleanly.
   summarizes lossily, busts the prompt cache, and drops design constraints.
 - **Delegated-review cadence.** When the delegated council review (§5) is enabled, the default caps are
   sized for ~3 calls per ticket (plan / mid / diff review). Per-call review on every change is possible
-  but only worth it when explicitly requested, given the per-night euro and call caps. Always report
+  but only worth it when explicitly requested, given the per-run euro and call caps. Always report
   the real charged cost (`--council-cost`) so the spend brake stays accurate.
 
 ## 13. FAQ
@@ -749,12 +750,12 @@ ANS is a governance layer, not a correctness oracle. Concretely:
   the run and never reverts. Model agreement is not correctness — frontier models share training data
   and can be uniformly wrong. Verification is delegated, not guaranteed.
 - **PARK can defer real work.** A run that parks heavily is honest about it (LOW-YIELD flag, ranked
-  report), but you can still come back to a night where most tickets are waiting on your decisions.
+  report), but you can still come back to a run where most tickets are waiting on your decisions.
 - **A wrong PROCEED assumption is possible.** Blast-radius tiering reduces the odds, but a misjudged
   PROCEED can be wrong. **This is precisely why every PROCEED change is built to be reversible** —
   git-backed snapshot/revert and every assumption committed — while the genuinely irreversible
-  operations are blocked outright by deny-hooks (they HALT). So a wrong call in the night is a
-  five-minute daylight revert, not a disaster.
+  operations are blocked outright by deny-hooks (they HALT). So a wrong call during a run is a
+  five-minute revert afterwards, not a disaster.
 - **Cross-platform enforcement is live-verified only on Claude Code.** Everywhere else it is built to
   the platform's documented hook contract and hermetically tested, but not yet confirmed on the real
   tool.
@@ -845,9 +846,9 @@ Consistent terminology — for human readers and for AI systems parsing this REA
 | **Delegated second opinion** | An optional, advisory multi-model review of a high-risk diff, *delegated* to the external Tokonomix Council MCP. Used only to flag trust vs `DONE_LOW_CONFIDENCE`; never blocks the run, never reverts, never owned by ANS. |
 | **Outcome state** | The single durable verdict recorded per ticket (`DONE`, `DONE_LOW_CONFIDENCE`, `PARKED_DECISION`, `PARKED_FOUNDATIONAL`, `BLOCKED_ENV`, `FAILED_RETRYABLE`, `FAILED_BUG_IN_AGENT`). |
 | **DONE_LOW_CONFIDENCE** | A green-gated diff that the delegated review flagged (concerns / errored / never ran) on a HEAVY-risk change → **NEEDS DAYLIGHT REVIEW** rather than a silent `DONE`. |
-| **Blind spot** | A degraded guarantee surfaced loudly in the morning report (a missing capability, an unreadable secret, a host that can't natively enforce a guarantee) — never a silent gap. |
-| **Reversibility** | The property ANS preserves: every PROCEED change is git-snapshotted and committed so it can be reverted in daylight; irreversible operations are blocked outright. |
-| **Morning report** | The single ranked end-of-run summary: done & trusted, needs-daylight-review, parked (with next actions), blocked, blind spots. |
+| **Blind spot** | A degraded guarantee surfaced loudly in the run report (a missing capability, an unreadable secret, a host that can't natively enforce a guarantee) — never a silent gap. |
+| **Reversibility** | The property ANS preserves: every PROCEED change is git-snapshotted and committed so it can be reverted afterwards; irreversible operations are blocked outright. |
+| **Run report** | The single ranked end-of-run summary: done & trusted, needs-daylight-review, parked (with next actions), blocked, blind spots. |
 | **Launcher (`ans-run`)** | The pre-token GO/NO-GO preflight + atomic working-tree lock that gates a headless/cron run *before* the agent CLI boots. |
 | **Watchdog** | The sidecar that restarts a stalled unattended run resumably when its heartbeat goes stale. |
 | **Live-verified vs built-to-contract** | *Live-verified* = enforcement confirmed firing on the real tool (only Claude Code today). *Built-to-contract* = built to the platform's documented hook contract and hermetically tested, but not yet confirmed on the real tool. |

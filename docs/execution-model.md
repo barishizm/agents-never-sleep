@@ -15,7 +15,7 @@
 ## The core idea: the agent IS the worker
 
 The in-process orchestrator can call a deterministic `Worker` synchronously — that is how the hermetic
-acceptance demo self-tests. But in a real overnight run there is no callable worker function: the worker
+acceptance demo self-tests. But in a real unattended run there is no callable worker function: the worker
 is an LLM-backed coding agent that cannot be invoked from inside a Python `for` loop. It reads a ticket,
 edits files, and re-enters the harness to record the result.
 
@@ -45,7 +45,7 @@ python3 -m agents_never_sleep.run complete --repo . --tickets <dir> --attempted 
 
 - **`PROCEED`** — a ready ticket (`ticket.body`, a snapshot id, and optionally a `council` /
   `specialists` block). Implement *only* this ticket; do not touch other tickets, do not stop, do not ask.
-- **`DRAINED` / `HALTED` / `LOW_YIELD`** (the terminal set in `run.py`) — the run is over and the morning
+- **`DRAINED` / `HALTED` / `LOW_YIELD`** (the terminal set in `run.py`) — the run is over and the run
   report is written. Stop.
 - **`NON_DESTRUCTIVE`** — unattended with no saved config; do a configuring interactive run first.
 
@@ -98,7 +98,7 @@ The driver (`driver.py`) enforces the two things the agent must never be trusted
 
 ## Scheduling & anti-starvation
 
-The night is never burned on one cursed item:
+The run is never burned on one cursed item:
 
 - **Attempt cap** (`ledger.py`) — a ticket attempted past its cross-resume cap is force-parked. The ledger
   is durable, so a kill+resume does not reset the count (use `reset-attempts <ticket>` for the documented
@@ -107,7 +107,7 @@ The night is never burned on one cursed item:
   failure signature, is force-parked rather than retried forever.
 - **Low-yield breaker** (`orchestrator.py`, `LowYieldBreaker`) — stops the run and alerts when, on a
   non-trivial backlog (≥ 8 processed), the bad ratio (parked + blocked + failed / processed) reaches 0.75.
-  A systematically broken environment fails fast instead of grinding all night.
+  A systematically broken environment fails fast instead of grinding on for the whole run.
 - **Independent-next scheduling** — the scheduler only picks a next ticket whose contamination scope does
   not intersect a parked one, so the agent never builds on top of an unresolved foundational decision.
 

@@ -15,7 +15,7 @@
 ## Why a separate layer at all
 
 A coding agent left to run for hours has exactly one response to uncertainty: **stop and ask**. That is
-fine with a human watching and fatal at 2am — one unanswerable question wastes the whole night. The
+fine with a human watching and fatal at 2am — one unanswerable question wastes the whole run. The
 missing piece is not a smarter model; it is an *operational* layer that decides **how an agent should
 behave while it works unattended**: when to assume-and-continue, when to defer a decision and move on,
 when (rarely) to stop everything — and how to make every one of those choices reversible and auditable.
@@ -36,7 +36,7 @@ none of them is a model.
 | **Outcome state machine** | `state.py` | The seven durable per-ticket outcomes; contamination scope; atomic, resume-safe, secret-scrubbed writes. |
 | **Deterministic gate** | `gates.py` | Run the project's own non-interactive check (tests / type-check) after each diff, with a timeout and a TTY-free environment. The **only hard gate**. |
 | **Reversibility / VCS** | `vcs.py` | Snapshot the working tree before an edit; revert to last-green if the gate fails on the diff; refuse to edit unrevertibly. |
-| **Anti-starvation ledger** | `ledger.py` | Durable attempt counts + failure-signature loop detection, so the night is never burned on one cursed ticket. |
+| **Anti-starvation ledger** | `ledger.py` | Durable attempt counts + failure-signature loop detection, so the run is never burned on one cursed ticket. |
 | **Scheduler / breaker** | `orchestrator.py` | Pick the next *independent* ticket; trip the low-yield circuit breaker when most work is parked/blocked/failing. |
 | **Agent-as-worker driver** | `driver.py` | Invert the loop so the *agent* implements one ticket per call; own the run-incomplete sentinel. |
 | **Preflight** | `preflight.py` | Measure capabilities (VCS, gates, integrations) after the session boots; never stop the run, only lower expected yield. |
@@ -45,7 +45,7 @@ none of them is a model.
 | **Secret redaction** | `redact.py` | Shape-anchored scrubbing of credential-shaped values from the report, gate artefacts, comments, and emitted JSON. |
 | **Keysource** | `keysource.py` | Resolve `env:` / `vault:` token-refs into credentials; never a literal in the config; degrade to a blind spot, never a silent empty value. |
 | **Work sources** | `sources/` | Where tickets come from: a directory of `.md` files (default) or a configured Paperclip project. |
-| **Run report** | `report.py` | The morning report: done / parked / needs-daylight-review / spend / blind spots. |
+| **Run report** | `report.py` | The run report: done / parked / needs-daylight-review / spend / blind spots. |
 | **Delegated review (advisory)** | `council.py`, `specialists.py` | Scaffolding to *delegate* a second opinion to the external Tokonomix Council MCP — see [Scope boundary](#scope-boundary). |
 
 The **public API surface** of these components (CLI subcommands, ticket format, gate interface, the
@@ -76,7 +76,7 @@ stable outcome values, the config file shape, the launcher CLI) is documented in
                  │  orchestrator.py ──► low-yield breaker; pick next INDEPENDENT ticket               │
                  └───────────────────────────────────────┬──────────────────────────────────────────┘
                                                           ▼
-   watchdog.py (sidecar) restarts a hung run        report.py ──► morning report
+   watchdog.py (sidecar) restarts a hung run        report.py ──► run report
 ```
 
 The harness owns scheduling, parking, snapshot/revert, the attempt cap, loop detection, and the

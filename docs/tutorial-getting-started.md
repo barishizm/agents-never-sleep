@@ -2,7 +2,7 @@
 
 > **30-second version.** This walks you end-to-end through your first ANS run: install → write a tiny
 > backlog → drive the `next → implement → complete` loop → watch the autonomy contract (PROCEED / PARK /
-> HALT) act on real tickets → read the morning report. By the end you'll understand *why* ANS exists (so a
+> HALT) act on real tickets → read the run report. By the end you'll understand *why* ANS exists (so a
 > coding agent never stalls the whole backlog on one unanswerable question) and *when* to reach for it (any
 > run-to-completion handoff you walk away from). For the *how it works* depth, this tutorial links the
 > [architecture](architecture.md), [state machine](state-machine.md), and [deterministic gates](deterministic-gates.md)
@@ -11,9 +11,9 @@
 Every command below matches the real CLI (`agents_never_sleep.run`, v1.0.0). There is **no `run`
 subcommand** — you drive the loop with `next` and `complete`.
 
-![One unattended night end to end, from handing off a backlog to reading the morning report.](diagrams/unattended-workflow.svg)
+![One unattended run end to end, shown overnight (22:00 → 08:00) as an example, from handing off a backlog to reading the morning report.](diagrams/unattended-workflow.svg)
 
-*Diagram: One unattended night end to end, from handing off a backlog to reading the morning report.*
+*Diagram: One unattended run end to end, shown overnight (22:00 → 08:00) as an example, from handing off a backlog to reading the morning report.*
 
 ## 0. What you need
 
@@ -141,7 +141,7 @@ python3 -m agents_never_sleep.run next --repo . --tickets ./backlog
 
 Ticket 02 never reaches you as a PROCEED: `next` classified it as a database-migration decision (a
 Hard-PARK category) and recorded `PARKED_DECISION` itself, with the candidate interpretations ('en' default
-vs NOT NULL + backfill) and the exact morning decision. That is PARK in action — the run kept moving
+vs NOT NULL + backfill) and the exact decision a human needs to make. That is PARK in action — the run kept moving
 instead of guessing a schema direction.
 
 Keep alternating `next`/`complete` until `next` returns a **terminal** status: `DRAINED`, `HALTED`, or
@@ -154,13 +154,13 @@ Keep alternating `next`/`complete` until `next` returns a **terminal** status: `
 - **Reversibility:** ticket 01 was snapshotted before the edit; had the gate gone red, the rename would
   have been reverted automatically ([recovery](recovery.md)).
 - **Anti-starvation:** if a ticket kept failing, the attempt cap / loop detector would force-park it rather
-  than burn the night ([scheduling](scheduling.md)). (If a *healthy* ticket gets force-parked because a
+  than burn the run ([scheduling](scheduling.md)). (If a *healthy* ticket gets force-parked because a
   kill+resume inflated its counter, recover it with `python3 -m agents_never_sleep.run reset-attempts
   <ticket-id> --repo . --tickets ./backlog`.)
 
 ## 7. Go unattended — `bin/ans-run`
 
-For a real overnight / detached run, launch through the launcher instead of driving by hand. It runs a
+For a real unattended / detached run, launch through the launcher instead of driving by hand. It runs a
 pre-token GO/NO-GO gate (config trust, identity, agent selection, credentials, repo health, working-tree
 lock) *before* the agent CLI boots:
 
@@ -175,7 +175,7 @@ hooks (`hooks/README.md`) so never-ASK / never-irreversible are enforced *struct
 wrap the run in the [watchdog](watchdog.md) so a hang is restarted. See the [launcher](launcher.md) doc for
 exit codes (0 GO / 64 NO-GO / 65 tree busy) and the autonomy-flag confirmation.
 
-## 8. Read the morning report
+## 8. Read the run report
 
 ```bash
 python3 -m agents_never_sleep.run report --repo . --tickets ./backlog
@@ -183,7 +183,7 @@ python3 -m agents_never_sleep.run report --repo . --tickets ./backlog
 
 The report (`night-report.md`) ranks: **done & trusted**, **needs daylight review** (a high-risk diff whose
 *delegated* review flagged it), **parked** (with the exact next action — e.g. "decide the users.locale
-migration direction"), **blocked**, and **blind spots**. This is the payoff: a night of autonomous work
+migration direction"), **blocked**, and **blind spots**. This is the payoff: a run of autonomous work
 turned into a few quick human decisions.
 
 ## Where verification fits (it isn't ANS)

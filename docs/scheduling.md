@@ -1,6 +1,6 @@
 # ANS Scheduling
 
-> **30-second version.** ANS schedules tickets so the night is never burned on one cursed item and never
+> **30-second version.** ANS schedules tickets so the run is never burned on one cursed item and never
 > builds on an unresolved foundation. It hands the agent only an **independent** next ticket (one whose
 > risk does not intersect a parked one), force-parks a ticket that exceeds its **attempt cap** or is
 > provably **looping**, trips a **low-yield circuit breaker** when most work is failing, and — for long
@@ -11,12 +11,13 @@
 
 *Diagram: Independent-next scheduling plus the attempt cap, loop detection, and low-yield breaker.*
 
-## The scheduling goal: keep the night productive
+## The scheduling goal: keep the run productive
 
-A naive loop ("do tickets in order, retry on failure") fails an overnight run two ways: it can spend the
-whole night retrying one broken ticket, and it can pile work on top of a decision that was never made.
+A naive loop ("do tickets in order, retry on failure") fails an unattended run two ways: it can spend the
+whole run retrying one broken ticket, and it can pile work on top of a decision that was never made.
 ANS's scheduler (`orchestrator.py` + `ledger.py`) exists to prevent both, so an unattended run converts a
-backlog into *real, reversible progress* rather than a wedged loop.
+backlog into *real, reversible progress* rather than a wedged loop. None of this is specific to running
+overnight — the same mechanisms apply whether the run starts at midnight or the middle of a workday.
 
 ## Independent-next selection
 
@@ -28,7 +29,7 @@ the run keeps moving, but never onto contaminated ground.
 
 ## Anti-starvation: attempt cap + loop detection
 
-Two durable mechanisms in `ledger.py` (`AttemptLedger`) stop one item from eating the night:
+Two durable mechanisms in `ledger.py` (`AttemptLedger`) stop one item from eating the run:
 
 - **Attempt cap.** Each ticket's attempt count persists across resumes. When it exceeds the cap, the
   ticket is **force-parked** instead of retried again — "parked to avoid burning the night on one ticket".
@@ -42,14 +43,14 @@ Two durable mechanisms in `ledger.py` (`AttemptLedger`) stop one item from eatin
 ## The low-yield circuit breaker
 
 Some failures are systemic: a broken toolchain, a missing dependency, an environment where *nothing*
-passes. Retrying ticket after ticket would waste the whole night producing parks and blocks. The
+passes. Retrying ticket after ticket would waste the whole run producing parks and blocks. The
 `LowYieldBreaker` (`orchestrator.py`) stops the run and alerts when the work is mostly unproductive:
 
 - It only trips on a **non-trivial backlog** (`min_tickets = 8`) — a tiny 3-ticket demo is safe.
 - It trips when the **bad ratio** — (parked + blocked + failed) / processed — reaches **0.75**.
 
-When it trips, the run ends with the `LOW_YIELD` terminal status and the morning report explains why. This
-is fail-fast governance: a systematically broken night ends loudly instead of grinding silently.
+When it trips, the run ends with the `LOW_YIELD` terminal status and the run report explains why. This
+is fail-fast governance: a systematically broken run ends loudly instead of grinding silently.
 
 ## Context strategy for long backlogs — `fresh_session_every`
 

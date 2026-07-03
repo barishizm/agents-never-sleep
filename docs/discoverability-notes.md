@@ -10,7 +10,7 @@
 
 - **Primary:** *Autonomous Execution Governance for coding agents — the workflow layer that lets an AI
   agent run a backlog to completion unattended without one unanswerable question halting the whole run.
-  ASK/PARK/HALT contract, deterministic gates, git-backed reversibility, morning report. Composes with
+  ASK/PARK/HALT contract, deterministic gates, git-backed reversibility, run report. Composes with
   Claude Code, Codex, Cursor, Aider — execution only.*
 - **Shorter:** *The governance layer between autonomous coding agents and software engineers. Runs a
   backlog unattended, reversibly, without stalling on the first hard question. Execution only — verification

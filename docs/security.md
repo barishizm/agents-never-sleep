@@ -24,12 +24,12 @@ vulnerability.
 1. **Never-ASK in unattended mode.** Under `CLAUDE_UNATTENDED=1`, the `deny_ask` PreToolUse hook denies the
    `AskUserQuestion` tool; the run PARKs or PROCEEDs, never blocks. A blocking question at 2am is both a
    stall and an availability problem; ANS removes the possibility structurally.
-2. **Never-irreversible unsupervised.** The deny-hooks block the operations that cannot be undone in
-   daylight: `git push --force`, remote branch/tag deletion, destructive SQL, and disk-destructive
+2. **Never-irreversible unsupervised.** The deny-hooks block the operations that cannot be undone
+   afterward: `git push --force`, remote branch/tag deletion, destructive SQL, and disk-destructive
    commands (`mkfs`, `dd of=/dev/…`, `shred`). The reversibility safety net (git snapshot/revert) handles
    the reversible mistakes; the hooks handle the ones no revert can fix.
 3. **Secret redaction.** `redact.py` strips keys, tokens, and connection-string passwords from everything
-   the night writes out — the morning report, gate artefacts, Paperclip comments, emitted JSON, even the
+   the run writes out — the run report, gate artefacts, Paperclip comments, emitted JSON, even the
    free-text `attempted` / `exact_blocker` fields. See [secrets](secrets.md) for how (shape-anchored
    matching + a literal-value registry).
 4. **Least-privilege key source.** Credentials resolve from env or a server-managed source (Vault), never
@@ -40,7 +40,7 @@ vulnerability.
 The launcher (`launcher.py`) is where privilege is bounded *before* the agent runs:
 
 - **Never as root.** Started as root with a configured `launcher.target_user` → re-exec as that user;
-  started as root with none → NO-GO. An unattended run must never own the night as root.
+  started as root with none → NO-GO. An unattended run must never own the machine as root.
 - **Run as the target user.** The recommended setup is a cron/systemd job that runs *as* the target user
   (no sudo at all). Where the root-guard re-exec is genuinely required, use a **command-scoped** sudoers
   rule (`ops ALL=(ansrunner) NOPASSWD: /usr/local/bin/ans-run`) — **never `NOPASSWD: ALL`**, which would
@@ -68,7 +68,7 @@ decision core (`enforce.py` / `enforcement.py`) and a per-platform capability ma
 **Only Claude Code is live-verified** — the enforcement is confirmed firing on the real tool. The other
 platforms (Gemini, Codex, Copilot, Cursor, Windsurf) are **built to each platform's documented hook
 contract** and hermetically tested, but not yet confirmed firing on the real tool. Where a platform cannot
-natively enforce a guarantee, the degradation is surfaced as a **blind spot** in the morning report —
+natively enforce a guarantee, the degradation is surfaced as a **blind spot** in the run report —
 never a silent gap. This distinction is stated everywhere it matters; ANS does not claim live verification
 it does not have.
 

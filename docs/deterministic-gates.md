@@ -31,7 +31,7 @@ will happily mark a diff that breaks that behaviour as DONE — because the gate
 governance layer, not a test-writer and not a correctness oracle. The quality of the safety net is the
 quality of your suite. Investing in the gate is investing in the autonomy.
 
-## Failure attribution — the part that makes it usable overnight
+## Failure attribution — the part that makes it usable unattended
 
 A naive "run the tests, block on red" gate is useless in a real repo, because repos have pre-existing
 failures, flaky tests, and environment hiccups — and a run that blocks on all of them becomes "always
@@ -47,9 +47,9 @@ blocked by repo noise". ANS's gate therefore **attributes** every red result by 
 
 So only a regression the diff *introduced* hard-blocks. A pre-existing red is not blamed on the agent, and
 an environment failure is `BLOCKED_ENV`, not a code failure. This is what lets the gate be both strict
-(real regressions are caught and reverted) and survivable (repo noise doesn't wedge the night).
+(real regressions are caught and reverted) and survivable (repo noise doesn't wedge the run).
 
-## Built so it can never hang overnight
+## Built so it can never hang while unattended
 
 Two properties keep the gate safe for unattended use (`gates.py`):
 

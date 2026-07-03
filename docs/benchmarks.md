@@ -1,7 +1,7 @@
 # ANS Benchmarks — methodology, not claimed results
 
 > **30-second version.** This is **how to measure** the autonomy of an unattended run — not a table of
-> results we are claiming. ANS's value is "the night made real, reversible progress without a human", and
+> results we are claiming. ANS's value is "the run made real, reversible progress without a human", and
 > this doc defines the metrics that capture that (uninterrupted runtime, completed backlog, recovery
 > success, retry efficiency, interruption reduction, parked ratio, human dependency, and a composite
 > autonomy score), the controlled procedure to measure them, the reproducible `acceptance/` harness, and —
@@ -34,7 +34,7 @@ so it is reproducible and so its limits are explicit.
 | **Retry efficiency** | Attempts per completed ticket; how often the attempt cap / loop detector force-parked. | Anti-starvation is bounding wasted effort. | Not that a force-parked ticket was truly unsolvable. |
 | **Interruption reduction** | Human interruptions, **target 0** (vs a baseline agent that stops at the first question). | The core problem ANS exists to solve is solved. | Not the *value* of the work done between interruptions. |
 | **Parked ratio** | (parked + blocked) / processed, with reasons. | Honest deferral rate. | A high park rate is **honest, not necessarily a win** — see below. |
-| **Human dependency** | Count + kind of decisions that required a morning human action. | How much the night actually offloaded. | Not whether those decisions were easy or hard. |
+| **Human dependency** | Count + kind of decisions that required a human action afterward. | How much the run actually offloaded. | Not whether those decisions were easy or hard. |
 | **Autonomy score** | A composite of the above (continuous runtime, tickets completed, interruptions→0, recovery, unfinished tickets). | A single comparable summary. | Only as meaningful as its inputs; a composite can hide a bad sub-metric. |
 
 **The parked-ratio caveat is load-bearing.** A run that parks *everything* would score "zero
@@ -52,7 +52,7 @@ To compare meaningfully, hold everything constant except the governance layer:
 3. **Inject the same controlled failures** in both arms (a deliberately-breaking ticket, a kill mid-run, a
    stalled command) so recovery is exercised identically.
 4. **Record the metrics above** for each arm, plus the per-ticket outcome states from the durable store and
-   the morning report.
+   the run report.
 5. **Publish setup + raw outcomes**, dated, alongside any derived number — never a derived number alone.
 
 ## The reproducible harness (`acceptance/`)
@@ -63,7 +63,7 @@ The harness that exercises the loop end-to-end already exists and is hermetic:
   sets up a throwaway sandbox repo, runs the harness unattended over the three acceptance tickets with a
   deterministic `DemoWorker`, and asserts the harness drove all three without ever asking a live question /
   halting, produced the correct durable outcome state for each, **reverted the bad edit (tree clean) and
-  kept the good edit**, and wrote a morning report. Exit 0 = green.
+  kept the good edit**, and wrote a run report. Exit 0 = green.
 - **`acceptance/test_*.py`** — focused hermetic tests for each spine + machinery component (resume,
   revert/backup, stop-hook, ask-hook, redaction, keysource, launcher mutual-exclusion, watchdog,
   fresh-session, classify narrowing/overrides, paperclip, …). `acceptance/run_all.sh` runs them all and

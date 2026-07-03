@@ -15,8 +15,8 @@
 
 An autonomous run *will* hit failures — a flaky test, a git lock, a model that produces a broken diff, a
 machine that hangs. The design goal is not to prevent every failure (impossible) but to make each one a
-*recoverable* event with a clear, durable record, so the night keeps making real progress and the morning
-knows exactly what to do. Every recovery path below leaves the working tree in a known-good state.
+*recoverable* event with a clear, durable record, so the run keeps making real progress and a human
+returning to it knows exactly what to do. Every recovery path below leaves the working tree in a known-good state.
 
 ## 1. Red gate → revert to last-green
 
@@ -32,7 +32,7 @@ did not introduce, and it **never deletes or skips a failing test to go green**.
 
 Some failures are not about the code at all: a git lock that prevents the snapshot commit, a gate command
 that cannot run, a read-only object store, a timeout. ANS records these as `BLOCKED_ENV` — a first-class
-state distinct from a code failure. The agent's partial edits are reverted, and the morning report says
+state distinct from a code failure. The agent's partial edits are reverted, and the run report says
 "fix the environment and re-run", not "the agent couldn't do it". If a snapshot commit genuinely cannot be
 made, ANS treats the ticket as `BLOCKED_ENV` rather than editing unrevertibly — reversibility is never
 sacrificed to make progress.

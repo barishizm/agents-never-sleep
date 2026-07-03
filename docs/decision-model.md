@@ -25,9 +25,9 @@ ever chooses among these three.
 ## The rule: ASK → PARK while unattended
 
 The fourth conceivable action — **ASK the human** — is forbidden under `CLAUDE_UNATTENDED=1`. There is
-nobody to answer at 2am, and a single blocking question would waste the entire night. So *every* impulse
-to ask is converted into a PARK: defer this decision, write down exactly what a human should decide in the
-morning, and move on. This is enforced two ways — by the decision logic (which never emits ASK
+nobody to answer at 2am, and a single blocking question would waste the entire run. So *every* impulse
+to ask is converted into a PARK: defer this decision, write down exactly what a human should decide
+afterward, and move on. This is enforced two ways — by the decision logic (which never emits ASK
 unattended) and structurally by the `deny_ask` hook, which denies the `AskUserQuestion` tool outright.
 
 ## How a ticket is classified (the `decide.py` flow)
@@ -51,7 +51,7 @@ The classifier reads the ticket text and applies, in order:
 4. **Otherwise → PROCEED.** Low blast-radius + reversible: assume and do.
 
 Because every branch is an enumerated rule, the decision is deterministic and inspectable — you can read
-a ticket and predict the action, and the morning report can explain exactly why each one was taken.
+a ticket and predict the action, and the run report can explain exactly why each one was taken.
 
 ## Foundational vs decision parks
 
@@ -71,7 +71,7 @@ to pick a genuinely *independent* next ticket.
 The blast-radius tiering is concrete precisely so the agent is rarely in a fuzzy middle. Almost everything
 is either clearly low-impact-and-reversible (PROCEED) or clearly in an enumerated high-impact category
 (PARK). When something is genuinely unclassifiable, the safe default is **PARK** — a wrongly-parked small
-item costs a 5-second morning decision; a wrongly-assumed big one costs a night of wrong work. That
+item costs a 5-second decision; a wrongly-assumed big one costs a run's worth of wrong work. That
 asymmetry is the entire reason the tiering leans conservative. (See [blast radius](blast-radius.md) for
 why classification is treated as the weakest link and reversibility as the backstop.)
 

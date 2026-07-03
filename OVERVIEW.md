@@ -2,7 +2,7 @@
 
 ### Let a coding agent work your backlog **overnight, alone — without ever stalling on a question.**
 
-> The pain: *"the agent stops at 2 a.m. with a dumb question and wastes the whole night."*
+> The pain: *"the agent stops at 2 a.m. with a dumb question and wastes the whole run."*
 > This skill makes that structurally impossible.
 
 `agents-never-sleep` is a portable [Agent Skill](https://www.agensi.io/learn/agent-skills-open-standard)
@@ -19,7 +19,7 @@ one engine, per-platform enforcement.
 ## Why it exists
 
 A normal agent, left alone on a big job, fails in one of two ways: it **stops** at the first ambiguity
-(and the night is wasted), or it **charges ahead** and does something destructive you can't undo. Both
+(and the run is wasted), or it **charges ahead** and does something destructive you can't undo. Both
 come from collapsing every uncertainty into a single response.
 
 This skill keeps the three responses to uncertainty **separate** — that's the whole idea:
@@ -31,7 +31,7 @@ This skill keeps the three responses to uncertainty **separate** — that's the 
 | **HALT** | stop the *whole* run (only on irreversible danger with no safety net) | no version control and none creatable |
 | ~~**ASK**~~ | **forbidden while unattended** — there is nobody to answer at 2 a.m. | converted to PARK automatically |
 
-The result: the night never idles on one cursed ticket, and nothing irreversible happens while you're
+The result: the run never idles on one cursed ticket, and nothing irreversible happens while you're
 away.
 
 ---
@@ -61,12 +61,12 @@ Under the hood, every ticket goes through a durable state machine:
 5. **Record** exactly one durable outcome (DONE, DONE_LOW_CONFIDENCE, PARKED_*, BLOCKED_ENV, FAILED_*).
    Atomic + resume-safe: kill the process mid-run and it picks up cleanly.
 6. **Anti-starvation:** per-ticket attempt caps and loop detection force-park a cursed ticket so the
-   night is never burned on one item; a low-yield circuit-breaker stops + alerts if most work is parking.
+   run is never burned on one item; a low-yield circuit-breaker stops + alerts if most work is parking.
 
 Optional **multi-model review** (via the Tokonomix gateway): high-risk diffs are reviewed by a council
 of frontier models and specialist lenses (architect / security / tenant-safety / …). It's *advisory* —
 it never blocks the run, it only withholds the "trusted" stamp: an unvetted high-risk change is marked
-**NEEDS DAYLIGHT REVIEW** in the report instead of a silent "done". Per-night cost brakes included.
+**NEEDS DAYLIGHT REVIEW** in the report instead of a silent "done". Per-run cost brakes included.
 
 ---
 
@@ -98,7 +98,7 @@ you switch a run to unattended mode.
 
 The harness is identical everywhere; **enforcement uses each platform's native hook system**. Where a
 platform has no hook for a given guarantee, the skill falls back to the written contract **and reports a
-loud BLIND SPOT in the morning report — never a silent gap.** (Strategy: *best-effort + graceful
+loud BLIND SPOT in the run report — never a silent gap.** (Strategy: *best-effort + graceful
 degradation*.)
 
 | Platform | deny-irreversible | never-stop | never-ASK |
@@ -125,20 +125,20 @@ are native vs degraded on the platform you're using.
 
 ---
 
-## What you get in the morning
+## What you get when the run finishes
 
 A single ranked report: what's **done & trusted**, what **needs daylight review** (gates passed but a
 high-risk change wasn't cleanly vetted), what's **parked** (with the candidate interpretations and the
 exact next action for you), what's **blocked**, and any **blind spots** (a degraded guarantee, a missing
-review credential, an unresolved secret). A LOW-YIELD night is flagged loudly so "the run finished" can
+review credential, an unresolved secret). A LOW-YIELD run is flagged loudly so "the run finished" can
 never be mistaken for "the work got done".
 
 ---
 
 ## At a glance
 
-- ✅ Runs a backlog to completion unattended, overnight, without stalling on questions
-- ✅ PROCEED / PARK / HALT autonomy contract — never ASK, never block the night on one ticket
+- ✅ Runs a backlog to completion unattended, without stalling on questions
+- ✅ PROCEED / PARK / HALT autonomy contract — never ASK, never block the run on one ticket
 - ✅ Deterministic test-gates with a failure taxonomy; git-backed undo
 - ✅ Code-layer security: never-ASK, deny-irreversible, never-stop, secret redaction
 - ✅ Optional multi-model + specialist review with cost brakes (advisory, fail-safe)

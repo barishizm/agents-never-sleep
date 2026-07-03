@@ -32,7 +32,7 @@ Stable response shapes:
 {"status": "PROCEED",  "ticket": {"id": "...", "body": "...", "path": "..."}, "attempt": N, "snapshot": "<sha>", "instructions": "...", "council": {...}, "specialists": {...}}
 {"status": "DRAINED"}          // all tickets processed; run complete
 {"status": "HALTED",   "reason": "..."}  // irreversible danger; operator must intervene
-{"status": "LOW_YIELD","report_path": "..."}  // too many parks/fails; morning report written
+{"status": "LOW_YIELD","report_path": "..."}  // too many parks/fails; run report written
 {"status": "NON_DESTRUCTIVE"}  // unattended, no config found; wizard must run first
 {"status": "ERROR",    "error": "..."}   // transient; fix and retry
 ```
@@ -59,13 +59,13 @@ Stable response shapes:
 {"status": "ERROR",    "error": "..."}
 ```
 
-### `report` — write morning report and exit
+### `report` — write run report and exit
 
 ```
 python3 -m agents_never_sleep.run report [--repo <path>] [--report <path>]
 ```
 
-Writes a Markdown morning report and exits 0.
+Writes a Markdown run report and exits 0.
 
 ---
 
@@ -114,7 +114,7 @@ The harness guarantees:
 - Gate output is captured and included in outcomes for diff-based classification.
 - Gate timeout triggers `BLOCKED_ENV` (never a run halt).
 - A gate that was already failing before your edit is classified as pre-existing and does NOT
-  block the ticket from landing as DONE (it is noted in the morning report as a blind spot).
+  block the ticket from landing as DONE (it is noted in the run report as a blind spot).
 
 ---
 

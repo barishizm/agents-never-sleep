@@ -1,6 +1,6 @@
 # ANS Secrets — redaction & key source
 
-> **30-second version.** ANS keeps credentials out of two places: out of what the night **writes** (secret
+> **30-second version.** ANS keeps credentials out of two places: out of what the run **writes** (secret
 > redaction scrubs keys/tokens/passwords from reports, logs, comments, and emitted JSON) and out of the
 > **config** (credentials are resolved from `env:` or `vault:` token-refs, never stored as literals). The
 > clever part of redaction is that it matches a secret by its **value shape**, never by a nearby keyword —
@@ -17,7 +17,7 @@
 
 ## Secret redaction (`redact.py`)
 
-ANS scrubs credentials from **everything the night writes out**: the morning report, gate artefacts,
+ANS scrubs credentials from **everything the run writes out**: the run report, gate artefacts,
 Paperclip comments, emitted JSON, and the free-text `attempted` / `exact_blocker` fields (which could carry
 a pasted credential) — scrubbed on write. Two complementary halves:
 
@@ -64,8 +64,8 @@ The two failure modes are deliberately different:
   missing env var, unreadable Vault path, disabled Vault integration — is a **blocking NO-GO** with a clear
   message, never a silent empty value. (Resolution happens *before* the capability probe — probe == spawn
   rule.) A literal value that *looks* like a pasted key is loudly flagged.
-- **At runtime** (a configured source unreadable mid-run, e.g. the Paperclip token): the unattended night
-  must never hard-stop, so the read **degrades** — it returns no value plus a morning-report **blind spot**,
+- **At runtime** (a configured source unreadable mid-run, e.g. the Paperclip token): the unattended run
+  must never hard-stop, so the read **degrades** — it returns no value plus a run-report **blind spot**,
   and the run continues with that capability disabled.
 
 ## The managed-routing tie-in

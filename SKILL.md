@@ -9,14 +9,14 @@ description: >-
   durable per-ticket state machine, an ASK/PARK/HALT autonomy contract (never block the run on a
   single ticket), deterministic-gate quality checks with a failure taxonomy, git-backed
   reversibility, attempt/loop caps, a stale-heartbeat restart watchdog (recovers a run frozen by
-  an overload wave), leaked-process reaping, and a morning report — so the night never idles and nothing
+  an overload wave), leaked-process reaping, and a run report — so the run never idles and nothing
   irreversible happens unsupervised. Make sure to reach for this even when the user does not say
   "unattended" but is clearly handing off long, autonomous, run-to-completion work.
 ---
 
 # Agents Never Sleep (ANS)
 
-Run a backlog to completion overnight without the run ever soft-halting on a question. The hard
+Run a backlog to completion unattended without the run ever soft-halting on a question. The hard
 part is not doing the work — it is **state durability + concrete park-vs-continue semantics +
 anti-starvation**, so that is what this skill is built around. The reliability spine shipped first
 (see `BUILD-PLAN.md`); the heavier multi-model review funnel was sequenced on top of it and is now
@@ -33,7 +33,7 @@ A run has exactly three responses to uncertainty. Keep them separate; collapsing
 inverts into the very stalling it exists to prevent.
 
 - **ASK** — ask the human. **Forbidden while unattended.** Do not emit `AskUserQuestion`; there is
-  nobody to answer at 2am, and a single question wastes the whole night. This is enforced
+  nobody to answer at 2am, and a single question wastes the whole run. This is enforced
   structurally, not by discipline: the `deny_ask.sh` PreToolUse hook (matcher `AskUserQuestion`,
   env-gated `CLAUDE_UNATTENDED=1`) DENIES the tool and steers you back into PARK/PROCEED — the mirror
   of the never-stop guarantee.
@@ -47,8 +47,8 @@ When unattended you only ever choose PROCEED, PARK, or HALT. Never ASK.
 
 ## Decide PROCEED vs PARK by blast radius (so "unsure" is rare)
 
-Make the tiering concrete — guessing on a high-blast-radius item and being confidently wrong all
-night is the worst outcome, worse than parking.
+Make the tiering concrete — guessing on a high-blast-radius item and being confidently wrong for the
+whole run is the worst outcome, worse than parking.
 
 **Hard-PARK (never guess):** DB schema / migration direction, public or shared API contract,
 security / auth / tenant-isolation boundary, money / billing / pricing, a cross-ticket interface
@@ -59,8 +59,8 @@ park the decision (hybrid).
 **Proceed (assume + log + continue):** naming, internal structure, log / comment / error wording,
 test fixtures, a choice between two equivalent local implementations, trivially-toggled defaults.
 
-**When genuinely unclassifiable → PARK.** A wrongly-parked small item costs a 5-second morning
-decision; a wrongly-assumed big one costs a night of wrong work.
+**When genuinely unclassifiable → PARK.** A wrongly-parked small item costs a 5-second decision
+afterwards; a wrongly-assumed big one costs a run of wrong work.
 
 Commit each PROCEED assumption so it can be reverted; if the snapshot commit cannot be made
 (git lock / timeout / read-only object store), treat the ticket as `BLOCKED_ENV` rather than editing
@@ -87,7 +87,7 @@ next-action, and its contamination scope.
    PARKED_DECISION, PARKED_FOUNDATIONAL, BLOCKED_ENV, FAILED_RETRYABLE, FAILED_BUG_IN_AGENT — with
    the required fields. Atomic writes; resume-safe.
 6. **Next ticket.** Attempt + loop caps (`agents_never_sleep/ledger.py`) force-park a ticket that exceeds its
-   cross-resume attempt cap or is provably looping, so the night is never burned on one cursed item.
+   cross-resume attempt cap or is provably looping, so the run is never burned on one cursed item.
    A low-yield circuit breaker stops and alerts if most work is parked/blocked.
 
 ## Running it — the agent IS the worker (drive this loop)
@@ -137,7 +137,7 @@ Read the JSON `status`:
   `... complete --attempted "…" [--council-verdict pass|concerns|error --council-cost <€>] \
   [--specialist-concerns architect,security,… --specialist-cost <€>] [--review-coverage "<who ran>"]`.
   Omit a flag only when you ran no such review. (Details: the Council and Specialist sections below.)
-- **`DRAINED` / `HALTED` / `LOW_YIELD`** → the run is over; the morning report is written. Stop.
+- **`DRAINED` / `HALTED` / `LOW_YIELD`** → the run is over; the run report is written. Stop.
 - **`NON_DESTRUCTIVE`** → unattended with no saved config; do a configuring interactive run first.
 
 **Never invent your own loop or stop early.** `next` owns the `.unattended/run-incomplete` sentinel
@@ -182,7 +182,7 @@ It is a deterministic GO/NO-GO gate that runs BEFORE the agent CLI boots:
   vouch for itself. **Never run ans-run in a repo you trust less than its `make install`.**
 - **identity** — configurable `launcher.target_user` + root-guard: started as root with a target
   user configured → re-exec as that user; as root with none configured → NO-GO (an unattended run
-  must never own the night as root),
+  must never execute as root),
 - **agent selection** — named presets under `launcher.agents`, picked by `--agent` or
   `launcher.default_agent`. NO platform detection happens at launch time (session env markers are
   spoofable and gone under cron); the wizard is where detection — as a prefill hint — and the
@@ -376,7 +376,8 @@ Per ticket, when a `council` block is present:
    upgrade your self-report — so it closes the "you grade your own work" gap. Absent/old gateways simply
    omit it; the self-report path is unchanged.
 
-**Cost safety (unattended runs spend real money).** The harness enforces a per-night brake from
+**Cost safety (unattended runs spend real money).** The harness enforces a per-run brake (config keys
+`per_night_euro_cap` / `max_council_calls_per_night`, named for the classic overnight case) from
 `--council-cost`: once `budget.per_night_euro_cap` or `budget.max_council_calls_per_night` is reached,
 `next` returns `council: {disabled: ...}` — stop convening councils (high-risk diffs are still flagged
 for daylight review). Also check `tokonomix_get_balance` before convening; if balance is below
@@ -385,7 +386,7 @@ the real charged cost via `--council-cost` so the brake is accurate.
 
 The harness then re-routes from the ACTUAL diff (overriding the hint) and decides disposition: a
 HEAVY-risk diff whose council raised **concerns**, **errored**, or **was never run** is recorded
-`DONE_LOW_CONFIDENCE` and flagged **NEEDS DAYLIGHT REVIEW** in the morning report — done, but not
+`DONE_LOW_CONFIDENCE` and flagged **NEEDS DAYLIGHT REVIEW** in the run report — done, but not
 trusted to merge blind. Deterministic gates remain the only HARD gate; the council never reverts.
 
 ### Specialist reviewers (when `specialists` is enabled)
@@ -399,14 +400,14 @@ and never blocks. On `complete`, report any lens that raised a **material concer
 records which lenses applied (from the actual diff) as coverage, and folds a concern in a
 **high-blast-radius** lens (`architect` / `security` / `tenant-safety`) into the SAME daylight-review
 disposition as the council — `DONE_LOW_CONFIDENCE` + **NEEDS DAYLIGHT REVIEW**, composed alongside any
-council reason, never clobbering it. Specialist € shares the council's per-night spend cap (it does
+council reason, never clobbering it. Specialist € shares the council's per-run spend cap (it does
 not consume a council-call slot). If `budget_exhausted` trips, `specialists` is returned `disabled` —
 stop convening lenses; high-risk diffs are still flagged.
 
 **Recommended council cadence:** run a council at ticket **start** (plan review), **mid** (after a
 significant implementation choice), and **end** (diff review) — approximately 3 calls per ticket.
 Running a council on every individual change (per-call) is possible but only recommended when the
-user explicitly requests it, given the per-night call cap and credit cost. The default caps
+user explicitly requests it, given the per-run call cap and credit cost. The default caps
 (`max_council_calls_per_night`, `per_night_euro_cap`) are sized for the 3-calls-per-ticket cadence.
 
 Mode detection is layered: `CLAUDE_UNATTENDED=1` (set by `claude-run`/cron) or a keyword →
@@ -447,12 +448,12 @@ that shared wrapper.
 Vault as a key source is built: a `token_ref` of `env:VAR` or `vault:<mount>/<path>[#field]` (the
 form the wizard already writes) resolves the Paperclip token and tokonomix key from env or the configured
 Vault (AppRole / `VAULT_TOKEN`, KV-v2), registers the resolved value with the redaction layer, and
-DEGRADES to a morning-report blind spot — never a hard stop — when a configured source can't be read.
+DEGRADES to a run-report blind spot — never a hard stop — when a configured source can't be read.
 
 The tokonomix onboarding gate is built: when a credential consumer (council/specialists) is enabled
 but no tokonomix credential is found, a `PROCEED` payload carries an `onboarding` directive — run the
 keyless `tokonomix_onboard` → `tokonomix_onboard_verify` handshake (interactive), or, unattended, the
-night proceeds with review disabled and the morning report carries a **BLIND SPOT** note. The MCP
+run proceeds with review disabled and the run report carries a **BLIND SPOT** note. The MCP
 calls are yours; the harness owns only the gate.
 
 

@@ -142,7 +142,7 @@ defining purpose is to run while you are not there.
 So the pattern predicts a new discipline, and the failure modes confirm the gap. We name it **Autonomous
 Execution Governance**: the body of practice concerned with *how an autonomous agent should behave while
 it executes unsupervised* — what it may decide alone, what it must defer, what must stop it cold, how its
-actions remain reversible, and how it reports honestly on a night nobody watched.
+actions remain reversible, and how it reports honestly on a run nobody watched.
 
 We should be careful here, because this is the part most prone to overreach. We are **not** claiming this
 discipline is mature, widely adopted, or standardized. We are claiming something narrower and more
@@ -178,9 +178,9 @@ party that benefits from "proceed" is also the party that decides "proceed vs st
 systematically biased toward proceeding. Governance that the governed administers is not governance.
 
 **Second: it violates separation of concerns.** "Write good code for this ticket" and "decide what an
-unattended run is *allowed* to do across an entire night" are different responsibilities operating at
+unattended run is *allowed* to do from start to finish" are different responsibilities operating at
 different altitudes and over different time horizons. The first is local and momentary: this file, this
-function, this test. The second is global and durable: this night, this backlog, the contract that holds
+function, this test. The second is global and durable: this run, this backlog, the contract that holds
 across forty tickets and a dozen context resets. Fusing them into one actor means the global,
 slow-changing policy lives inside the same context window that is busy with the local, fast-changing
 task — and is therefore subject to being crowded out, rationalized away, or simply forgotten as the
@@ -233,17 +233,17 @@ each is given in §7.
 
 **1. An autonomous system should never guess an irreversible decision.**
 *Rationale.* Reversibility is the entire safety budget of unattended work. A reversible mistake is a
-five-minute correction in daylight; an irreversible one is a disaster you wake up to. The cost asymmetry
+five-minute correction; an irreversible one is a disaster you cannot walk back. The cost asymmetry
 is so steep that an irreversible action taken on a *guess* is never justified by the convenience of not
 stopping.
 *Failure it prevents.* The 3 a.m. force-push, the dropped column, the deleted secret, the destructive
-migration run on a wrong assumption — the class of action that no morning can undo.
+migration run on a wrong assumption — the class of action that nothing afterward can undo.
 
 **2. An autonomous system should never silently fail.**
 *Rationale.* A silent failure is worse than a loud one, because it masquerades as success. "The run
 finished" must never be confused with "the work got done." Every degraded guarantee, every skipped
 check, every unresolvable credential must surface.
-*Failure it prevents.* The night that *looks* productive but quietly skipped a failing test, ran without
+*Failure it prevents.* The run that *looks* productive but quietly skipped a failing test, ran without
 its review credential, or completed tickets that all need redoing — discovered days later, in production.
 
 **3. An autonomous system should always remain reversible.**
@@ -254,7 +254,7 @@ damage by construction.
 degrades from catastrophe to chore.
 
 **4. An autonomous system should always remain auditable.**
-*Rationale.* A human returning to a night they did not watch must be able to reconstruct *what was
+*Rationale.* A human returning to a run they did not watch must be able to reconstruct *what was
 decided, why, and with what confidence* — per decision, not in aggregate. Trust in autonomy is built on
 the ability to inspect it after the fact.
 *Failure it prevents.* The opaque run: forty completed tickets and no way to know which rested on a
@@ -263,7 +263,7 @@ shaky assumption, which were genuinely verified, and which merely went green.
 **5. An autonomous system should always explain its uncertainty.**
 *Rationale.* When the system defers a decision, the deferral is only useful if it carries the *reason*,
 the *candidate interpretations*, and the *exact next action* a human must take. A bare "I stopped" wastes
-the human's morning re-deriving the question.
+the human's time re-deriving the question afterward.
 *Failure it prevents.* The unhelpful block — a parked ticket with no context, forcing the human to redo
 all the analysis the agent already did before it deferred.
 
@@ -272,7 +272,7 @@ all the analysis the agent already did before it deferred.
 not freeze the thirty-nine tickets that did not depend on it. Deferral must be *local* — defer this one
 decision, keep moving — not global.
 *Failure it prevents.* The classic eight-hour idle: an agent that hit one ambiguity at 22:11 and did
-nothing else all night, returning a backlog where one stalled ticket cost the other thirty-nine.
+nothing else for the rest of the run, returning a backlog where one stalled ticket cost the other thirty-nine.
 
 **7. An autonomous system should separate execution from verification.**
 *Rationale.* Deciding *whether to do the work* and judging *whether the work is correct* are different
@@ -280,7 +280,7 @@ jobs with different failure modes and different owners. A governor that also tri
 oracle would be a worse governor and a worse oracle. Verification, when needed, is *delegated* to a
 component that owns it.
 *Failure it prevents.* The conflated system that marks its own work "verified" because it was the one
-who did it — the test-author-grades-their-own-test antipattern, at the scale of a whole night.
+who did it — the test-author-grades-their-own-test antipattern, at the scale of a whole run.
 
 **8. An autonomous system should separate governance from intelligence.**
 *Rationale.* The same structural argument as §3. The thing that takes initiative cannot be the thing
@@ -296,7 +296,7 @@ after a crash, a stale heartbeat, or a red gate — and gets thirty-nine of fort
 a run that aimed for forty-of-forty and died irrecoverably at ticket twelve. Build for the failure that
 will happen, not the success you hope for.
 *Failure it prevents.* The brittle perfectionist run that cannot survive its own interruption — one
-crash and the whole night is lost, with no resumable state to pick up from.
+crash and the whole run is lost, with no resumable state to pick up from.
 
 **10. An autonomous system should optimize for trust, not speed.**
 *Rationale.* The product of an autonomous run is not throughput; it is *a result a human can trust
@@ -360,14 +360,14 @@ preflight degradation that lowers expected yield and raises conservatism; fail-c
 resolution.)
 
 **Auditability.** Every decision leaves a durable, inspectable record: what was decided, why, with what
-confidence, and what a human must do about it. The morning after is reconstructable from state, not from
-memory. (*Mechanism:* the per-ticket durable outcome store and the ranked morning report.)
+confidence, and what a human must do about it. What happened is reconstructable from state, not from
+memory. (*Mechanism:* the per-ticket durable outcome store and the ranked run report.)
 
 **Recovery.** The system is built to resume, not to run perfectly once. State is persisted atomically so
 that a crash, a kill, or a stale heartbeat resumes cleanly rather than restarting or corrupting. Recovery
 is treated as the common case, because over a long enough run it is. (*Mechanism:* atomic, resume-safe
 state; a watchdog that restarts a stalled run resumably; attempt/loop caps that prevent a cursed item
-from consuming the night.)
+from consuming the run.)
 
 **Statefulness.** Governance lives in durable state *outside* the intelligent actor, precisely so it
 cannot be crowded out of a context window. The contract that holds at ticket 1 holds at ticket 40 because
@@ -407,7 +407,7 @@ distinct problems, and conflating them would have produced a worse tool for both
 Now the parallel. Today the bottleneck on autonomous AI is not *intelligence* — the models can already
 reason, write code, and act. The bottleneck is **safe, trustworthy execution over a long unsupervised
 run**: the agent needs to know what it may decide alone, what it must defer, what must stop it; its
-actions need to be reversible; its night needs to be auditable. ANS does not make the agent smarter. It
+actions need to be reversible; its run needs to be auditable. ANS does not make the agent smarter. It
 does not improve the model. It solves a *different* problem that sits *above* the AI — the problem of
 governing an autonomous actor's behavior over time — and the claim is that solving it cleanly unlocks a
 scale of *unsupervised* work that is otherwise impractical. **ANS solves autonomy, not AI.** Those are
@@ -421,7 +421,7 @@ be *checked* rather than merely felt:
 | What it governs | Concurrent change to a shared artifact | An autonomous actor's behavior during unsupervised execution |
 | What it does **not** do | Write the code; make you a better programmer | Write the code; make the model smarter |
 | The capability it presupposes | People can write code | Models can reason and act |
-| The failure it removes | Lost work, unmergeable change, un-undoable mistake, no history | Frozen backlog, irreversible action, silent failure, unauditable night |
+| The failure it removes | Lost work, unmergeable change, un-undoable mistake, no history | Frozen backlog, irreversible action, silent failure, unauditable run |
 | Its core invariant | History is durable; any committed state is recoverable | Every permitted change is reversible; every decision is recorded |
 | Why it lives *outside* the worker | The artifact is shared; one author can't own the merge | Governance must be external to the governed (conflict of interest, §3) |
 
@@ -519,10 +519,10 @@ what makes the governance auditable: re-run it and you get the same verdict.
 Each PROCEED ticket is snapshotted before edits; a red gate reverts to the last green commit. If the
 snapshot commit cannot be made at all (git lock, timeout, read-only object store), the ticket is recorded
 `BLOCKED_ENV` rather than edited un-revertibly — fail-safe (the design principle) in action. Every
-PROCEED assumption is committed so it can be reverted in daylight. The genuinely irreversible operations
+PROCEED assumption is committed so it can be cheaply reverted. The genuinely irreversible operations
 — force-push, remote-branch delete, destructive SQL, secret deletion, disk wipe — are not *governed* on a
 guess; they are **denied at the tool layer by hooks**, which is the reversibility binary of §5: permit
-only the undoable, refuse the rest. This is why a wrong PROCEED in the night is a five-minute daylight
+only the undoable, refuse the rest. This is why a wrong PROCEED during an unattended run is a five-minute
 revert rather than a disaster — the irreversible class never had a path to execution.
 
 ### The pre-token launcher — least privilege, determinism, fail-safe
@@ -545,7 +545,7 @@ discipline's principles expressed as a deterministic pre-condition rather than a
 The per-ticket state machine records exactly one durable outcome per ticket with atomic, resume-safe
 writes, so a crash or kill resumes cleanly rather than corrupting or restarting. An **attempt/loop
 ledger** caps cross-resume retries and detects provable loops, force-parking a cursed item before it
-burns the night; a low-yield circuit breaker halts and alerts when most outcomes are parks or blocks, so
+burns the run; a low-yield circuit breaker halts and alerts when most outcomes are parks or blocks, so
 "the run finished" is never silently confused with "the work got done" (principle 2). A **watchdog**
 sidecar restarts a stalled run resumably when its heartbeat goes stale — the hang an in-process stop-hook
 cannot see — and exits with a distinct code on exhausted restarts so the failure is loud. For long
@@ -557,11 +557,11 @@ ticket 40 is governed by the same contract — and gets the same quality — as 
 
 Exactly one of seven durable outcome states is recorded per ticket — `DONE`, `DONE_LOW_CONFIDENCE`,
 `PARKED_DECISION`, `PARKED_FOUNDATIONAL`, `BLOCKED_ENV`, `FAILED_RETRYABLE`, `FAILED_BUG_IN_AGENT` — and
-the night ends in a single **ranked morning report**: what is done and trusted, what needs daylight
+the run ends in a single **ranked run report**: what is done and trusted, what needs daylight
 review, what is parked (with candidate interpretations and the exact next action), what is blocked, and
 every **blind spot** (a degraded guarantee, a missing review credential, an unresolved secret, a host
 that could not natively enforce a guarantee). A blind spot is surfaced loudly, never swallowed. This is
-the morning-after reconstructability that principle 4 demands.
+the after-the-fact reconstructability that principle 4 demands.
 
 ### Verification is *delegated*, not owned — principle 7 at its sharpest
 
@@ -670,7 +670,7 @@ This document would betray its own thesis if it overstated its case. Stated plai
   opinion is advisory, never a guarantee. Model agreement is not truth.
 - **A wrong PROCEED assumption is possible.** Blast-radius tiering lowers the odds; it does not zero
   them. The defense is reversibility, not infallibility — which is why we built the system so a wrong
-  call is a daylight revert, not a catastrophe.
+  call is a cheap revert, not a catastrophe.
 - **Enforcement strength varies by host.** Only Claude Code is live-verified today. Elsewhere a guarantee
   may rest on a prose contract plus a loudly-reported blind spot, which is weaker than a tool-layer
   denial.

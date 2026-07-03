@@ -23,7 +23,7 @@ to a concrete module, the module is named — open it to see the exact behaviour
 **Autonomy contract** — The rule that an unattended run has exactly three responses to uncertainty —
 ASK, PARK, HALT — and that ASK is forbidden while unattended. This is the heart of ANS: a coding agent
 left alone treats *every* unknown as "stop and ask", which means one unanswerable question wastes the
-whole night. The contract gives the agent a structured alternative so the run never idles. Defined in
+whole run. The contract gives the agent a structured alternative so the run never idles. Defined in
 `decide.py`; enforced by the deny-hooks in `hooks/`.
 
 **ASK** — Asking the human a question. **Forbidden while unattended** — there is nobody to answer at
@@ -34,7 +34,7 @@ tool and steers the agent back into PARK or PROCEED. The one exception is a sing
 
 **PARK** — Defer *this one decision or ticket* and keep the run moving to the next independent ticket.
 Parking is normal and healthy — it is the opposite of stopping. A park always records why, the candidate
-interpretations, the exact human next-action, and its contamination scope, so the morning review is a
+interpretations, the exact human next-action, and its contamination scope, so reviewing it afterward is a
 few-second decision. Recorded as `PARKED_DECISION` or `PARKED_FOUNDATIONAL` (see *Outcome states*).
 
 **HALT** — Stop the *whole run*. Reserved for genuinely irreversible danger that the hook layer would
@@ -95,7 +95,7 @@ Lives in `gates.py`.
 
 **Snapshot / revert** — Before editing, ANS takes a git snapshot of the working tree; if the gate fails
 on the diff, it reverts to that last-green snapshot. This is the reversibility safety net that makes a
-wrong PROCEED a cheap daylight revert instead of a catastrophe. If the snapshot commit cannot be made
+wrong PROCEED a cheap revert instead of a catastrophe. If the snapshot commit cannot be made
 (git lock, timeout, read-only object store) the ticket is recorded `BLOCKED_ENV` rather than edited
 unrevertibly. Lives in `vcs.py`.
 
@@ -109,7 +109,7 @@ There are exactly seven, and they are never collapsed:
 - **DONE** — completed, gates green.
 - **DONE_LOW_CONFIDENCE** — completed and gates green, but the *delegated* review coverage was degraded
   (a high-risk diff whose council raised concerns, errored, or never ran). Flagged **NEEDS DAYLIGHT
-  REVIEW** in the morning report — done, but not trusted to merge blind.
+  REVIEW** in the run report — done, but not trusted to merge blind.
 - **PARKED_DECISION** — a single decision deferred; the run kept moving.
 - **PARKED_FOUNDATIONAL** — a foundational ambiguity; the ticket is parked *and* its dependents are
   quarantined (see *contamination scope*).
@@ -119,15 +119,15 @@ There are exactly seven, and they are never collapsed:
 - **FAILED_BUG_IN_AGENT** — the harness or agent did something wrong; needs a human look.
 
 **Morning report** — The end-of-run summary (`report.py`): what got done, what parked and why, what
-needs daylight review, spend, and blind spots. The artefact a human reads first thing in the morning to
-turn a night of autonomous work into a few quick decisions.
+needs daylight review, spend, and blind spots. The artefact a human reads when the run ends — named for
+the classic overnight case — to turn a run of autonomous work into a few quick decisions.
 
 ---
 
-## Anti-starvation (never burn the night on one ticket)
+## Anti-starvation (never burn the run on one ticket)
 
 **Attempt cap** — The maximum number of times a single ticket is attempted across resumes (`ledger.py`,
-`AttemptLedger`). A ticket that crashes and restarts forever would otherwise burn the whole night; at the
+`AttemptLedger`). A ticket that crashes and restarts forever would otherwise burn the whole run; at the
 cap it is force-parked instead. The cap survives resumes because the ledger is durable.
 
 **Loop detection** — Detecting a ticket that loops *fast* under budget, failing the same way each time.
@@ -136,13 +136,13 @@ so a varying timestamp/path doesn't defeat detection); when the same signature r
 the ticket is force-parked. Lives in `ledger.py`.
 
 **Low-yield breaker** — A circuit breaker that stops the run and alerts when most work is parked, blocked,
-or failing — so a systematically broken environment doesn't grind all night producing nothing. It only
+or failing — so a systematically broken environment doesn't grind on for the whole run producing nothing. It only
 trips on a non-trivial backlog (≥ 8 processed) once the bad ratio (parked+blocked+failed / processed)
 reaches 0.75. Lives in `orchestrator.py` (`LowYieldBreaker`); surfaces as the `LOW_YIELD` terminal status.
 
 **`reset-attempts` / `reset-spend`** — Operator escape hatches (run subcommands). `reset-attempts <ticket>`
 clears an inflated attempt counter for the documented "a kill+resume round-trip pushed a healthy ticket
-to the cap" case; `reset-spend` zeroes the per-night spend accounting (the breaker's processed/bad
+to the cap" case; `reset-spend` zeroes the per-run spend accounting (the breaker's processed/bad
 counters are untouched). Defined in `run.py` / `ledger.py`.
 
 ---
@@ -226,14 +226,14 @@ age climbing *during* a ticket is normal (the agent is implementing); a stall is
 ## Security
 
 **Secret redaction** — Shape-anchored scrubbing (`redact.py`) that strips credential-shaped values from the
-morning report, gate artefacts, Paperclip comments, and emitted JSON. Resolved credentials are registered
+run report, gate artefacts, Paperclip comments, and emitted JSON. Resolved credentials are registered
 with a redaction registry so they are never printed. Built, not "Phase 2".
 
 **Keysource** — The credential resolver (`keysource.py`) for token-refs of the form `env:VAR` (resolved
 from the launcher's own environment at spawn) or `vault:<mount>/<path>[#field]` (resolved via HashiCorp
 Vault, AppRole / `VAULT_TOKEN`, KV-v2). A credential is **never** a literal in the config — only a ref. A
 failed resolution is a blocking NO-GO with a clear message, never a silent empty value; a configured source
-that can't be read at *run* time degrades to a morning-report blind spot rather than a hard stop.
+that can't be read at *run* time degrades to a run-report blind spot rather than a hard stop.
 
 **Token-ref** — A pointer to a credential, never the credential itself: `env:VAR` or
 `vault:<mount>/<path>[#field]`. The form the wizard writes for the Paperclip token and the Tokonomix key.

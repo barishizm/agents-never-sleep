@@ -35,7 +35,7 @@ is wired per platform from ONE shared decision core (`agents_never_sleep/enforce
 - **Gemini CLI / Codex CLI / Copilot CLI / Cursor / Windsurf** — config snippets + per-platform
   install in `hooks/platforms/` + the capability matrix. Strategy is **best-effort + graceful
   degradation**: each platform enforces what its hook system allows; a guarantee with no native hook
-  falls back to the `SKILL.md` prose contract AND is reported as a morning-report BLIND SPOT
+  falls back to the `SKILL.md` prose contract AND is reported as a run-report BLIND SPOT
   (`agents_never_sleep/capabilities.py`) — never silent. `deny-irreversible` is native everywhere; `never-stop`
   everywhere except Cursor/Windsurf; `never-ASK` on Claude + Copilot only.
 

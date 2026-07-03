@@ -3,7 +3,7 @@
 > **30-second version.** Every ticket ANS processes ends in **exactly one** of seven durable outcome
 > states, written atomically so a crash or resume never loses or double-counts work. The states are not
 > collapsed: "done", "done but flag for review", "parked a decision", "parked a foundation", "blocked by
-> the environment", "failed but retryable", and "failed — agent bug" are all distinct, because the morning
+> the environment", "failed but retryable", and "failed — agent bug" are all distinct, because the
 > response to each is different. This is the durable backbone that makes an unattended run *resumable*.
 > See [recovery](recovery.md), [scheduling](scheduling.md), and the [glossary](glossary.md).
 
@@ -13,8 +13,8 @@
 
 ## Why a durable per-ticket state machine
 
-An overnight run is a sequence of small, independent units of work. If the run crashes at ticket 23, the
-morning must know exactly which of the first 22 are trustworthy, which need a human look, and which to
+An unattended run is a sequence of small, independent units of work. If the run crashes at ticket 23, you
+must know exactly which of the first 22 are trustworthy, which need a human look, and which to
 retry — without re-running anything. That requires a *durable* record per ticket, written the instant the
 outcome is known, and a *precise* vocabulary so "done" never silently means "done but the review errored".
 ANS's state machine (`state.py`) is that record and that vocabulary.
@@ -23,7 +23,7 @@ ANS's state machine (`state.py`) is that record and that vocabulary.
 
 Recorded as `OutcomeState` in `state.py`. Each ticket gets exactly one:
 
-| State | Meaning | Morning response |
+| State | Meaning | Response |
 |---|---|---|
 | **DONE** | Completed; the deterministic gate is green. | Trust it. |
 | **DONE_LOW_CONFIDENCE** | Gate green, but the *delegated* review coverage was degraded (a high-risk diff whose council raised concerns, errored, or never ran). | **NEEDS DAYLIGHT REVIEW** — done, not trusted to merge blind. |
@@ -57,11 +57,11 @@ gate runs on the real diff — so a DONE always means "gate-green", never "the a
 
 ## What each outcome record carries
 
-Every `TicketOutcome` (`state.py`) records the fields needed to act in the morning without re-deriving
+Every `TicketOutcome` (`state.py`) records the fields needed to act afterward without re-deriving
 context: the `state`, a human-readable `why`, the `exact_blocker` (if any), `human_action_required`,
 `review_coverage` (which delegated lenses ran, if any), `contamination_scope` and any
 `dependents_quarantined` (for a foundational park), `work_product_behind_flag` (for the hybrid
-build-narrow-and-park case), and timestamps. A park is only useful if the morning decision is fast —
+build-narrow-and-park case), and timestamps. A park is only useful if the follow-up decision is fast —
 hence the recorded candidate interpretations and the exact next-action.
 
 ## Atomic, resume-safe, secret-scrubbed writes

@@ -33,7 +33,7 @@ running ANS instance.
    invalidates the trust (`trust.py`). *Never run `ans-run` in a repo you trust less than its `make install`.*
 2. **Identity / root-guard.** Started as root with a `launcher.target_user` configured → **re-exec as that
    user** (credentials, settings, and repo ownership live in the user's HOME). Started as root with **no**
-   target user → **NO-GO** (an unattended run must never own the night as root). The re-exec keeps the
+   target user → **NO-GO** (an unattended run must never own the machine as root). The re-exec keeps the
    launch one command; where it is genuinely needed, use a *command-scoped* sudoers rule, never
    `NOPASSWD: ALL`.
 3. **Agent selection.** Named presets under `launcher.agents`, picked by `--agent` or

@@ -63,11 +63,11 @@ Honest framing: the classifier reads ticket *text* and matches patterns. It can 
 phrase a high-blast-radius change in innocuous words and slip through as PROCEED. ANS does not pretend the
 classifier is perfect. Instead it makes that imperfection cheap with three layers of backstop:
 
-1. **Conservative default.** Unclassifiable → PARK. A wrongly-parked small item costs a 5-second morning
-   decision; a wrongly-assumed big one costs a night of wrong work. The tiering leans toward the cheap
+1. **Conservative default.** Unclassifiable → PARK. A wrongly-parked small item costs a 5-second
+   decision; a wrongly-assumed big one costs a run's worth of wrong work. The tiering leans toward the cheap
    mistake.
 2. **Reversibility.** Every PROCEED is snapshotted before the edit (`vcs.py`); a wrong assumption is a
-   daylight revert, not a catastrophe. This is the real safety net — *the system is built so a wrong call
+   cheap revert, not a catastrophe. This is the real safety net — *the system is built so a wrong call
    is recoverable*, not so the classifier never errs.
 3. **Disposition from the actual diff.** Trust-or-flag is re-routed from the *real* change, not just the
    ticket text, so a diff that turns out to touch a high-risk surface is flagged for daylight review even
@@ -75,7 +75,7 @@ classifier is perfect. Instead it makes that imperfection cheap with three layer
 
 The thesis: you cannot make an autonomous classifier infallible, so you make being wrong **safe**. Blast
 radius decides *whether to guess*; reversibility decides *what happens when the guess is wrong*. Together
-they let the night make real progress without a human watching.
+they let the run make real progress without a human watching.
 
 ## Boundary: blast radius governs execution, not correctness
 

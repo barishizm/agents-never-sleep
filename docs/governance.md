@@ -23,8 +23,8 @@ in the loop:
 
 - This decision is irreversible and high-stakes — should the agent guess, or defer it?
 - A test failed — was it my diff, or was it already red? Revert, or continue?
-- I've attempted this ticket three times — keep trying, or move on so the night isn't wasted?
-- Most of tonight's work is getting parked — is the environment broken? Should I stop and alert?
+- I've attempted this ticket three times — keep trying, or move on so the run isn't wasted?
+- Most of this run's work is getting parked — is the environment broken? Should I stop and alert?
 
 None of these are about *how good the code is*. They are about *how an unsupervised actor should conduct
 itself*. That is a governance problem, and it is why ANS is deliberately not a model — the policy is
@@ -37,7 +37,7 @@ uncertainty, and they are never collapsed into one another.
 
 - **ASK** — ask the human. **Forbidden while unattended** and enforced structurally (the `deny_ask`
   hook denies `AskUserQuestion` under `CLAUDE_UNATTENDED=1`). There is nobody to answer at 2am; one
-  blocking question wastes the night.
+  blocking question wastes the run.
 - **PARK** — defer *this one decision or ticket* and keep the run moving to the next independent ticket.
   Parking is the healthy, normal response to a high-stakes unknown — the opposite of stopping.
 - **HALT** — stop the *whole run*. Only for genuinely irreversible danger or the total absence of a
@@ -45,7 +45,7 @@ uncertainty, and they are never collapsed into one another.
 
 Unattended, the agent only ever chooses **PROCEED, PARK, or HALT** — never ASK. Collapsing these three
 is exactly how a run inverts into the stalling it exists to prevent: an ASK becomes a silent stall, a HALT
-becomes an over-reaction that ends the night, a missing PARK turns every unknown into one of those two.
+becomes an over-reaction that ends the run, a missing PARK turns every unknown into one of those two.
 Keeping them distinct is the policy.
 
 ## Why governance has to be its own layer
@@ -67,15 +67,15 @@ argument):
 
 ## What governance produces
 
-Governance is only useful if the morning is better than the night was uncertain. ANS makes every
+Governance is only useful if the aftermath is clearer than the run was uncertain. ANS makes every
 governed run produce a durable, auditable trail:
 
 - **One durable outcome per ticket** (`state.py`) — DONE, parked (with why + the exact human next-action),
   blocked, or failed. Nothing is lost between resumes.
-- **Reversibility** (`vcs.py`) — every PROCEED is snapshotted; a wrong assumption is a daylight revert,
+- **Reversibility** (`vcs.py`) — every PROCEED is snapshotted; a wrong assumption is a cheap revert,
   not a catastrophe.
-- **A morning report** (`report.py`) — what got done, what parked and why, what needs daylight review,
-  what it cost, and any blind spots. Governance turns a night of autonomous work into a few quick
+- **A run report** (`report.py`) — what got done, what parked and why, what needs daylight review,
+  what it cost, and any blind spots. Governance turns a run of autonomous work into a few quick
   human decisions.
 
 ## What governance is NOT

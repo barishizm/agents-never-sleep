@@ -5,8 +5,8 @@
 > wave that freezes the heartbeat). It runs the agent as a child, polls its heartbeat file, and when the
 > heartbeat goes stale it kills and **restarts the run resumable**; on exhausted restarts it fires an
 > alert and exits `75`. **`ans-run` now wraps every detached launch in it by default** (opt out with
-> `--no-watchdog`), so an overnight run can recover from an overload freeze instead of sitting dead until
-> morning. It also **reaps the run's own leaked child processes** (the agent's MCP servers) by parent-chain
+> `--no-watchdog`), so an unattended run can recover from an overload freeze instead of sitting dead until
+> someone checks on it. It also **reaps the run's own leaked child processes** (the agent's MCP servers) by parent-chain
 > lineage, so a long run doesn't creep toward OOM. It is composed *around* a command, never a rewrite of
 > any shared wrapper. See [recovery](recovery.md), [launcher](launcher.md), [security](security.md),
 > [glossary](glossary.md).
