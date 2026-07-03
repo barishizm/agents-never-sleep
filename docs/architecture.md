@@ -15,7 +15,7 @@
 ## Why a separate layer at all
 
 A coding agent left to run for hours has exactly one response to uncertainty: **stop and ask**. That is
-fine with a human watching and fatal at 2am — one unanswerable question wastes the whole run. The
+fine with a human watching and fatal with nobody there — one unanswerable question wastes the whole run. The
 missing piece is not a smarter model; it is an *operational* layer that decides **how an agent should
 behave while it works unattended**: when to assume-and-continue, when to defer a decision and move on,
 when (rarely) to stop everything — and how to make every one of those choices reversible and auditable.

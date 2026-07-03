@@ -59,7 +59,7 @@ To compare meaningfully, hold everything constant except the governance layer:
 
 The harness that exercises the loop end-to-end already exists and is hermetic:
 
-- **`acceptance/run_acceptance.py`** — the one verification that maps directly to the "2am stop" pain. It
+- **`acceptance/run_acceptance.py`** — the one verification that maps directly to the "mid-run stop" pain. It
   sets up a throwaway sandbox repo, runs the harness unattended over the three acceptance tickets with a
   deterministic `DemoWorker`, and asserts the harness drove all three without ever asking a live question /
   halting, produced the correct durable outcome state for each, **reverted the bad edit (tree clean) and

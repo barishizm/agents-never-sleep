@@ -63,7 +63,7 @@ only fires when reported). The same `--tickets <dir>` must be passed on **both**
 
 The driver (`driver.py`) enforces the two things the agent must never be trusted to remember:
 
-1. **Sentinel ownership (never stop at 2am).** The Stop-hook blocks a premature end-of-turn while
+1. **Sentinel ownership (never stop mid-run).** The Stop-hook blocks a premature end-of-turn while
    `.unattended/run-incomplete` exists. The driver owns that file: it stays set while any non-terminal
    ticket remains and is cleared **only** when the backlog is genuinely drained / halted / low-yield-
    tripped. "Never stop" is therefore enforced by the *file*, not by the agent's diligence to keep

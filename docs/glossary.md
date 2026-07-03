@@ -27,7 +27,7 @@ whole run. The contract gives the agent a structured alternative so the run neve
 `decide.py`; enforced by the deny-hooks in `hooks/`.
 
 **ASK** — Asking the human a question. **Forbidden while unattended** — there is nobody to answer at
-2am, and a single blocking question wastes the entire run. Enforced structurally, not by discipline:
+mid-run, and a single blocking question wastes the entire run. Enforced structurally, not by discipline:
 the `deny_ask.sh` PreToolUse hook (env-gated on `CLAUDE_UNATTENDED=1`) denies the `AskUserQuestion`
 tool and steers the agent back into PARK or PROCEED. The one exception is a single setup question asked
 *once, in chat, before the run starts* (foreground vs detached) — that is routing, not a mid-run stall.
@@ -158,7 +158,7 @@ in-process `run` was removed; real runs always use the `next`/`complete` flow. (
 parked and why.)
 
 **Run-incomplete sentinel** — The file (`${UE_RUN_INCOMPLETE:-<repo>/.unattended/run-incomplete}`) that
-`next` owns and the Stop-hook checks: while it exists, a premature stop at 2am is blocked, guaranteeing
+`next` owns and the Stop-hook checks: while it exists, a premature stop is blocked, guaranteeing
 the run keeps going until `next` returns a terminal status. The "never-stop" guarantee in one file.
 
 **The agent is the worker** — A deliberate division of labour: the *harness* (stdlib Python) owns

@@ -25,7 +25,7 @@ built (status in "The quality machinery layered on the spine" below).
 > Full rationale: `agents-never-sleep-design.md` (13 design threads + 3 council reviews).
 > The MVP spine is implemented as a small Python package under `agents_never_sleep/` (the old import
 > name `harness` still works via a back-compat shim through all of 1.x) and proven by
-> `acceptance/run_acceptance.py` (the only test that maps to the "stops at 2am" pain).
+> `acceptance/run_acceptance.py` (the only test that maps to the "stops mid-run" pain).
 
 ## The autonomy contract — three distinct states, never collapsed
 
@@ -141,7 +141,7 @@ Read the JSON `status`:
 - **`NON_DESTRUCTIVE`** → unattended with no saved config; do a configuring interactive run first.
 
 **Never invent your own loop or stop early.** `next` owns the `.unattended/run-incomplete` sentinel
-that the Stop-hook uses to block a premature 2am stop; keep calling `next` until it returns a
+that the Stop-hook uses to block a premature stop; keep calling `next` until it returns a
 terminal status. The harness handles snapshot-before-edit, gate-after-edit, revert-on-red, the
 attempt cap, loop detection and the low-yield breaker — your only job is the edits.
 

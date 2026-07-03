@@ -7,7 +7,7 @@
 
 `agents-never-sleep` is a portable [Agent Skill](https://www.agensi.io/learn/agent-skills-open-standard)
 plus a small zero-dependency Python harness. You hand it a backlog (local `.md` tickets or a tracker);
-it works ticket-by-ticket to completion while you sleep, makes its own judgment calls inside safe
+it works ticket-by-ticket to completion while you're away, makes its own judgment calls inside safe
 limits, never does anything irreversible unsupervised, and leaves a **morning report** of exactly what
 it did, what it parked for you, and why.
 
@@ -29,7 +29,7 @@ This skill keeps the three responses to uncertainty **separate** — that's the 
 | **PROCEED** | assume + log + keep going (low blast-radius, reversible) | naming, internal structure, a local refactor |
 | **PARK** | defer *this one* ticket, move to the next — normal and healthy | "which DB migration direction?" → park, build the rest |
 | **HALT** | stop the *whole* run (only on irreversible danger with no safety net) | no version control and none creatable |
-| ~~**ASK**~~ | **forbidden while unattended** — there is nobody to answer at 2 a.m. | converted to PARK automatically |
+| ~~**ASK**~~ | **forbidden while unattended** — there is nobody there to answer | converted to PARK automatically |
 
 The result: the run never idles on one cursed ticket, and nothing irreversible happens while you're
 away.
@@ -72,7 +72,7 @@ it never blocks the run, it only withholds the "trusted" stamp: an unvetted high
 
 ## Security & safety model
 
-Safety is enforced at the **code layer**, not by trusting the agent's 2 a.m. discipline:
+Safety is enforced at the **code layer**, not by trusting the agent's mid-run discipline:
 
 - 🛑 **never-ASK** — the "ask the human" tool is denied; the agent is steered into PARK/PROCEED instead.
 - 🧨 **deny-irreversible** — destructive / outward commands are blocked at the source: force-push,

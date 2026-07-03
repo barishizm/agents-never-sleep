@@ -104,8 +104,8 @@ decision: *which* uncertainties a run may resolve on its own (because the choice
 isolated), *which* it must defer to a human (because the blast radius is large), and *which* must halt
 the whole run (because the action is genuinely irreversible). The coding agent cannot supply this layer
 itself — it is the *worker*, optimizing the next edit; it has no durable, structural authority over its
-own autonomy, no enforced reversibility, and no memory of the contract once its context fills up at
-2 a.m.
+own autonomy, no enforced reversibility, and no memory of the contract once its context fills up
+mid-run.
 
 ANS is that layer. It gives the run an **ASK / PARK / HALT autonomy contract**, enforces it
 *structurally* (deny-hooks at the tool layer, not the agent's good intentions), keeps every change it

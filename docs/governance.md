@@ -36,7 +36,7 @@ The governing policy is the **autonomy contract**: an unattended run has exactly
 uncertainty, and they are never collapsed into one another.
 
 - **ASK** — ask the human. **Forbidden while unattended** and enforced structurally (the `deny_ask`
-  hook denies `AskUserQuestion` under `CLAUDE_UNATTENDED=1`). There is nobody to answer at 2am; one
+  hook denies `AskUserQuestion` under `CLAUDE_UNATTENDED=1`). There is nobody there to answer; one
   blocking question wastes the run.
 - **PARK** — defer *this one decision or ticket* and keep the run moving to the next independent ticket.
   Parking is the healthy, normal response to a high-stakes unknown — the opposite of stopping.

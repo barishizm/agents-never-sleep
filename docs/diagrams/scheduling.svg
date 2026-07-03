@@ -2,7 +2,7 @@
   <title id="t">ANS scheduling and anti-starvation</title>
   <desc id="d">The scheduler picks the next independent ticket whose contamination scope does not intersect a parked ticket. Anti-starvation has three guards: the attempt cap force-parks a ticket attempted past its cap, loop detection force-parks a ticket failing with the same signature, and the low-yield breaker stops the whole run when at least eight tickets are processed and the bad ratio reaches 0.75. For long backlogs, fresh-session-every spawns a fresh agent session every N tickets.</desc>
   <rect width="760" height="380" fill="#0b1220"/>
-  <text x="380" y="30" fill="#e2e8f0" font-size="17" text-anchor="middle">Scheduling — keep the night productive</text>
+  <text x="380" y="30" fill="#e2e8f0" font-size="17" text-anchor="middle">Scheduling — keep the run productive</text>
 
   <!-- backlog -->
   <rect x="40" y="80" width="120" height="150" rx="8" fill="#11182a" stroke="#334155" stroke-width="1.5"/>
@@ -27,7 +27,7 @@
   <!-- anti-starvation guards -->
   <rect x="450" y="70" width="280" height="40" rx="6" fill="#1a1530" stroke="#fbbf24" stroke-width="1.3"/>
   <text x="590" y="88" fill="#fbbf24" font-size="11" text-anchor="middle">attempt cap → force-park</text>
-  <text x="590" y="103" fill="#94a3b8" font-size="9" text-anchor="middle">don't burn the night on one ticket</text>
+  <text x="590" y="103" fill="#94a3b8" font-size="9" text-anchor="middle">don't burn the run on one ticket</text>
 
   <rect x="450" y="120" width="280" height="40" rx="6" fill="#1a1530" stroke="#fbbf24" stroke-width="1.3"/>
   <text x="590" y="138" fill="#fbbf24" font-size="11" text-anchor="middle">loop detection → force-park</text>

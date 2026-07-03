@@ -22,7 +22,7 @@ These are stated in `SECURITY.md` as the things to test against; if you can brea
 vulnerability.
 
 1. **Never-ASK in unattended mode.** Under `CLAUDE_UNATTENDED=1`, the `deny_ask` PreToolUse hook denies the
-   `AskUserQuestion` tool; the run PARKs or PROCEEDs, never blocks. A blocking question at 2am is both a
+   `AskUserQuestion` tool; the run PARKs or PROCEEDs, never blocks. A blocking question mid-run is both a
    stall and an availability problem; ANS removes the possibility structurally.
 2. **Never-irreversible unsupervised.** The deny-hooks block the operations that cannot be undone
    afterward: `git push --force`, remote branch/tag deletion, destructive SQL, and disk-destructive

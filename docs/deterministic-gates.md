@@ -58,7 +58,7 @@ Two properties keep the gate safe for unattended use (`gates.py`):
    after Ns]` note and is classified `FAIL_ENV`.
 2. **Non-interactive environment.** The gate runs with `stdin` redirected to `/dev/null` and a
    non-interactive environment (`DEBIAN_FRONTEND=noninteractive`, git/npm/apt/ssh prompts disabled), so it
-   can never block at 2am waiting on a TTY prompt.
+   can never block mid-run waiting on a TTY prompt.
 
 ## The one inviolable rule
 

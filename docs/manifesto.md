@@ -134,7 +134,7 @@ has been adopted fast, because it is obviously valuable — hand a backlog to a 
 away. The failure mode it introduces is not covered by any prior discipline. Version control records
 *what changed* but says nothing about *whether an unsupervised actor should have changed it*. CI/CD runs
 a fixed pipeline but has no concept of an actor that improvises mid-run. Observability tells you, after
-the fact, that something went wrong — it does not stop an autonomous agent from force-pushing at 3 a.m.
+the fact, that something went wrong — it does not stop an autonomous agent from force-pushing unattended.
 And it crosses exactly the hand-supervision threshold the pattern predicts: **the entire premise of
 autonomous execution is that a human is *not* watching.** You cannot supervise by hand a thing whose
 defining purpose is to run while you are not there.
@@ -198,7 +198,7 @@ the system prompt. An agent cannot deny its own tool calls structurally for the 
 cannot revoke its own privileges and still use them.
 
 **Fourth: the agent has no durable memory of the contract.** A long autonomous run exhausts and resets
-context. The constraint the agent agreed to at 22:00 — "park anything touching the schema" — is, by
+context. The constraint the agent agreed to at the start of the run — "park anything touching the schema" — is, by
 ticket 30, competing for attention with thirty tickets' worth of accumulated state, and a fresh session
 may not have seen the original instruction at all. Governance that lives only in the agent's context is
 governance with the durability of a single context window. It must instead live in **durable state

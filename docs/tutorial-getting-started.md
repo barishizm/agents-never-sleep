@@ -11,9 +11,9 @@
 Every command below matches the real CLI (`agents_never_sleep.run`, v1.0.0). There is **no `run`
 subcommand** — you drive the loop with `next` and `complete`.
 
-![One unattended run end to end, shown overnight (22:00 → 08:00) as an example, from handing off a backlog to reading the morning report.](diagrams/unattended-workflow.svg)
+![One unattended run end to end, from handing off a backlog to reading the run report.](diagrams/unattended-workflow.svg)
 
-*Diagram: One unattended run end to end, shown overnight (22:00 → 08:00) as an example, from handing off a backlog to reading the morning report.*
+*Diagram: One unattended run end to end, from handing off a backlog to reading the run report.*
 
 ## 0. What you need
 
@@ -42,7 +42,7 @@ Unattended, the agent has exactly three responses to uncertainty, and **never** 
 - **PARK** — defer *this one* ticket/decision and keep the run moving to the next independent ticket.
   Parking is normal and healthy — the opposite of stopping.
 - **HALT** — stop the whole run. Only on genuinely irreversible danger.
-- **ASK** — *forbidden while unattended.* There's nobody to answer at 2am, so every would-be ASK becomes a
+- **ASK** — *forbidden while unattended.* There's nobody there to answer, so every would-be ASK becomes a
   PARK. (See [governance](governance.md) and [decision model](decision-model.md).)
 
 ## 3. Write a tiny backlog
