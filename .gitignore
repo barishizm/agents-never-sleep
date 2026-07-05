@@ -32,3 +32,11 @@ night-report.md
 *.tar.gz
 *.zip
 phase2-night-report*.md
+
+# Internal working docs — host-only, NEVER distributed (parked design: Paperclip INT-2337)
+CLAUDE.local.md
+docs/superpowers/
+COUNCIL-SETUP.md
+BUILD-PLAN.md
+PIP-INSTALL-PLAN.md
+BUGFIX-PLAN-*.md
