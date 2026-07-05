@@ -40,3 +40,10 @@ COUNCIL-SETUP.md
 BUILD-PLAN.md
 PIP-INSTALL-PLAN.md
 BUGFIX-PLAN-*.md
+
+# Website — lives in the private repo TokonoMix/agentsneversleep-private, NEVER here.
+# This repo is the OSS skill ONLY. Guard against the site ever re-entering the public tree.
+/site/
+/site-src/
+/site-mockups/
+/index.html
