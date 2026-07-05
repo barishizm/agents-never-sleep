@@ -7,7 +7,8 @@
 > and the **env contract** (`CLAUDE_UNATTENDED=1`, `UE_RUN_INCOMPLETE`) makes the enforcement hooks
 > and the harness agree on where the run's state lives. Each layer catches a failure the layer
 > inside it cannot see. See [scheduling](../scheduling.md) for how ANS orders tickets *within* a run,
-> and [the launcher doc](../launcher.md) for the preflight itself.
+> [the launcher doc](../launcher.md) for the preflight itself, and the [glossary](../glossary.md)
+> for any term used here.
 
 Every command, flag, and env var below is verified against the real code (`agents_never_sleep/`,
 `bin/ans-run`, `hooks/`, v1.0.0).

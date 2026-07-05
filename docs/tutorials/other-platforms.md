@@ -16,7 +16,8 @@ each platform's hook system calls with its own payload shape. What differs per p
 unattended invocation and what its autonomy flag grants, and (2) how much of the autonomy contract
 the platform's hooks can enforce natively. Sources of truth: `agents_never_sleep/agent_clis.py`
 (invocations), `agents_never_sleep/enforce.py` + `hooks/platforms/` (enforcement), and
-[hooks/platforms/README.md](../../hooks/platforms/README.md) (capability matrix).
+[hooks/platforms/README.md](../../hooks/platforms/README.md) (capability matrix). Terms like
+"autonomy contract" and "run report" are defined in the [glossary](../glossary.md).
 
 ## What "enforcement maps" means
 

@@ -7,7 +7,7 @@
 > **refactor** (behavior-preserving steps, never big-bang), and a **migration** (the decision parks
 > by contract; reversible scaffolding can proceed). The rules referenced here are the
 > [decision model](../decision-model.md) and the [state machine](../state-machine.md) — this page
-> applies them, it does not replace them.
+> applies them, it does not replace them (terms: [glossary](../glossary.md)).
 
 The mechanics in one line: for every ticket the classifier (`decide.py`) picks
 **PROCEED / PARK / HALT** from the ticket *text* by blast radius; a PROCEED is snapshotted,
