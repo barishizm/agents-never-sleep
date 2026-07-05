@@ -33,6 +33,26 @@ Pure standard library, Python 3.9+. No build step.
   credentials. Test fixtures must be obviously fake.
 - Surgical, focused changes; match the existing style.
 
+## Surface parity (public knowledge)
+
+A change that introduces or alters **user-visible mechanism knowledge** must land with a
+matching entry in `site-src/content/mechanisms/` (the content SSOT that generates the public
+`/en/mechanisms/` page and `llms.txt`). CI's `surface-parity` gate fires when a
+`### Added`/`### Changed` CHANGELOG line or a `knowledge-affecting` PR label is present
+without an SSOT update.
+
+The obligation fires at **publish-readiness (flag-flip / GA)**, not at initial merge — a
+flag-gated feature does not need a public entry until it is meant to be public.
+
+If a gate-fire is a false positive (e.g. an internal-only refactor that tripped a label),
+add ONE line to the PR body: `surface-waiver: <reason>`. This is the authorized, logged
+escape — do NOT use `git commit --no-verify`. Waivers are visible in the PR and reviewable.
+
+SSOT entries are **public-safe by construction**: no tenant/account IDs, DB names, Vault
+paths, cost figures, internal hostnames, or private endpoints (enforced by
+`site-src/tools/redact_lint.py`, whose org-specific vocabulary lives in a gitignored
+`redact-vocab.local.json`), and no absolute "never/always" outcome claims.
+
 ## Security
 
 Report vulnerabilities privately — see [SECURITY.md](./SECURITY.md).
