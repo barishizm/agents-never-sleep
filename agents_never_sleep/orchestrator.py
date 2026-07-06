@@ -20,6 +20,7 @@ from __future__ import annotations
 import dataclasses
 import os
 
+from . import gate_cache
 from .decide import Action, Decision, classify
 from .gates import GateResult, GateRunner
 from .state import OutcomeState, OutcomeStore, TicketOutcome
@@ -79,7 +80,8 @@ class Orchestrator:
                  worker: Worker, artifacts_dir: str, unattended: bool = True,
                  breaker: LowYieldBreaker | None = None, ledger=None,
                  fix_cap: int = 3, loop_threshold: int = 2, heartbeat=None,
-                 protect_paths: list | None = None, classify_overrides: dict | None = None):
+                 protect_paths: list | None = None, classify_overrides: dict | None = None,
+                 gate_baseline_reuse: bool = False):
         self.repo_dir = repo_dir
         self.store = store
         self.gate = gate
@@ -95,6 +97,17 @@ class Orchestrator:
         # Operator-supplied per-ticket classification overrides (INT-1825 bug 1): {ticket_id: action}.
         # Config-sourced and trusted; never an agent-runtime loosening of its own PARK gate.
         self.classify_overrides = classify_overrides or {}
+        # Q&A item 14: reuse a just-proven-green complete as the next ticket's baseline instead
+        # of re-running the full gate. Default OFF (unchanged behaviour). The receipt lives under
+        # the store's own state dir — store already owns durable per-run bookkeeping, so this
+        # needs no new constructor wiring from driver.py beyond the flag itself.
+        self.gate_baseline_reuse = gate_baseline_reuse
+        # Derived, not injected: the store's state dir is already the durable per-run home. A
+        # store without one (a test double) simply gets no cache path — reuse silently disables
+        # (fail-safe: the gate then always runs for real), never a constructor crash.
+        _state_dir = getattr(store, "state_dir", None)
+        self.gate_cache_path = (os.path.join(_state_dir, gate_cache.CACHE_FILENAME)
+                                if _state_dir else None)
 
     # ---- shared per-ticket helpers (used by BOTH run() and StepDriver) --------------------
 
@@ -162,7 +175,21 @@ class Orchestrator:
             )
             self.store.write(outcome)
             return outcome
-        baseline_green = self.gate.baseline(self.repo_dir)
+
+        baseline_green = None
+        if self.gate_baseline_reuse and self.gate_cache_path:
+            # On ANY doubt fall through to running the gate for real: a clean tree_id that
+            # matches a cached PASS with the EXACT same (non-empty) gate command is the only
+            # reuse case. An empty/missing command identifies no gate, so it never matches.
+            current_tree = gate_cache.tree_id(self.repo_dir)
+            command = getattr(self.gate, "command", None) or []
+            if command and gate_cache.hit(self.gate_cache_path, current_tree_id=current_tree,
+                                          command=command):
+                baseline_green = True
+                print("[agents-never-sleep] baseline reused from previous green complete "
+                      f"(tree {current_tree[:8]})")
+        if baseline_green is None:
+            baseline_green = self.gate.baseline(self.repo_dir)
         return ProceedToken(ticket_id=ticket.id, snapshot=snapshot,
                             baseline_green=baseline_green, attempt_n=attempt_n)
 
@@ -298,6 +325,18 @@ class Orchestrator:
                 if "unverified" not in coverage:
                     coverage = f"{coverage} · no-council (credits-degrade)"
             self.git.commit_all(f"done:{ticket.id}")
+            if self.gate_baseline_reuse and self.gate_cache_path:
+                # Receipt reflects "this exact gate command PASSED on this exact tree" — that is
+                # independent of the DONE vs DONE_LOW_CONFIDENCE trust-downgrades above (council/
+                # specialist/no-op/credits-degrade), so it is written unconditionally here. Only
+                # this PASS branch ever writes; any non-PASS outcome leaves the existing cache
+                # alone — safe, because reuse matches on the content-addressed tree id, so a
+                # stale entry can never produce a false hit. An empty/missing gate command
+                # identifies no gate, so nothing is recorded for it.
+                command = getattr(self.gate, "command", None) or []
+                fresh_tree = gate_cache.tree_id(self.repo_dir)
+                if command and fresh_tree is not None:
+                    gate_cache.write(self.gate_cache_path, tree_id=fresh_tree, command=command)
             outcome = TicketOutcome(
                 ticket_id=ticket.id, state=state, why=why,
                 attempted=attempted, evidence="gate PASS", attempts=token.attempt_n,

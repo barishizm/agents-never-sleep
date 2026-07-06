@@ -49,6 +49,10 @@ def default_config(profile) -> dict:
     starting point AND as the defensive unattended-no-config fallback)."""
     return {
         "schema_version": SCHEMA_VERSION,
+        # Q&A item 14: reuse a green `complete`'s gate result as the next ticket's baseline
+        # (skip the redundant re-run) when the tree + gate command are byte-identical. Off by
+        # default — enabling it is a deliberate operator opt-in, not a silent speed-up.
+        "gate_baseline_reuse": False,
         "gates": [
             {"name": name, "command": cmd, "blocking": name not in ("lint", "audit")}
             for name, cmd in profile.gates

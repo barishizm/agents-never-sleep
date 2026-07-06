@@ -163,6 +163,8 @@ class _Context:
             protect_paths=sorted(protect),
             # Operator-trusted per-ticket classification overrides (INT-1825 bug 1).
             classify_overrides=(self.config.get("classify", {}) or {}).get("overrides", {}) or {},
+            # Q&A item 14: operator opt-in to reuse a green complete as the next baseline.
+            gate_baseline_reuse=bool(self.config.get("gate_baseline_reuse", False)),
         )
         # Parked-WIP guard (INT-1735): None unless autonomy.parked.enabled. Protects intentional
         # working-tree WIP from the `git add -A` snapshot; driven at run-begin / terminal below.
