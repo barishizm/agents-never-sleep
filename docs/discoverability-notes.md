@@ -11,7 +11,7 @@
 - **Primary:** *Autonomous Execution Governance for coding agents — the workflow layer that lets an AI
   agent run a backlog to completion unattended without one unanswerable question halting the whole run.
   ASK/PARK/HALT contract, deterministic gates, git-backed reversibility, run report. Composes with
-  Claude Code, Codex, Cursor, Aider — execution only.*
+  Claude Code, Codex, Gemini CLI, Copilot — execution only.*
 - **Shorter:** *The governance layer between autonomous coding agents and software engineers. Runs a
   backlog unattended, reversibly, without stalling on the first hard question. Execution only — verification
   is delegated.*
@@ -89,5 +89,34 @@ project *correctly* (not just find it), the suite uses:
 
 ---
 
-*Sources: the ANS spec REVISION discoverability list, the doc-suite (`glossary.md`, `architecture.md`,
-README v2). Proposals only — apply the GitHub settings manually.*
+## Audit 2026-07-05 — AI-discoverability pass over README + docs (EPIC 030de6fb, ticket 08)
+
+**Checked** (criteria from the program spec; small fixes only, README v3 structure untouched):
+
+1. **"ANS is NOT / ANS IS" lists** — present in README §"ANS is NOT / ANS IS" and complete (model /
+   IDE / MCP server / chatbot / code reviewer / testing framework / not-a-competitor on the NOT side;
+   governance / workflow / orchestration / resilience / operational safety on the IS side). No change.
+2. **Terminology consistency** — swept README.md, SKILL.md, WATCHDOG.md, all of docs/ for "night run"
+   as a concept: none found. Remaining "overnight" mentions are legitimate framing ("the classic
+   overnight case", each already paired with "works just as well during the day"). Code/artifact
+   identifiers (`night-report.md`, `per_night_euro_cap`, `max_council_calls_per_night`) deliberately
+   NOT renamed (public surface). No prose change needed.
+3. **30-second test** — every doc in docs/ (incl. the three new tutorials) opens with a purpose
+   header; `glossary.md` ("What this is" + 30-second version), `manifesto.md` (position-paper
+   statement), and `discoverability-notes.md` ("What this is") pass without a literal "30-second"
+   label. No change.
+4. **Glossary cross-links** — added a first-use glossary link to the three new tutorials
+   (`tutorials/unattended-scheduling.md`, `tutorials/workflow-patterns.md`,
+   `tutorials/other-platforms.md`); all other docs already link it.
+5. **Natural keyword set** — spot-checked the table above against README/docs prose; still woven in
+   genuine context, no stuffing found. No change.
+
+**Fixed (honesty bar):** the proposed GitHub description above said "Composes with Claude Code,
+Codex, Cursor, Aider" — Aider is a v1.1 roadmap adapter (never claim it), and Cursor has an
+enforcement adapter but no launcher CLI entry. Corrected to "Claude Code, Codex, Gemini CLI,
+Copilot" (the four `agent_clis.py` entries). If the old description text was already applied to the
+GitHub repo by hand, re-apply the corrected one.
+
+**Noted, out of scope (>20-line / structural):** the new `docs/tutorials/` tree is not yet linked
+from the README or from `tutorial-getting-started.md` — worth a small "further tutorials" pointer in
+a future README pass so the tutorials are reachable by crawlers from the repo root.
