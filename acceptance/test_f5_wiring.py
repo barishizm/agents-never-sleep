@@ -25,6 +25,7 @@ from agents_never_sleep.driver import StepDriver                         # noqa:
 from agents_never_sleep.gates import GateRunner                          # noqa: E402
 from agents_never_sleep.ledger import AttemptLedger  # noqa: E402
 from agents_never_sleep.orchestrator import Orchestrator, ProceedToken   # noqa: E402
+from agents_never_sleep.report import build_report                       # noqa: E402
 from agents_never_sleep.state import OutcomeState, OutcomeStore, TicketOutcome  # noqa: E402
 from agents_never_sleep.tickets import Ticket                            # noqa: E402
 
@@ -141,11 +142,24 @@ def test_orchestrator_resolve_park_rejects_forged_hard_category(failures):
         failures.append(f"[orch] hard category must still park foundational, got {result}")
 
 
+def test_report_shows_f5_declined_block(failures):
+    o = TicketOutcome(ticket_id="t-declined", state=OutcomeState.PARKED_DECISION,
+                      why="requirement-meaning ambiguous; defer the decision — F5 consensus tried "
+                          "and declined: no cited evidence",
+                      category="requirement_meaning", review_coverage="f5-attempted-declined")
+    text = build_report([o], run_label="t")
+    if "F5 consensus attempt" not in text:
+        failures.append("[report] F5-declined block missing from the report")
+    if "t-declined" not in text:
+        failures.append("[report] declined ticket id missing from the report")
+
+
 def main() -> int:
     failures: list = []
     test_ledger_f5_attempted(failures)
     test_orchestrator_resolve_park_resolve_and_decline(failures)
     test_orchestrator_resolve_park_rejects_forged_hard_category(failures)
+    test_report_shows_f5_declined_block(failures)
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — F5 wiring not proven")
