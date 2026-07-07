@@ -81,6 +81,7 @@ class Orchestrator:
                  breaker: LowYieldBreaker | None = None, ledger=None,
                  fix_cap: int = 3, loop_threshold: int = 2, heartbeat=None,
                  protect_paths: list | None = None, classify_overrides: dict | None = None,
+                 consensus_assisted_categories: list | None = None,
                  gate_baseline_reuse: bool = False):
         self.repo_dir = repo_dir
         self.store = store
@@ -97,6 +98,9 @@ class Orchestrator:
         # Operator-supplied per-ticket classification overrides (INT-1825 bug 1): {ticket_id: action}.
         # Config-sourced and trusted; never an agent-runtime loosening of its own PARK gate.
         self.classify_overrides = classify_overrides or {}
+        # Project-default hard-PARK opt-in set (Plan 2 §2/§3) — held on the instance, consumed by
+        # the driver's F5 offer path (Task 7). Existing callers pass nothing -> [].
+        self.consensus_assisted_categories = list(consensus_assisted_categories or [])
         # Q&A item 14: reuse a just-proven-green complete as the next ticket's baseline instead
         # of re-running the full gate. Default OFF (unchanged behaviour). The receipt lives under
         # the store's own state dir — store already owns durable per-run bookkeeping, so this
@@ -160,9 +164,14 @@ class Orchestrator:
                             why="F5 offer replay (category taken from the durable offer record)",
                             category=offer.get("category", ""),
                             foundational=bool(offer.get("foundational", False)))
-        recorded.consensus_resolvable = (offer.get("category") == "requirement_meaning")
-        structurally_eligible = f5.eligible(recorded, has_safety_net=has_net, already_attempted=False)
-        result, reason = f5.interpret_verdict(verdict)
+        recorded_categories = offer.get("consensus_assisted_categories", [])
+        structurally_eligible = f5.eligible(
+            recorded, has_safety_net=has_net, already_attempted=False,
+            consensus_assisted_categories=recorded_categories)
+        if offer.get("category") == "requirement_meaning":
+            result, reason = f5.interpret_verdict(verdict)
+        else:
+            result, reason = f5.interpret_soundness_verdict(verdict)
         if result == f5.F5Result.RESOLVE and structurally_eligible:
             return self.begin_proceed(ticket)
         if result == f5.F5Result.RESOLVE and not structurally_eligible:
