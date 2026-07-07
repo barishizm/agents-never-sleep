@@ -22,6 +22,7 @@ sys.path.insert(0, SKILL_ROOT)
 import shutil
 
 from agents_never_sleep import f5                                        # noqa: E402
+from agents_never_sleep import driver as driver_mod                      # noqa: E402
 from agents_never_sleep.decide import classify                           # noqa: E402
 from agents_never_sleep.driver import StepDriver                         # noqa: E402
 from agents_never_sleep.gates import GateRunner                          # noqa: E402
@@ -343,6 +344,35 @@ def test_resolve_park_twice_is_idempotent(failures):
         failures.append(f"[idem] outcome must still be the single original park, got {stored}")
 
 
+def test_f5_budget_ceiling_stops_offering(failures):
+    """The per-run F5 call ceiling throttles RUN-WIDE, not per-ticket: with the ceiling
+    monkeypatched down to 1 and 3 eligible (requirement_meaning) tickets in the backlog, only
+    the FIRST ticket gets a PARK_CONSENSUS_ELIGIBLE offer; the remaining two must fall through
+    to a normal park in the SAME run — never a second offer."""
+    work = tempfile.mkdtemp(prefix="ue-f5-cap-")
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+    tickets = [_ambiguous_ticket(f"t-cap-{i}") for i in range(3)]
+    drv = _build(repo, os.path.join(work, "state"), os.path.join(work, "art"), tickets)
+
+    original_cap = driver_mod._F5_MAX_CALLS_PER_RUN
+    driver_mod._F5_MAX_CALLS_PER_RUN = 1
+    try:
+        r1 = drv.next_ticket()
+        if r1.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+            failures.append(f"[cap] first ticket (under the cap) should get an F5 offer, got {r1}")
+        r2 = drv.next_ticket()
+        if r2.get("status") != "DRAINED":
+            failures.append(f"[cap] once the per-run F5 ceiling is reached, remaining tickets must "
+                            f"fall through to a normal park (never a second offer), got {r2}")
+        for tid in ("t-cap-0", "t-cap-1", "t-cap-2"):
+            o = drv.store.read(tid)
+            if o is None or o.state != OutcomeState.PARKED_DECISION:
+                failures.append(f"[cap] {tid} should end up parked, got {o}")
+    finally:
+        driver_mod._F5_MAX_CALLS_PER_RUN = original_cap
+
+
 def _run_cli(args, cwd, env):
     proc = subprocess.run([sys.executable, "-m", "agents_never_sleep.run", *args],
                           cwd=cwd, env=env, capture_output=True, text=True, timeout=60)
@@ -456,6 +486,7 @@ def main() -> int:
     test_driver_resolve_park_decline_branch_keeps_parked(failures)
     test_resolve_park_halts_if_safety_net_lost(failures)
     test_resolve_park_twice_is_idempotent(failures)
+    test_f5_budget_ceiling_stops_offering(failures)
     test_cli_resolve_park_round_trip(failures)
     test_cli_resolve_park_not_resolved_flag(failures)
     print("=" * 60)
