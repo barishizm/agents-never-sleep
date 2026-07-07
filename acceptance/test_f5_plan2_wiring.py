@@ -12,7 +12,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
 from agents_never_sleep.ledger import AttemptLedger  # noqa: E402
+from agents_never_sleep.report import build_report  # noqa: E402
 from agents_never_sleep.run import _Context, build_parser  # noqa: E402
+from agents_never_sleep.state import OutcomeState, TicketOutcome  # noqa: E402
 from agents_never_sleep.tickets import Ticket  # noqa: E402
 
 
@@ -419,6 +421,31 @@ def test_resolve_park_defect_found_flag_sets_true(failures):
         failures.append(f"F5Verdict.defect_found must be True when --defect-found passed, got {verdict.defect_found!r}")
 
 
+def test_report_shows_hard_category_f5_declined_line(failures):
+    """Task 11 (spec §6): Plan 1's declined-consensus report line is keyed off the
+    category-agnostic `review_coverage == "f5-attempted-declined"` tag that resolve_park sets for
+    EVERY declined park (see resolve_park's fall-through at the bottom of orchestrator.py, which
+    runs regardless of `offer.get("category")`) — so the block fires for a hard-category park too.
+    But the line's WORDING hardcoded "the requirement-meaning ambiguity", which is wrong/misleading
+    for a hard-category (e.g. db_schema_or_migration) park. Assert the block fires AND names the
+    recorded category, not a false requirement-meaning claim."""
+    o = TicketOutcome(ticket_id="t-hard-declined", state=OutcomeState.PARKED_FOUNDATIONAL,
+                      why="hard-PARK category: db_schema_or_migration — F5 consensus tried "
+                          "and declined: no cited evidence",
+                      category="db_schema_or_migration", review_coverage="f5-attempted-declined")
+    text = build_report([o], run_label="t")
+    if "F5 consensus attempt" not in text:
+        failures.append("[report-hard] F5-declined block missing for a hard-category park")
+    if "t-hard-declined" not in text:
+        failures.append("[report-hard] declined hard-category ticket id missing from the report")
+    if "db_schema_or_migration" not in text:
+        failures.append(f"[report-hard] declined-consensus line must name the recorded hard "
+                        f"category, got: {text!r}")
+    if "requirement-meaning ambiguity" in text:
+        failures.append("[report-hard] declined-consensus line must not claim a "
+                        "requirement-meaning ambiguity for a hard-category park")
+
+
 def main():
     failures = []
     test_offer_record_snapshots_effective_set(failures)
@@ -435,6 +462,7 @@ def main():
     test_force_daylight_review_composes_with_existing_low_confidence(failures)
     test_run_context_passes_project_set_to_orchestrator(failures)
     test_run_context_validates_consensus_config_fail_fast(failures)
+    test_report_shows_hard_category_f5_declined_line(failures)
     if failures:
         print("RESULT: ❌")
         for f in failures:
