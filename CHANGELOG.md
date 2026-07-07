@@ -10,6 +10,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-07-07
+
 ### Added — F5 wiring: grounded-consensus PARK resolution for `requirement_meaning` (MINOR, additive)
 - Activates the previously dormant, unit-tested `agents_never_sleep/f5.py` at runtime, narrowly for
   the single eligible category (`requirement_meaning`: FILE-scoped, non-foundational, reversible,
@@ -71,7 +73,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   payload so a resumed/fresh agent CONTINUES its reasoning instead of re-deriving. With the flag
   off the PROCEED payload is byte-identical. New module `agents_never_sleep/scratchpad.py`.
 
-### Added — four new enforcement platforms (MINOR, additive; v1.1 + v1.2 target)
+### Added — four new enforcement platforms (MINOR, additive)
 - **Hermes** (`hermes-orch-beta`) — ANS's first **in-process** adapter. A native plugin
   (`hooks/platforms/hermes/`, logic in `agents_never_sleep.hermes_plugin.ans_pre_tool`) registers
   on Hermes's `pre_tool_call` hook and calls the shared `decide()` core directly. Matrix:
