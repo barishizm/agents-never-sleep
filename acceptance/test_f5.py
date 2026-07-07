@@ -54,19 +54,61 @@ def test_tag_only_on_requirement_meaning(failures):
 
 def test_eligibility_is_narrow(failures):
     d = _req_meaning_decision()
-    if not f5.eligible(d, has_safety_net=True, already_attempted=False):
+    if not f5.eligible(d, has_safety_net=True, already_attempted=False,
+                       consensus_assisted_categories=[]):
         failures.append("[elig] requirement_meaning + safety net + first attempt should be eligible")
-    if f5.eligible(d, has_safety_net=True, already_attempted=True):
+    if f5.eligible(d, has_safety_net=True, already_attempted=True,
+                   consensus_assisted_categories=[]):
         failures.append("[elig] a second attempt (one per lifetime) must NOT be eligible")
-    if f5.eligible(d, has_safety_net=False, already_attempted=False):
+    if f5.eligible(d, has_safety_net=False, already_attempted=False,
+                   consensus_assisted_categories=[]):
         failures.append("[elig] no safety net must NOT be eligible")
     hard = classify("Change the public API contract response shape", unattended=True,
                     has_safety_net=True)
-    if f5.eligible(hard, has_safety_net=True, already_attempted=False):
+    if f5.eligible(hard, has_safety_net=True, already_attempted=False,
+                   consensus_assisted_categories=[]):
         failures.append("[elig] a hard-category PARK must NOT be eligible")
     proc = classify("Rename a local variable", unattended=True, has_safety_net=True)
-    if f5.eligible(proc, has_safety_net=True, already_attempted=False):
+    if f5.eligible(proc, has_safety_net=True, already_attempted=False,
+                   consensus_assisted_categories=[]):
         failures.append("[elig] a PROCEED must NOT be eligible (F5 never escalates)")
+
+
+def test_eligible_requirement_meaning_still_unconditional(failures):
+    """requirement_meaning stays eligible with an EMPTY opt-in set (today's behavior)."""
+    from agents_never_sleep import f5
+    from agents_never_sleep.decide import Decision, Action
+    d = Decision(Action.PARK, "why", category="requirement_meaning", foundational=False)
+    d.consensus_resolvable = True
+    if not f5.eligible(d, has_safety_net=True, already_attempted=False,
+                       consensus_assisted_categories=[]):
+        failures.append("requirement_meaning must stay eligible with empty opt-in set")
+
+
+def test_eligible_hard_category_only_when_opted_in(failures):
+    """A foundational hard category is eligible IFF it is in the passed set."""
+    from agents_never_sleep import f5
+    from agents_never_sleep.decide import Decision, Action
+    d = Decision(Action.PARK, "why", category="db_schema_or_migration", foundational=True)
+    if f5.eligible(d, has_safety_net=True, already_attempted=False,
+                   consensus_assisted_categories=[]):
+        failures.append("hard category must NOT be eligible when not opted in")
+    if not f5.eligible(d, has_safety_net=True, already_attempted=False,
+                       consensus_assisted_categories=["db_schema_or_migration"]):
+        failures.append("hard category MUST be eligible when opted in (even foundational)")
+
+
+def test_eligible_safety_net_and_one_shot_still_gate(failures):
+    """The widening does not remove the safety-net / already-attempted gates."""
+    from agents_never_sleep import f5
+    from agents_never_sleep.decide import Decision, Action
+    d = Decision(Action.PARK, "why", category="money_or_billing", foundational=False)
+    if f5.eligible(d, has_safety_net=False, already_attempted=False,
+                   consensus_assisted_categories=["money_or_billing"]):
+        failures.append("no safety net must stay ineligible")
+    if f5.eligible(d, has_safety_net=True, already_attempted=True,
+                   consensus_assisted_categories=["money_or_billing"]):
+        failures.append("already attempted must stay ineligible (one-shot)")
 
 
 def test_interpret_downgrade_only_and_evidence_gated(failures):
@@ -112,6 +154,9 @@ def main() -> int:
     failures = []
     test_tag_only_on_requirement_meaning(failures)
     test_eligibility_is_narrow(failures)
+    test_eligible_requirement_meaning_still_unconditional(failures)
+    test_eligible_hard_category_only_when_opted_in(failures)
+    test_eligible_safety_net_and_one_shot_still_gate(failures)
     test_interpret_downgrade_only_and_evidence_gated(failures)
     test_prompt_asks_to_disambiguate_not_to_proceed(failures)
     print("=" * 60)

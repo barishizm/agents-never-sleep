@@ -56,17 +56,33 @@ class F5Verdict:
     synthesis_text: str = ""        # the judge synthesis (concern-language backstop)
 
 
-def eligible(decision, *, has_safety_net: bool, already_attempted: bool) -> bool:
-    """F5 is structurally unreachable unless ALL hold: the decision is a `requirement_meaning`
-    PARK (FILE-scoped, non-foundational), a reversibility safety net exists, and F5 has not already
-    been attempted on this ticket (one call per lifetime — kills park-thrash on resume). Any hard
-    category / HALT / PROCEED is ineligible by construction — F5 never escalates and never touches
-    fact/authority/blast-radius parks."""
+def eligible(decision, *, has_safety_net: bool, already_attempted: bool,
+             consensus_assisted_categories=()) -> bool:
+    """F5 is structurally unreachable unless ALL hold: the decision is a PARK whose category is
+    eligible (either `requirement_meaning`, which is ALWAYS eligible, or a hard-PARK category the
+    project/ticket explicitly opted into via `consensus_assisted_categories`), a reversibility
+    safety net exists, and F5 has not already been attempted on this ticket (one call per lifetime
+    — kills park-thrash on resume).
+
+    `consensus_assisted_categories` is the EFFECTIVE set already resolved by the caller (project
+    default ± ticket override — see consensus_scope.effective_categories). This function does NOT
+    read config or re-classify: it only checks membership, so the same set can be snapshotted into
+    the durable offer record and re-checked verbatim at resolve time (anti-TOCTOU). The `()` default
+    is a fail-closed safety net (empty/absent set = no hard categories opted in = today's behavior);
+    real call sites still pass the effective set explicitly.
+
+    The old `consensus_resolvable and not foundational` pair is deliberately GONE: four of the five
+    hard categories are foundational, so keeping the foundational exclusion would make the opt-in a
+    near no-op. The safety compensation for widening is the forced DONE_LOW_CONFIDENCE + daylight
+    review on every non-requirement_meaning resolution (see orchestrator.resolve_park /
+    _finalize_impl), NOT a narrower eligibility gate here."""
+    category_ok = (
+        decision.category == "requirement_meaning"
+        or decision.category in consensus_assisted_categories
+    )
     return (
         decision.action == Action.PARK
-        and getattr(decision, "consensus_resolvable", False)
-        and decision.category == "requirement_meaning"
-        and not decision.foundational
+        and category_ok
         and has_safety_net
         and not already_attempted
     )
