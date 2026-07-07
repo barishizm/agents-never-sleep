@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 
 from agents_never_sleep.ledger import AttemptLedger  # noqa: E402
 from agents_never_sleep.run import build_parser  # noqa: E402
+from agents_never_sleep.tickets import Ticket  # noqa: E402
 
 
 def test_offer_record_snapshots_effective_set(failures):
@@ -62,6 +63,82 @@ def _build_orch(work):
     store = OutcomeStore(state_dir)
     return Orchestrator(repo_dir=repo, store=store, gate=gate, worker=None,
                         artifacts_dir=os.path.join(work, "art"), unattended=True, ledger=ledger)
+
+
+def _build_driver(work, tickets, consensus_assisted_categories=None):
+    """StepDriver fixture for the _f5_offer wiring itself (Task 7) — mirrors
+    acceptance/test_f5_wiring.py's `_build`, plus the `consensus_assisted_categories` project-set
+    knob (Task 6) that `_build` doesn't expose."""
+    from agents_never_sleep.driver import StepDriver
+    from agents_never_sleep.gates import GateRunner
+    from agents_never_sleep.ledger import AttemptLedger
+    from agents_never_sleep.orchestrator import Orchestrator
+    from agents_never_sleep.state import OutcomeStore
+
+    repo = os.path.join(work, "repo")
+    sandbox = os.path.join(HERE, "sandbox")
+    if os.path.isdir(sandbox):
+        shutil.copytree(sandbox, repo)
+    else:
+        os.makedirs(repo, exist_ok=True)
+    state_dir = os.path.join(work, "state")
+    gate = GateRunner(command=[sys.executable, "-m", "unittest", "discover", "-s", ".",
+                               "-p", "test_*.py"], cwd=repo, timeout=60)
+    ledger = AttemptLedger(os.path.join(state_dir, "ledger.json"))
+    store = OutcomeStore(state_dir)
+    orch = Orchestrator(repo_dir=repo, store=store, gate=gate, worker=None,
+                        artifacts_dir=os.path.join(work, "art"), unattended=True, ledger=ledger,
+                        consensus_assisted_categories=consensus_assisted_categories)
+    return StepDriver(orch=orch, tickets=tickets, store=store, state_dir=state_dir,
+                      report_path=os.path.join(os.path.dirname(state_dir), "report.md"))
+
+
+def _migration_ticket(tid: str, meta: dict | None = None) -> Ticket:
+    return Ticket(id=tid, title="Add a migration",
+                 body="Run a database schema migration to add a column", meta=meta or {}, path="")
+
+
+def test_driver_offers_f5_for_opted_in_hard_category(failures):
+    """Task 7 Step 3: a project set of ["db_schema_or_migration"] must make a db-migration ticket
+    eligible for F5, and the durable offer record must snapshot exactly that effective set."""
+    with tempfile.TemporaryDirectory(prefix="ue-f5plan2-drv-hard-") as work:
+        ticket = _migration_ticket("t-hard-offer")
+        drv = _build_driver(work, [ticket], consensus_assisted_categories=["db_schema_or_migration"])
+        result = drv.next_ticket()
+        if result.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+            failures.append(f"[drv-hard] opted-in hard category should get an F5 offer, got {result}")
+            return
+        offer = drv.orch.ledger.get_f5_offer("t-hard-offer")
+        if offer is None or offer.get("consensus_assisted_categories") != ["db_schema_or_migration"]:
+            failures.append(f"[drv-hard] ledger offer must snapshot the effective set, got {offer}")
+
+
+def test_driver_parks_hard_category_when_project_set_empty(failures):
+    """Task 7 Step 3: with the project set empty and no ticket override, the same hard-category
+    ticket must fall through to a normal park — no F5 offer, no ledger record."""
+    with tempfile.TemporaryDirectory(prefix="ue-f5plan2-drv-off-") as work:
+        ticket = _migration_ticket("t-hard-off")
+        drv = _build_driver(work, [ticket], consensus_assisted_categories=[])
+        result = drv.next_ticket()
+        if result.get("status") == "PARK_CONSENSUS_ELIGIBLE":
+            failures.append(f"[drv-off] empty project set must not offer F5, got {result}")
+        if drv.orch.ledger.get_f5_offer("t-hard-off") is not None:
+            failures.append("[drv-off] no F5 offer record should exist when the project set is empty")
+
+
+def test_driver_ticket_opt_out_skips_offer_even_for_requirement_meaning(failures):
+    """Task 7 Step 3: an explicit ticket-level `consensus_assisted: false` must skip the offer
+    entirely — even for requirement_meaning, which is otherwise ALWAYS eligible."""
+    with tempfile.TemporaryDirectory(prefix="ue-f5plan2-drv-optout-") as work:
+        ticket = Ticket(id="t-optout", title="Add a widget",
+                        body="Add a widget — unclear which kind of widget?",
+                        meta={"consensus_assisted": False}, path="")
+        drv = _build_driver(work, [ticket])
+        result = drv.next_ticket()
+        if result.get("status") == "PARK_CONSENSUS_ELIGIBLE":
+            failures.append(f"[drv-optout] ticket opt-out must skip the F5 offer, got {result}")
+        if drv.orch.ledger.get_f5_offer("t-optout") is not None:
+            failures.append("[drv-optout] no F5 offer record should exist after an explicit opt-out")
 
 
 def test_resolve_park_hard_category_defect_found_stays_parked(failures):
@@ -180,6 +257,9 @@ def main():
     failures = []
     test_offer_record_snapshots_effective_set(failures)
     test_resolve_park_rechecks_recorded_set_not_fresh_config(failures)
+    test_driver_offers_f5_for_opted_in_hard_category(failures)
+    test_driver_parks_hard_category_when_project_set_empty(failures)
+    test_driver_ticket_opt_out_skips_offer_even_for_requirement_meaning(failures)
     test_resolve_park_hard_category_defect_found_stays_parked(failures)
     test_resolve_park_requirement_meaning_still_uses_interpret_verdict(failures)
     test_resolve_park_defect_found_flag_defaults_false(failures)
