@@ -67,6 +67,14 @@ def default_config(profile) -> dict:
             "balance_threshold_euro": 1.0,         # agent stops convening councils below this balance
             "on_credits_exhausted": "stop",        # "stop" (A) or "degrade" (B) — see decide_budget
         },
+        "classify": {
+            "overrides": {},
+            # Hard-PARK categories the project opted into a consensus-assisted resolution attempt
+            # (Plan 2). Empty = today's behavior (only requirement_meaning is F5-eligible). Members
+            # must be exact HARD_PARK_CATEGORIES keys — validated fail-fast at load (see
+            # validate_consensus_config). requirement_meaning is never listed (always eligible).
+            "consensus_assisted_categories": [],
+        },
         "autonomy": {
             # unattended-no-config is conservative: non-destructive only until a human configures
             "non_destructive_only": True,
@@ -151,6 +159,28 @@ def default_config(profile) -> dict:
     }
 
 
+def validate_consensus_config(config: dict) -> None:
+    """Fail-fast on a misconfigured consensus-assisted opt-in. A safety toggle must NEVER silently
+    no-op: a typo'd or unknown category, or a `requirement_meaning` entry (eligible by definition —
+    naming it signals a misunderstanding), is a hard config error surfaced at load, never ignored."""
+    from .decide import HARD_PARK_CATEGORIES
+    # Only a genuinely-absent key defaults to []; a present-but-wrong-type value (including falsy
+    # ones like {}, "", 0, False) must reach the isinstance check and raise — never silently no-op.
+    cats = (config.get("classify") or {}).get("consensus_assisted_categories", [])
+    if not isinstance(cats, list):
+        raise ValueError("classify.consensus_assisted_categories must be a list")
+    valid = set(HARD_PARK_CATEGORIES)
+    for entry in cats:
+        if entry == "requirement_meaning":
+            raise ValueError(
+                "classify.consensus_assisted_categories must not list 'requirement_meaning' "
+                "— it is always F5-eligible by definition")
+        if entry not in valid:
+            raise ValueError(
+                f"classify.consensus_assisted_categories has unknown category {entry!r}; "
+                f"valid keys: {sorted(valid)}")
+
+
 def is_interactive() -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty() and not os.environ.get("CLAUDE_UNATTENDED")
 
@@ -203,6 +233,28 @@ def run_wizard(repo_dir: str, profile) -> dict:
             ans = ask("When credits run out, should I: (A) stop or (B) degrade?", "A")
             cfg["budget"]["on_credits_exhausted"] = (
                 "degrade" if ans.strip().upper().startswith("B") else "stop")
+
+        cfg.setdefault("specialists", {})["enabled"] = ask(
+            "Enable specialist reviewer lenses (architect/security/etc.)? (y/n)", "y"
+        ).lower().startswith("y")
+
+        from .decide import HARD_PARK_CATEGORIES
+        explain = {
+            "db_schema_or_migration": "database schema / migration changes",
+            "api_contract": "public API request/response shape changes",
+            "security_or_tenant": "auth, permissions, or tenant-isolation changes",
+            "money_or_billing": "pricing, billing, invoicing, or payment changes",
+            "cross_ticket_interface": "shared interfaces other tickets depend on",
+        }
+        opted = []
+        print("  For each high-risk area, ANS normally STOPS and waits for you. You can instead let")
+        print("  ANS attempt a multi-model consensus resolution and apply it unattended — the result")
+        print("  is always flagged for your daylight review, and git is the reverse button.")
+        for cat in HARD_PARK_CATEGORIES:
+            if ask(f"  Allow consensus-assisted resolution for {explain[cat]}? (y/n)",
+                   "n").lower().startswith("y"):
+                opted.append(cat)
+        cfg.setdefault("classify", {})["consensus_assisted_categories"] = opted
 
     # Launcher presets: scaffold one preset per INSTALLED known agent CLI, and make the
     # autonomy decision explicit per CLI (security review 2026-06-10: autonomy flags are

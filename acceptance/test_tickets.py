@@ -126,6 +126,28 @@ def test_report_silent_when_no_difference_or_no_active(failures):
         failures.append("[silent] recommended with no hints supplied")
 
 
+def test_consensus_assisted_tristate(failures):
+    # Plan 2 §2 — a per-ticket `consensus_assisted:` override read as a tri-state: true/false
+    # force F5 on/off for THIS ticket over the project default; unset (or unparseable) -> None
+    # -> follow the project default. Consumed by driver._f5_offer (Task 7).
+    d = _ticket_dir({
+        "t_true.md": "---\nid: T1\ntitle: X\nconsensus_assisted: true\n---\nbody\n",
+        "t_false.md": "---\nid: T2\ntitle: X\nconsensus_assisted: false\n---\nbody\n",
+        "t_unset.md": "---\nid: T3\ntitle: X\n---\nbody\n",
+        # case-insensitive + whitespace-stripped (docstring promise): uppercase/padded still resolve.
+        "t_upper.md": "---\nid: T4\ntitle: X\nconsensus_assisted:   TRUE  \n---\nbody\n",
+        "t_cap.md": "---\nid: T5\ntitle: X\nconsensus_assisted: False\n---\nbody\n",
+        # a non-bool value is NOT a silent True/False — it falls through to None (project default).
+        "t_nonsense.md": "---\nid: T6\ntitle: X\nconsensus_assisted: maybe\n---\nbody\n",
+    })
+    loaded = {t.id: t for t in load_tickets(d)}
+    cases = {"T1": True, "T2": False, "T3": None, "T4": True, "T5": False, "T6": None}
+    for tid, expect in cases.items():
+        got = loaded[tid].declared_consensus_assisted
+        if got is not expect:
+            failures.append(f"[consensus-tristate] {tid}: expected {expect!r}, got {got!r}")
+
+
 def main() -> int:
     failures: list = []
     test_agent_hint_parses_and_exposes(failures)
@@ -134,6 +156,7 @@ def main() -> int:
     test_report_recommends_only_on_difference(failures)
     test_report_withholds_command_on_unsafe_ticket_id(failures)
     test_report_silent_when_no_difference_or_no_active(failures)
+    test_consensus_assisted_tristate(failures)
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — F2 declarative agent-hint guarantees not proven")

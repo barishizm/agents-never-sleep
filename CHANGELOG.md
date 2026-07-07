@@ -10,6 +10,44 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — F5 Plan 2: consensus-assisted hard-PARK categories + explicit setup wizard (MINOR, additive)
+- A project may now opt individual hard-PARK categories (`db_schema_or_migration`, `api_contract`,
+  `security_or_tenant`, `money_or_billing`, `cross_ticket_interface`) into a consensus-assisted
+  resolution attempt before parking, via the new `classify.consensus_assisted_categories` config key
+  (empty by default — existing projects behave identically). A ticket may override the project
+  default with an optional `consensus_assisted: true|false` frontmatter field; an explicit `false`
+  disables F5 even for `requirement_meaning`. The set is validated fail-fast at load (an unknown or
+  misspelled category, or a `requirement_meaning` entry, is a hard error — a safety toggle must never
+  silently no-op).
+- `f5.eligible()` gains a `consensus_assisted_categories` parameter and consults it for `category_ok`
+  (replacing the old `consensus_resolvable`/`not-foundational` pair — four of five hard categories
+  are foundational). `interpret_verdict()` — the evidence/dissent/hedge trust gate — is unchanged for
+  every category: the opt-in controls only whether F5 is *tried*, never how strictly it judges.
+- For a hard category the consensus asks a grounded **soundness** question (new `build_soundness_prompt`:
+  is this already-decided change reversible / correctly scoped / free of data-loss, contract-break, or
+  security holes, citing evidence?), never disambiguation and never "should I proceed". A found defect
+  is a **deterministic veto**: the new `F5Verdict.defect_found` (agent flag `resolve-park --defect-found`)
+  routes through `interpret_soundness_verdict` to `KEEP_PARKED` in the harness, before the shared gate,
+  so a confidently-reported "resolved: here is the security hole" can never apply the hole unattended.
+  With no defect it delegates to the byte-for-byte-unchanged `interpret_verdict` (evidence + zero-dissent
+  + no-hedge). `requirement_meaning` keeps the disambiguation prompt and gate.
+- Safety compensation: an F5 resolution of any category other than `requirement_meaning` is forced to
+  `DONE_LOW_CONFIDENCE` with a `NEEDS DAYLIGHT REVIEW` note regardless of gate/council result — ANS
+  may apply the change unattended (git is the reverse button), but the human always gets the
+  after-the-fact look a hard-PARK used to guarantee. Carried by a new `ProceedToken.force_daylight_review`
+  that round-trips through the persisted pending token from `resolve-park` to `complete`.
+- Anti-TOCTOU: the effective opt-in set is snapshotted onto the durable offer record at offer time;
+  `resolve-park` re-checks eligibility against the RECORDED set, never fresh config.
+- The first-run wizard now asks explicitly (when a Tokonomix key is present) whether to enable council
+  and specialist review, and — per hard-PARK category — whether to allow a consensus-assisted
+  resolution (default no), instead of silently defaulting off credential presence. Unattended
+  first-runs keep the conservative empty opt-in.
+- SKILL.md documents ticket-authoring guidance: ask once per batch, write `consensus_assisted:` only
+  when it differs from the project default; ticket prose is never a trusted opt-in channel.
+- New acceptance suites `acceptance/test_consensus_scope.py` and `acceptance/test_f5_plan2_wiring.py`;
+  `test_f5.py`/`test_config.py`/`test_tickets.py` extended. No change to any Stable CLI verb, outcome
+  state, or config key — purely additive.
+
 ## [1.1.0] — 2026-07-07
 
 ### Added — F5 wiring: grounded-consensus PARK resolution for `requirement_meaning` (MINOR, additive)

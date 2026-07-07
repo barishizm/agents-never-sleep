@@ -81,15 +81,18 @@ def build_report(outcomes: list, *, run_label: str = "unattended run",
         for o in degraded:
             lines.append(f">   - {o.ticket_id}: {o.why}")
         lines.append("")
-    # F5 (build-narrow, requirement_meaning only): a PARK whose ticket got a grounded consensus
-    # attempt that DECLINED to resolve the ambiguity. Distinct from a cold park — the human sees it
-    # was TRIED, not skipped — tagged by orchestrator.resolve_park via review_coverage.
+    # F5 (build-narrow, requirement_meaning + opted-in hard-PARK categories, spec §6): a PARK whose
+    # ticket got a grounded consensus attempt that DECLINED to resolve. Distinct from a cold park —
+    # the human sees it was TRIED, not skipped — tagged by orchestrator.resolve_park via
+    # review_coverage, category-agnostic (fires for a declined hard-category park too), so the
+    # per-ticket line names the RECORDED category rather than assuming requirement-meaning.
     f5_declined = [o for o in outcomes if "f5-attempted-declined" in (o.review_coverage or "")]
     if f5_declined:
-        lines.append(f"> 🧭 **{len(f5_declined)} PARK(ed) ticket(s) had an F5 consensus attempt that "
-                     "declined to resolve the requirement-meaning ambiguity (stayed PARK):**")
+        lines.append(f"> 🧭 **{len(f5_declined)} PARK(ed) ticket(s) had an F5 consensus attempt "
+                     "that declined to resolve (stayed PARK):**")
         for o in f5_declined:
-            lines.append(f">   - {o.ticket_id}: {o.why}")
+            cat = f" [{o.category}]" if o.category else ""
+            lines.append(f">   - {o.ticket_id}{cat}: {o.why}")
         lines.append("")
     # Where the work lives (INT-1825 bug 2): the run is isolated to its own branch, so point the
     # operator at it explicitly — this is an info pointer, NOT a blind spot.

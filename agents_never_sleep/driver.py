@@ -472,7 +472,13 @@ class StepDriver:
             return None
         from . import f5
         already = self.orch.ledger.f5_attempted(ticket.id)
-        if not f5.eligible(decision, has_safety_net=has_net, already_attempted=already):
+        from . import consensus_scope
+        cats = consensus_scope.effective_categories(
+            self.orch.consensus_assisted_categories, ticket.declared_consensus_assisted)
+        if cats is None:
+            return None  # ticket explicitly opted OUT (consensus_assisted: false) — normal park
+        if not f5.eligible(decision, has_safety_net=has_net, already_attempted=already,
+                           consensus_assisted_categories=cats):
             return None
         if self._load_progress().get("f5_calls", 0) >= _F5_MAX_CALLS_PER_RUN:
             return None
@@ -480,16 +486,47 @@ class StepDriver:
         attempt_id = uuid.uuid4().hex[:16]
         self.orch.ledger.open_f5_offer(
             ticket.id, attempt_id=attempt_id, category=decision.category,
-            has_safety_net=has_net, foundational=decision.foundational)
+            has_safety_net=has_net, foundational=decision.foundational,
+            consensus_assisted_categories=cats)
         self._bump_f5_calls()
-        prompt = f5.build_grounding_prompt(
-            ticket_title=ticket.title, ticket_body=ticket.body,
-            candidate_readings=["derive the plausible distinct readings from the ticket body below"],
-            repo_context=f"See the repository under the ticket's stated path "
-                        f"({ticket.path or 'repo root'}) for existing conventions relevant to "
-                        "disambiguation.",
-            safety_net_desc="git revert to the pre-ticket snapshot is available "
-                           "(reversibility safety net confirmed).")
+        if decision.category == "requirement_meaning":
+            prompt = f5.build_grounding_prompt(
+                ticket_title=ticket.title, ticket_body=ticket.body,
+                candidate_readings=["derive the plausible distinct readings from the ticket body below"],
+                repo_context=f"See the repository under the ticket's stated path "
+                            f"({ticket.path or 'repo root'}) for existing conventions relevant to "
+                            "disambiguation.",
+                safety_net_desc="git revert to the pre-ticket snapshot is available "
+                               "(reversibility safety net confirmed).")
+        else:
+            prompt = f5.build_soundness_prompt(
+                ticket_title=ticket.title, ticket_body=ticket.body, category=decision.category,
+                repo_context=f"See the repository under the ticket's stated path "
+                            f"({ticket.path or 'repo root'}) for existing conventions, migration "
+                            "style, auth/tenant patterns, and interface contracts relevant to "
+                            "judging soundness.",
+                safety_net_desc="git revert to the pre-ticket snapshot is available "
+                               "(reversibility safety net confirmed).")
+        if decision.category == "requirement_meaning":
+            instructions = (
+                "This ticket would otherwise PARK because its requirement meaning is ambiguous. Run "
+                "a grounded tokonomix consensus (parallel+blind proposers, a disjoint judge) using "
+                "the supplied `prompt` VERBATIM — never ask a free-text 'should I proceed?'. Then "
+                "call `resolve-park --ticket-id <id> --attempt-id <the attempt_id from this payload> "
+                "[--resolved --chosen-reading ... --evidence ... --dissent-count N "
+                "--synthesis-text ... | --not-resolved]`.")
+        else:
+            instructions = (
+                f"This ticket is in the high-risk category '{decision.category}' and would otherwise "
+                "PARK for human review. The requirement is NOT ambiguous — the author already decided "
+                "it. Run a grounded tokonomix consensus using the supplied `prompt` VERBATIM (a "
+                "SOUNDNESS check — never a free-text 'should I proceed?'). Then call `resolve-park "
+                "--ticket-id <id> --attempt-id <the attempt_id from this payload>`: report `--resolved` "
+                "ONLY on an affirmatively-sound, evidence-cited verdict (with `--chosen-reading <the "
+                "one-line soundness conclusion> --evidence ... --dissent-count N --synthesis-text ...`); "
+                "report `--defect-found` if the consensus found a concrete defect (a deterministic veto "
+                "that keeps the ticket parked); otherwise `--not-resolved`. A resolved hard-category "
+                "change is applied unattended but recorded DONE_LOW_CONFIDENCE for daylight review.")
         return {
             "status": "PARK_CONSENSUS_ELIGIBLE",
             "ticket": {"id": ticket.id, "title": ticket.title, "body": ticket.body,
@@ -497,13 +534,7 @@ class StepDriver:
             "category": decision.category,
             "attempt_id": attempt_id,
             "prompt": prompt,
-            "instructions": (
-                "This ticket would otherwise PARK because its requirement meaning is ambiguous. Run "
-                "a grounded tokonomix consensus (parallel+blind proposers, a disjoint judge) using "
-                "the supplied `prompt` VERBATIM — never ask a free-text 'should I proceed?'. Then "
-                "call `resolve-park --ticket-id <id> --attempt-id <the attempt_id from this payload> "
-                "[--resolved --chosen-reading ... --evidence ... --dissent-count N "
-                "--synthesis-text ... | --not-resolved]`."),
+            "instructions": instructions,
         }
 
     # ---- terminal signals (always clear the sentinel + write the report) ----------------
@@ -775,9 +806,10 @@ class StepDriver:
                    "ticket": {"id": ticket.id, "title": ticket.title, "body": ticket.body,
                               "path": ticket.path},
                    "attempt": result.attempt_n, "snapshot": result.snapshot,
-                   "instructions": ("F5 consensus resolved the requirement-meaning ambiguity — "
+                   "instructions": ("F5 consensus resolved the ambiguity for this ticket — "
                                     "implement ONLY this ticket, then call `complete`. Do not stop "
-                                    "or ask.")}
+                                    "or ask. (A hard-PARK category resolution is recorded "
+                                    "DONE_LOW_CONFIDENCE for daylight review.)")}
         return self._hand_out_proceed(payload, ticket, result, balance_eur=None)
 
     def _attach_council_hint(self, payload: dict, ticket, *, balance_eur=None) -> None:

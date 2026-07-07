@@ -54,19 +54,61 @@ def test_tag_only_on_requirement_meaning(failures):
 
 def test_eligibility_is_narrow(failures):
     d = _req_meaning_decision()
-    if not f5.eligible(d, has_safety_net=True, already_attempted=False):
+    if not f5.eligible(d, has_safety_net=True, already_attempted=False,
+                       consensus_assisted_categories=[]):
         failures.append("[elig] requirement_meaning + safety net + first attempt should be eligible")
-    if f5.eligible(d, has_safety_net=True, already_attempted=True):
+    if f5.eligible(d, has_safety_net=True, already_attempted=True,
+                   consensus_assisted_categories=[]):
         failures.append("[elig] a second attempt (one per lifetime) must NOT be eligible")
-    if f5.eligible(d, has_safety_net=False, already_attempted=False):
+    if f5.eligible(d, has_safety_net=False, already_attempted=False,
+                   consensus_assisted_categories=[]):
         failures.append("[elig] no safety net must NOT be eligible")
     hard = classify("Change the public API contract response shape", unattended=True,
                     has_safety_net=True)
-    if f5.eligible(hard, has_safety_net=True, already_attempted=False):
+    if f5.eligible(hard, has_safety_net=True, already_attempted=False,
+                   consensus_assisted_categories=[]):
         failures.append("[elig] a hard-category PARK must NOT be eligible")
     proc = classify("Rename a local variable", unattended=True, has_safety_net=True)
-    if f5.eligible(proc, has_safety_net=True, already_attempted=False):
+    if f5.eligible(proc, has_safety_net=True, already_attempted=False,
+                   consensus_assisted_categories=[]):
         failures.append("[elig] a PROCEED must NOT be eligible (F5 never escalates)")
+
+
+def test_eligible_requirement_meaning_still_unconditional(failures):
+    """requirement_meaning stays eligible with an EMPTY opt-in set (today's behavior)."""
+    from agents_never_sleep import f5
+    from agents_never_sleep.decide import Decision, Action
+    d = Decision(Action.PARK, "why", category="requirement_meaning", foundational=False)
+    d.consensus_resolvable = True
+    if not f5.eligible(d, has_safety_net=True, already_attempted=False,
+                       consensus_assisted_categories=[]):
+        failures.append("requirement_meaning must stay eligible with empty opt-in set")
+
+
+def test_eligible_hard_category_only_when_opted_in(failures):
+    """A foundational hard category is eligible IFF it is in the passed set."""
+    from agents_never_sleep import f5
+    from agents_never_sleep.decide import Decision, Action
+    d = Decision(Action.PARK, "why", category="db_schema_or_migration", foundational=True)
+    if f5.eligible(d, has_safety_net=True, already_attempted=False,
+                   consensus_assisted_categories=[]):
+        failures.append("hard category must NOT be eligible when not opted in")
+    if not f5.eligible(d, has_safety_net=True, already_attempted=False,
+                       consensus_assisted_categories=["db_schema_or_migration"]):
+        failures.append("hard category MUST be eligible when opted in (even foundational)")
+
+
+def test_eligible_safety_net_and_one_shot_still_gate(failures):
+    """The widening does not remove the safety-net / already-attempted gates."""
+    from agents_never_sleep import f5
+    from agents_never_sleep.decide import Decision, Action
+    d = Decision(Action.PARK, "why", category="money_or_billing", foundational=False)
+    if f5.eligible(d, has_safety_net=False, already_attempted=False,
+                   consensus_assisted_categories=["money_or_billing"]):
+        failures.append("no safety net must stay ineligible")
+    if f5.eligible(d, has_safety_net=True, already_attempted=True,
+                   consensus_assisted_categories=["money_or_billing"]):
+        failures.append("already attempted must stay ineligible (one-shot)")
 
 
 def test_interpret_downgrade_only_and_evidence_gated(failures):
@@ -108,12 +150,75 @@ def test_prompt_asks_to_disambiguate_not_to_proceed(failures):
         failures.append("[prompt] must instruct: no evidence -> undetermined, do not guess")
 
 
+def test_soundness_prompt_is_not_disambiguation(failures):
+    """A hard-category prompt asks for a grounded SOUNDNESS verdict on an already-decided change,
+    never 'which reading' and never 'should I proceed'."""
+    from agents_never_sleep import f5
+    p = f5.build_soundness_prompt(
+        ticket_title="Add discount column to invoices",
+        ticket_body="Add a nullable numeric discount column and apply it at render time.",
+        category="db_schema_or_migration",
+        repo_context="invoices table DDL; existing migration style is additive-only.",
+        safety_net_desc="git revert to the pre-ticket snapshot is available.")
+    low = p.lower()
+    if "should i proceed" in low or "which reading" in low:
+        failures.append("soundness prompt must not ask 'should I proceed' or 'which reading'")
+    if "sound" not in low or "evidence" not in low:
+        failures.append("soundness prompt must ask for a grounded soundness verdict with evidence")
+    if "undetermined" not in low:
+        failures.append("soundness prompt must offer 'undetermined' rather than forcing a guess")
+    if "db_schema_or_migration" not in p and "schema" not in low:
+        failures.append("soundness prompt should name the risk area/category")
+
+
+def test_soundness_defect_fails_closed(failures):
+    """THE load-bearing gate: a verdict that RESOLVED the question by FINDING A DEFECT must stay
+    PARKED even though every clause of the disambiguation gate would otherwise pass. This is the hole
+    a verbatim interpret_verdict reuse would leave open on the highest-risk path."""
+    from agents_never_sleep import f5
+    v = f5.F5Verdict(resolved=True, chosen_reading="SQL injection at line 42",
+                     evidence="line 42 concatenates unsanitized user input into the query",
+                     dissent_count=0, synthesis_text="clear vulnerability", defect_found=True)
+    result, _ = f5.interpret_soundness_verdict(v)
+    if result != f5.F5Result.KEEP_PARKED:
+        failures.append("a found defect must KEEP_PARKED regardless of resolved/evidence")
+
+
+def test_soundness_grounded_affirmative_resolves(failures):
+    """A grounded AFFIRMATIVE soundness verdict (no defect) resolves via the shared gate."""
+    from agents_never_sleep import f5
+    v = f5.F5Verdict(resolved=True, chosen_reading="additive, reversible migration; no column drop",
+                     evidence="migration adds a nullable column; existing style is additive-only",
+                     dissent_count=0, synthesis_text="straightforwardly additive", defect_found=False)
+    result, _ = f5.interpret_soundness_verdict(v)
+    if result != f5.F5Result.RESOLVE:
+        failures.append("a grounded affirmative soundness verdict should RESOLVE")
+
+
+def test_disambiguation_verdict_defaults_defect_found_false(failures):
+    """The new field defaults False so the requirement_meaning path is byte-identical."""
+    from agents_never_sleep import f5
+    v = f5.F5Verdict(resolved=True, chosen_reading="X", evidence="repo shows X", dissent_count=0,
+                     synthesis_text="clear")
+    if v.defect_found is not False:
+        failures.append("defect_found must default to False")
+    if f5.interpret_verdict(v)[0] != f5.F5Result.RESOLVE:
+        failures.append("interpret_verdict must be unchanged for the disambiguation path")
+
+
 def main() -> int:
     failures = []
     test_tag_only_on_requirement_meaning(failures)
     test_eligibility_is_narrow(failures)
+    test_eligible_requirement_meaning_still_unconditional(failures)
+    test_eligible_hard_category_only_when_opted_in(failures)
+    test_eligible_safety_net_and_one_shot_still_gate(failures)
     test_interpret_downgrade_only_and_evidence_gated(failures)
     test_prompt_asks_to_disambiguate_not_to_proceed(failures)
+    test_soundness_prompt_is_not_disambiguation(failures)
+    test_soundness_defect_fails_closed(failures)
+    test_soundness_grounded_affirmative_resolves(failures)
+    test_disambiguation_verdict_defaults_defect_found_false(failures)
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — F5 core guardrails not proven")

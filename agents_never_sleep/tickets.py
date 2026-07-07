@@ -52,6 +52,24 @@ class Ticket:
         agent = agent.strip()
         return agent if (agent and _AGENT_SLUG.match(agent)) else None
 
+    @property
+    def declared_consensus_assisted(self) -> Optional[bool]:
+        """Optional per-ticket F5 override (Plan 2 §2). `true`/`false` in the frontmatter forces F5
+        ON/OFF for THIS ticket regardless of the project default — an explicit `false` disables even
+        the otherwise-unconditional requirement_meaning eligibility. Unset (or any non-bool value) ->
+        None -> follow the project default. Parsed from the hand-rolled frontmatter's scalar string
+        (no PyYAML), so accept the literal strings 'true'/'false' case-insensitively."""
+        raw = self.meta.get("consensus_assisted")
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, str):
+            low = raw.strip().lower()
+            if low == "true":
+                return True
+            if low == "false":
+                return False
+        return None
+
 
 def _parse_frontmatter(text: str) -> tuple[dict, str]:
     """Parse a leading `--- key: value --- ` block. Guard against a file that merely OPENS with

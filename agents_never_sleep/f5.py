@@ -11,10 +11,12 @@ tokonomix MCP (the harness can't call LLMs) — the agent reports a structured `
 `interpret_verdict` applies the hard, deterministic downgrade-only gate. The DECISION stays
 deterministic even though the evidence-gathering is a model call.
 
-Eligibility is intentionally NARROW: F5 can only ever touch the `requirement_meaning` PARK branch of
-decide.classify() (FILE-scoped, foundational=False, reversible), once per ticket lifetime. A wrong
-unblock there is at worst a revertible FILE-scoped commit that the normal post-edit gate + council +
-daylight review still catch. NEVER credentials, dependencies, foundational/blast-radius, money, or
+Eligibility is intentionally NARROW: F5 always touches the `requirement_meaning` PARK branch of
+decide.classify() (FILE-scoped, foundational=False, reversible), and ALSO any hard-PARK category a
+project/ticket has explicitly opted into via `consensus_assisted_categories` — once per ticket
+lifetime either way. For hard categories the consensus is asked a grounded SOUNDNESS question (not
+disambiguation), a found defect is a deterministic PARK veto (interpret_soundness_verdict), and any
+resolution is forced to DONE_LOW_CONFIDENCE + daylight review. NEVER credentials, dependencies, or
 HALT — those are facts/authority, not interpretation, and no number of correlated models can supply
 them.
 """
@@ -54,19 +56,38 @@ class F5Verdict:
     evidence: str = ""              # exact evidence cited FROM the repo/spec context
     dissent_count: int = 0          # proposers disagreeing with the chosen reading
     synthesis_text: str = ""        # the judge synthesis (concern-language backstop)
+    defect_found: bool = False      # soundness path: the consensus found a CONCRETE defect -> hard
+                                    # veto (interpret_soundness_verdict KEEP_PARKED regardless of
+                                    # resolved/evidence). Default False keeps disambiguation identical.
 
 
-def eligible(decision, *, has_safety_net: bool, already_attempted: bool) -> bool:
-    """F5 is structurally unreachable unless ALL hold: the decision is a `requirement_meaning`
-    PARK (FILE-scoped, non-foundational), a reversibility safety net exists, and F5 has not already
-    been attempted on this ticket (one call per lifetime — kills park-thrash on resume). Any hard
-    category / HALT / PROCEED is ineligible by construction — F5 never escalates and never touches
-    fact/authority/blast-radius parks."""
+def eligible(decision, *, has_safety_net: bool, already_attempted: bool,
+             consensus_assisted_categories=()) -> bool:
+    """F5 is structurally unreachable unless ALL hold: the decision is a PARK whose category is
+    eligible (either `requirement_meaning`, which is ALWAYS eligible, or a hard-PARK category the
+    project/ticket explicitly opted into via `consensus_assisted_categories`), a reversibility
+    safety net exists, and F5 has not already been attempted on this ticket (one call per lifetime
+    — kills park-thrash on resume).
+
+    `consensus_assisted_categories` is the EFFECTIVE set already resolved by the caller (project
+    default ± ticket override — see consensus_scope.effective_categories). This function does NOT
+    read config or re-classify: it only checks membership, so the same set can be snapshotted into
+    the durable offer record and re-checked verbatim at resolve time (anti-TOCTOU). The `()` default
+    is a fail-closed safety net (empty/absent set = no hard categories opted in = today's behavior);
+    real call sites still pass the effective set explicitly.
+
+    The old `consensus_resolvable and not foundational` pair is deliberately GONE: four of the five
+    hard categories are foundational, so keeping the foundational exclusion would make the opt-in a
+    near no-op. The safety compensation for widening is the forced DONE_LOW_CONFIDENCE + daylight
+    review on every non-requirement_meaning resolution (see orchestrator.resolve_park /
+    _finalize_impl), NOT a narrower eligibility gate here."""
+    category_ok = (
+        decision.category == "requirement_meaning"
+        or decision.category in consensus_assisted_categories
+    )
     return (
         decision.action == Action.PARK
-        and getattr(decision, "consensus_resolvable", False)
-        and decision.category == "requirement_meaning"
-        and not decision.foundational
+        and category_ok
         and has_safety_net
         and not already_attempted
     )
@@ -91,6 +112,18 @@ def interpret_verdict(v: F5Verdict) -> tuple["F5Result", str]:
     return F5Result.RESOLVE, f"disambiguated on cited evidence: {v.chosen_reading.strip()}"
 
 
+def interpret_soundness_verdict(v: F5Verdict) -> tuple["F5Result", str]:
+    """Hard-category (decision B) gate. A found defect is a DETERMINISTIC veto — KEEP_PARKED BEFORE
+    the shared gate, so even a mis-framed resolved=True on a defect ('resolved: SQL injection at
+    line 42') fails closed. This is the split the disambiguation gate can't express: there
+    resolved=True has one meaning; here it must not be trusted to also mean 'proceed-safe'. With no
+    defect, delegates to interpret_verdict UNCHANGED — RESOLVE still requires an evidence-cited,
+    zero-dissent, hedge-free AFFIRMATIVE soundness conclusion."""
+    if v.defect_found:
+        return F5Result.KEEP_PARKED, "consensus found a concrete soundness defect — stays parked"
+    return interpret_verdict(v)
+
+
 def build_grounding_prompt(*, ticket_title: str, ticket_body: str, candidate_readings: list,
                            repo_context: str, safety_net_desc: str) -> str:
     """The grounded prompt. It asks the council to DISAMBIGUATE using cited evidence — explicitly
@@ -111,4 +144,36 @@ def build_grounding_prompt(*, ticket_title: str, ticket_body: str, candidate_rea
         "Answer whether ONE reading is clearly intended BY THE CONTEXT (cite the exact evidence), "
         "or whether it is genuinely undetermined. If you cannot point to evidence in the context, "
         "the answer is 'undetermined' — do not guess."
+    )
+
+
+def build_soundness_prompt(*, ticket_title: str, ticket_body: str, category: str,
+                           repo_context: str, safety_net_desc: str) -> str:
+    """The grounded prompt for an OPTED-IN HARD category (design decision B). Unlike the
+    disambiguation prompt, the requirement is NOT ambiguous — the customer already decided WHAT to
+    build. This asks the council for a grounded SOUNDNESS verdict on that already-decided change,
+    explicitly NOT 'should I proceed?' (the most dangerous framing) and NOT 'which reading?'.
+
+    Interpreted by interpret_soundness_verdict: the agent reports `resolved=True` + `defect_found=
+    False` + cited evidence ONLY when the context AFFIRMATIVELY establishes soundness; a concrete
+    cited defect is reported `defect_found=True` (hard veto -> PARK), and an ungrounded 'looks fine'
+    fails the shared evidence gate -> PARK. So the prompt tells the models to answer 'undetermined'
+    rather than guess."""
+    return (
+        f"A ticket in the high-risk category '{category}' is about to be PARKED for human review. "
+        "The requirement is NOT ambiguous — assume the author already decided this change is wanted. "
+        "Do NOT decide whether to proceed. Decide ONLY this: does the provided repository/spec "
+        "context affirmatively establish that applying this already-decided change is SOUND — "
+        "reversible, correctly scoped, with no data loss, no contract/interface break, and no "
+        "security or tenant-isolation hole — citing the EXACT evidence? Or is there a concrete, "
+        "cited defect that should keep it parked?\n\n"
+        f"TICKET: {ticket_title}\n{ticket_body}\n\n"
+        f"RISK AREA: {category}\n\n"
+        f"REPOSITORY / SPEC CONTEXT:\n{repo_context}\n\n"
+        f"REVERSIBILITY: {safety_net_desc}\n\n"
+        "State in one line the soundness conclusion (what is sound and why), citing the exact "
+        "evidence from the context. If you find a concrete defect, say so explicitly (it will keep "
+        "the ticket parked). If the context does not let you GROUND an affirmative soundness "
+        "conclusion in cited evidence, the answer is 'undetermined' — do not guess. An ungrounded "
+        "'looks fine' is not a resolution."
     )
