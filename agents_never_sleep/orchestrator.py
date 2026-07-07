@@ -146,6 +146,39 @@ class Orchestrator:
         self.store.write(outcome)
         return outcome
 
+    def resolve_park(self, ticket, offer: dict, verdict):
+        """F5 consumer. `offer` is the durable ledger record from the PARK_CONSENSUS_ELIGIBLE offer
+        (attempt_id/category/foundational/has_safety_net/status) — the trusted category anchor, so we
+        NEVER re-classify the (possibly-mutated) ticket text here. RESOLVE routes into begin_proceed
+        ONLY when the ticket is still structurally F5-eligible per the RECORDED category + a
+        CURRENT safety-net check; else park with a full audit trail. Idempotency + one-shot are the
+        caller's job (StepDriver.resolve_park checks is_terminal + consumes the offer)."""
+        from . import f5
+        has_net = self.git.ensure_safety_net()
+        # Rebuild a minimal Decision from the RECORDED offer, not a fresh classify():
+        recorded = Decision(action=Action.PARK,
+                            why="F5 offer replay (category taken from the durable offer record)",
+                            category=offer.get("category", ""),
+                            foundational=bool(offer.get("foundational", False)))
+        recorded.consensus_resolvable = (offer.get("category") == "requirement_meaning")
+        structurally_eligible = f5.eligible(recorded, has_safety_net=has_net, already_attempted=False)
+        result, reason = f5.interpret_verdict(verdict)
+        if result == f5.F5Result.RESOLVE and structurally_eligible:
+            return self.begin_proceed(ticket)
+        if result == f5.F5Result.RESOLVE and not structurally_eligible:
+            reason = ("verdict claimed RESOLVE but the RECORDED offer is not F5-structurally-eligible "
+                      "(category/foundational/safety-net) — ignored")
+        outcome = self.park(ticket, recorded)
+        outcome.why = f"{outcome.why} — F5 consensus tried and declined: {reason}"
+        outcome.evidence = verdict.evidence or outcome.evidence
+        outcome.attempted = (f"F5 consensus attempted: resolved={verdict.resolved}, "
+                            f"chosen_reading={verdict.chosen_reading!r}, "
+                            f"dissent_count={verdict.dissent_count}, "
+                            f"synthesis={verdict.synthesis_text!r}")
+        outcome.review_coverage = "f5-attempted-declined"
+        self.store.write(outcome)
+        return outcome
+
     def begin_proceed(self, ticket) -> ProceedToken | TicketOutcome:
         """Account the attempt (cross-resume cap), then snapshot + baseline.
 
