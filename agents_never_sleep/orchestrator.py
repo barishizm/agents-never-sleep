@@ -48,6 +48,7 @@ class ProceedToken:
     snapshot: str
     baseline_green: bool
     attempt_n: int
+    force_daylight_review: str | None = None
 
     def to_json(self) -> dict:
         return dataclasses.asdict(self)
@@ -173,7 +174,16 @@ class Orchestrator:
         else:
             result, reason = f5.interpret_soundness_verdict(verdict)
         if result == f5.F5Result.RESOLVE and structurally_eligible:
-            return self.begin_proceed(ticket)
+            proceed = self.begin_proceed(ticket)
+            # Spec §5: a resolution of ANY category other than requirement_meaning applied a change
+            # that used to be a hard stop — force the after-the-fact human look. requirement_meaning
+            # keeps its plain-DONE behavior. begin_proceed may return a capped PARK outcome instead
+            # of a token; only stamp a real token.
+            if (isinstance(proceed, ProceedToken)
+                    and recorded.category != "requirement_meaning"):
+                proceed.force_daylight_review = (
+                    f"F5 resolved a hard-PARK category: {recorded.category}")
+            return proceed
         if result == f5.F5Result.RESOLVE and not structurally_eligible:
             reason = ("verdict claimed RESOLVE but the RECORDED offer is not F5-structurally-eligible "
                       "(category/foundational/safety-net) — ignored")
@@ -366,6 +376,21 @@ class Orchestrator:
                 why = deg if why == "gates green" else f"{why}; {deg}"
                 if "unverified" not in coverage:
                     coverage = f"{coverage} · no-council (credits-degrade)"
+            # Spec §5: an F5-resolved HARD category is never auto-trusted as a clean DONE — floor to
+            # DONE_LOW_CONFIDENCE so the human's after-the-fact daylight look always happens. Model
+            # the SPECIALIST block (orchestrator.py:326-336), NOT the credits block: floor AND compose
+            # the reason regardless of prior state, so the "F5 resolved a hard-PARK category" audit
+            # fact survives even when the council/specialist ALREADY set DONE_LOW_CONFIDENCE first (a
+            # DONE-only gate would silently drop the single most important fact on the highest-risk
+            # path). It can only lower trust, never raise it.
+            fdr = getattr(token, "force_daylight_review", None)
+            if fdr and state in (OutcomeState.DONE, OutcomeState.DONE_LOW_CONFIDENCE):
+                state = OutcomeState.DONE_LOW_CONFIDENCE
+                why = fdr if why == "gates green" else f"{why}; {fdr}"
+                if "NEEDS-DAYLIGHT-REVIEW" not in coverage:
+                    coverage = f"{coverage} · NEEDS-DAYLIGHT-REVIEW"
+                fdr_action = f"daylight review (F5 hard-category resolution): {ticket.title}"
+                human_action = f"{human_action} + {fdr_action}" if human_action else fdr_action
             self.git.commit_all(f"done:{ticket.id}")
             if self.gate_baseline_reuse and self.gate_cache_path:
                 # Receipt reflects "this exact gate command PASSED on this exact tree" — that is

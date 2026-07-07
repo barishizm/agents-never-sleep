@@ -248,6 +248,98 @@ def test_resolve_park_requirement_meaning_still_uses_interpret_verdict(failures)
                             f"and reach begin_proceed, got {result}")
 
 
+def test_hard_category_resolve_forces_daylight_review_e2e(failures):
+    """Spec §5 (Task 8) — the load-bearing safety test. A hard-category (db_schema_or_migration)
+    RESOLVE must be forced to DONE_LOW_CONFIDENCE + a daylight-review reason even with a green
+    gate, and this must survive the REAL `complete` finalize path (token round-trip through
+    _save_pending/_load_pending), not a direct _finalize_impl call. Control: the SAME flow with a
+    requirement_meaning ticket stays plain DONE."""
+    from agents_never_sleep import f5
+    from agents_never_sleep.state import OutcomeState
+
+    with tempfile.TemporaryDirectory(prefix="ue-f5plan2-daylight-hard-") as work:
+        ticket = _migration_ticket("t-daylight-hard")
+        drv = _build_driver(work, [ticket], consensus_assisted_categories=["db_schema_or_migration"])
+        offer = drv.next_ticket()
+        if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+            failures.append(f"[daylight-hard] expected an F5 offer, got {offer}")
+            return
+        verdict = f5.F5Verdict(resolved=True, chosen_reading="additive, reversible migration",
+                              evidence="migration adds a nullable column only", dissent_count=0,
+                              synthesis_text="straightforwardly additive", defect_found=False)
+        resumed = drv.resolve_park("t-daylight-hard", offer["attempt_id"], verdict)
+        if resumed.get("status") != "PROCEED":
+            failures.append(f"[daylight-hard] RESOLVE must hand back a PROCEED payload, got {resumed}")
+            return
+        with open(os.path.join(drv.orch.repo_dir, "app.py"), "a", encoding="utf-8") as fh:
+            fh.write("\n# F5-resolved migration note\n")
+        done = drv.complete_ticket(attempted="implemented the migration")
+        if done.get("state") != OutcomeState.DONE_LOW_CONFIDENCE.value:
+            failures.append(f"[daylight-hard] hard-category resolution with a green gate must "
+                            f"floor to DONE_LOW_CONFIDENCE, got {done}")
+        if "F5 resolved a hard-PARK category" not in done.get("why", ""):
+            failures.append(f"[daylight-hard] why must carry the hard-category daylight-review "
+                            f"reason, got {done.get('why')!r}")
+
+    # Control: requirement_meaning RESOLVE with a green gate stays plain DONE (unchanged behaviour).
+    with tempfile.TemporaryDirectory(prefix="ue-f5plan2-daylight-control-") as work:
+        ticket = Ticket(id="t-daylight-control", title="Add a widget",
+                        body="Add a widget — unclear which kind of widget?", meta={}, path="")
+        drv = _build_driver(work, [ticket])
+        offer = drv.next_ticket()
+        if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+            failures.append(f"[daylight-control] expected an F5 offer, got {offer}")
+            return
+        verdict = f5.F5Verdict(resolved=True, chosen_reading="a status badge",
+                              evidence="components/Badge.tsx already renders status",
+                              dissent_count=0, synthesis_text="clearly reading A")
+        resumed = drv.resolve_park("t-daylight-control", offer["attempt_id"], verdict)
+        if resumed.get("status") != "PROCEED":
+            failures.append(f"[daylight-control] RESOLVE must hand back a PROCEED payload, got {resumed}")
+            return
+        with open(os.path.join(drv.orch.repo_dir, "app.py"), "a", encoding="utf-8") as fh:
+            fh.write("\n# F5-resolved widget note\n")
+        done = drv.complete_ticket(attempted="implemented reading A")
+        if done.get("state") != OutcomeState.DONE.value:
+            failures.append(f"[daylight-control] requirement_meaning resolution must stay plain "
+                            f"DONE, got {done}")
+        if "F5 resolved a hard-PARK category" in done.get("why", ""):
+            failures.append(f"[daylight-control] requirement_meaning must NOT carry the "
+                            f"hard-category daylight reason, got {done.get('why')!r}")
+
+
+def test_force_daylight_review_composes_with_existing_low_confidence(failures):
+    """Compose-when-already-flagged (brief Step 1, second assertion): when the diff independently
+    already produces DONE_LOW_CONFIDENCE (here via credits_degrade, standing in for a
+    council/specialist daylight flag), a force_daylight_review token must STILL fold in the
+    hard-category reason. Proves the `state in (DONE, DONE_LOW_CONFIDENCE)` guard in
+    _finalize_impl, not a `== DONE` gate — a DONE-only gate would silently drop this audit fact on
+    the highest-risk path. Exercised via the real finalize_after_edit path (not a raw dataclass
+    poke), with the token built directly rather than through resolve_park (the fixture cannot
+    easily drive a council/specialist flag alongside an F5 offer in one pass)."""
+    from agents_never_sleep.orchestrator import ProceedToken
+    from agents_never_sleep.state import OutcomeState
+
+    with tempfile.TemporaryDirectory(prefix="ue-f5plan2-compose-") as work:
+        orch = _build_orch(work)
+        ticket = _migration_ticket("t-compose")
+        token = orch.begin_proceed(ticket)
+        if not isinstance(token, ProceedToken):
+            failures.append(f"[compose] begin_proceed must return a ProceedToken, got {token}")
+            return
+        token.force_daylight_review = "F5 resolved a hard-PARK category: db_schema_or_migration"
+        with open(os.path.join(orch.repo_dir, "app.py"), "a", encoding="utf-8") as fh:
+            fh.write("\n# compose-case trivial edit\n")
+        outcome = orch.finalize_after_edit(ticket, token, "trivial edit", credits_degrade=True)
+        if outcome.state != OutcomeState.DONE_LOW_CONFIDENCE:
+            failures.append(f"[compose] credits_degrade must floor to DONE_LOW_CONFIDENCE, "
+                            f"got {outcome.state}")
+        if "F5 resolved a hard-PARK category" not in outcome.why:
+            failures.append(f"[compose] the hard-category reason must survive composing on top "
+                            f"of an ALREADY DONE_LOW_CONFIDENCE state (== DONE gate would drop "
+                            f"it), got why={outcome.why!r}")
+
+
 def _resolve_park_argv(*extra):
     return ["resolve-park", "--ticket-id", "T1", "--attempt-id", "a1",
             "--resolved", "--chosen-reading", "x", *extra]
@@ -295,6 +387,8 @@ def main():
     test_resolve_park_requirement_meaning_still_uses_interpret_verdict(failures)
     test_resolve_park_defect_found_flag_defaults_false(failures)
     test_resolve_park_defect_found_flag_sets_true(failures)
+    test_hard_category_resolve_forces_daylight_review_e2e(failures)
+    test_force_daylight_review_composes_with_existing_low_confidence(failures)
     if failures:
         print("RESULT: ❌")
         for f in failures:
