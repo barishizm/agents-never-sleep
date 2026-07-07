@@ -25,6 +25,7 @@ import json
 import os
 import sys
 
+from . import config
 from .config import ensure_config, load_config
 from .driver import StepDriver
 from .gates import GateRunner
@@ -98,6 +99,10 @@ class _Context:
             write_profile(profile, os.path.join(self.state_dir, "capability-profile.json"))
             self.config = ensure_config(self.repo, profile)
 
+        # Fail-fast (Plan 2 §1): a misconfigured consensus-assisted opt-in must abort here, before
+        # any ticket work, not surface later as a silent no-op deep in the offer path.
+        config.validate_consensus_config(self.config)
+
         # Resolve a Vault-backed tokonomix key into the env the existing consumers read (the
         # onboarding gate + council both probe TOKONOMIX_API_KEY). Only when not already set; the
         # resolved value is registered for redaction. A failure degrades (no env set), never crashes.
@@ -163,6 +168,9 @@ class _Context:
             protect_paths=sorted(protect),
             # Operator-trusted per-ticket classification overrides (INT-1825 bug 1).
             classify_overrides=(self.config.get("classify", {}) or {}).get("overrides", {}) or {},
+            # Plan 2 §1: project opt-in set of hard-PARK categories eligible for F5 (validated above).
+            consensus_assisted_categories=(
+                (self.config.get("classify", {}) or {}).get("consensus_assisted_categories", []) or []),
             # Q&A item 14: operator opt-in to reuse a green complete as the next baseline.
             gate_baseline_reuse=bool(self.config.get("gate_baseline_reuse", False)),
         )

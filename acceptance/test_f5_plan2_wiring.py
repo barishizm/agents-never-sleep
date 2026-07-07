@@ -2,6 +2,7 @@
 """Plan 2 wiring: the hard-category widening end-to-end — offer record snapshots the effective set,
 resolve re-checks against THAT set (not fresh config), and a hard-category resolution is forced to
 DONE_LOW_CONFIDENCE + daylight review even with a green gate."""
+import json
 import os
 import shutil
 import sys
@@ -11,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
 from agents_never_sleep.ledger import AttemptLedger  # noqa: E402
-from agents_never_sleep.run import build_parser  # noqa: E402
+from agents_never_sleep.run import _Context, build_parser  # noqa: E402
 from agents_never_sleep.tickets import Ticket  # noqa: E402
 
 
@@ -340,6 +341,49 @@ def test_force_daylight_review_composes_with_existing_low_confidence(failures):
                             f"it), got why={outcome.why!r}")
 
 
+def _context_for(repo, consensus_assisted_categories):
+    """Build a real `_Context` (the object run.py's cmd_next/etc construct) over a minimal saved
+    config — mirrors test_f5_wiring.py's `_write_config`, plus the `classify.
+    consensus_assisted_categories` knob Task 9 wires through. `existing = load_config(...)` finds
+    this file, so no preflight probe runs."""
+    os.makedirs(os.path.join(repo, ".claude"), exist_ok=True)
+    cfg = {
+        "schema_version": 1,
+        "classify": {"overrides": {}, "consensus_assisted_categories": consensus_assisted_categories},
+    }
+    with open(os.path.join(repo, ".claude", "agents-never-sleep.json"), "w", encoding="utf-8") as fh:
+        json.dump(cfg, fh)
+    args = build_parser().parse_args(["next", "--repo", repo, "--tickets", "tickets"])
+    return _Context(args)
+
+
+def test_run_context_passes_project_set_to_orchestrator(failures):
+    """Task 9: `classify.consensus_assisted_categories` from the saved config must reach the
+    Orchestrator the run entry builds — completing the offer-time path end-to-end."""
+    with tempfile.TemporaryDirectory(prefix="ue-f5plan2-runctx-") as work:
+        repo = os.path.join(work, "repo")
+        os.makedirs(repo, exist_ok=True)
+        ctx = _context_for(repo, ["db_schema_or_migration"])
+        if ctx.orch.consensus_assisted_categories != ["db_schema_or_migration"]:
+            failures.append(f"[run-ctx] Orchestrator.consensus_assisted_categories must mirror the "
+                            f"config, got {ctx.orch.consensus_assisted_categories!r}")
+
+
+def test_run_context_validates_consensus_config_fail_fast(failures):
+    """Task 9: a typo'd/unknown category must abort at `_Context` construction (config-load time),
+    before any ticket work — not surface later as a silent no-op deep in the offer path."""
+    with tempfile.TemporaryDirectory(prefix="ue-f5plan2-runctx-typo-") as work:
+        repo = os.path.join(work, "repo")
+        os.makedirs(repo, exist_ok=True)
+        try:
+            _context_for(repo, ["db_schema_or_migratoin"])  # deliberate typo
+        except ValueError:
+            pass
+        else:
+            failures.append("[run-ctx] a typo'd category must raise ValueError at startup "
+                            "(validate_consensus_config not wired at config-load)")
+
+
 def _resolve_park_argv(*extra):
     return ["resolve-park", "--ticket-id", "T1", "--attempt-id", "a1",
             "--resolved", "--chosen-reading", "x", *extra]
@@ -389,6 +433,8 @@ def main():
     test_resolve_park_defect_found_flag_sets_true(failures)
     test_hard_category_resolve_forces_daylight_review_e2e(failures)
     test_force_daylight_review_composes_with_existing_low_confidence(failures)
+    test_run_context_passes_project_set_to_orchestrator(failures)
+    test_run_context_validates_consensus_config_fail_fast(failures)
     if failures:
         print("RESULT: ❌")
         for f in failures:
