@@ -141,6 +141,36 @@ def test_driver_ticket_opt_out_skips_offer_even_for_requirement_meaning(failures
             failures.append("[drv-optout] no F5 offer record should exist after an explicit opt-out")
 
 
+def test_offer_instructions_are_category_aware(failures):
+    """Safety gap (Task 7 review): the PARK_CONSENSUS_ELIGIBLE offer's `instructions` must be routed
+    by category. A hard-category offer must NAME `--defect-found` (so a prose-only defect can veto
+    instead of being submitted as `--resolved`) and must NOT frame the requirement as 'ambiguous';
+    a requirement_meaning offer must keep the disambiguation framing."""
+    with tempfile.TemporaryDirectory(prefix="ue-f5plan2-instr-hard-") as work:
+        ticket = _migration_ticket("t-hard-instr")
+        drv = _build_driver(work, [ticket], consensus_assisted_categories=["db_schema_or_migration"])
+        result = drv.next_ticket()
+        if result.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+            failures.append(f"[instr-hard] opted-in hard category should get an F5 offer, got {result}")
+            return
+        instr = result.get("instructions", "")
+        if "--defect-found" not in instr:
+            failures.append(f"[instr-hard] hard-category instructions must name --defect-found, got {instr!r}")
+        if "requirement meaning is ambiguous" in instr:
+            failures.append("[instr-hard] hard-category instructions must NOT call the requirement ambiguous")
+
+    with tempfile.TemporaryDirectory(prefix="ue-f5plan2-instr-req-") as work:
+        req = Ticket(id="t-req-instr", title="Add a widget",
+                     body="Add a widget — unclear which kind of widget?", meta={}, path="")
+        drv = _build_driver(work, [req])
+        result = drv.next_ticket()
+        if result.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+            failures.append(f"[instr-req] requirement_meaning should get an F5 offer, got {result}")
+            return
+        if "requirement meaning is ambiguous" not in result.get("instructions", ""):
+            failures.append("[instr-req] requirement_meaning instructions must keep the ambiguity framing")
+
+
 def test_resolve_park_hard_category_defect_found_stays_parked(failures):
     """The end-to-end wiring of Task 6 Step 4/4b: a hard-category offer whose RECORDED
     consensus_assisted_categories opted it in, with a RESOLVE verdict that also FOUND A DEFECT,
@@ -260,6 +290,7 @@ def main():
     test_driver_offers_f5_for_opted_in_hard_category(failures)
     test_driver_parks_hard_category_when_project_set_empty(failures)
     test_driver_ticket_opt_out_skips_offer_even_for_requirement_meaning(failures)
+    test_offer_instructions_are_category_aware(failures)
     test_resolve_park_hard_category_defect_found_stays_parked(failures)
     test_resolve_park_requirement_meaning_still_uses_interpret_verdict(failures)
     test_resolve_park_defect_found_flag_defaults_false(failures)

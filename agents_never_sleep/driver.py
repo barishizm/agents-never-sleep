@@ -507,6 +507,26 @@ class StepDriver:
                             "judging soundness.",
                 safety_net_desc="git revert to the pre-ticket snapshot is available "
                                "(reversibility safety net confirmed).")
+        if decision.category == "requirement_meaning":
+            instructions = (
+                "This ticket would otherwise PARK because its requirement meaning is ambiguous. Run "
+                "a grounded tokonomix consensus (parallel+blind proposers, a disjoint judge) using "
+                "the supplied `prompt` VERBATIM — never ask a free-text 'should I proceed?'. Then "
+                "call `resolve-park --ticket-id <id> --attempt-id <the attempt_id from this payload> "
+                "[--resolved --chosen-reading ... --evidence ... --dissent-count N "
+                "--synthesis-text ... | --not-resolved]`.")
+        else:
+            instructions = (
+                f"This ticket is in the high-risk category '{decision.category}' and would otherwise "
+                "PARK for human review. The requirement is NOT ambiguous — the author already decided "
+                "it. Run a grounded tokonomix consensus using the supplied `prompt` VERBATIM (a "
+                "SOUNDNESS check — never a free-text 'should I proceed?'). Then call `resolve-park "
+                "--ticket-id <id> --attempt-id <the attempt_id from this payload>`: report `--resolved` "
+                "ONLY on an affirmatively-sound, evidence-cited verdict (with `--chosen-reading <the "
+                "one-line soundness conclusion> --evidence ... --dissent-count N --synthesis-text ...`); "
+                "report `--defect-found` if the consensus found a concrete defect (a deterministic veto "
+                "that keeps the ticket parked); otherwise `--not-resolved`. A resolved hard-category "
+                "change is applied unattended but recorded DONE_LOW_CONFIDENCE for daylight review.")
         return {
             "status": "PARK_CONSENSUS_ELIGIBLE",
             "ticket": {"id": ticket.id, "title": ticket.title, "body": ticket.body,
@@ -514,13 +534,7 @@ class StepDriver:
             "category": decision.category,
             "attempt_id": attempt_id,
             "prompt": prompt,
-            "instructions": (
-                "This ticket would otherwise PARK because its requirement meaning is ambiguous. Run "
-                "a grounded tokonomix consensus (parallel+blind proposers, a disjoint judge) using "
-                "the supplied `prompt` VERBATIM — never ask a free-text 'should I proceed?'. Then "
-                "call `resolve-park --ticket-id <id> --attempt-id <the attempt_id from this payload> "
-                "[--resolved --chosen-reading ... --evidence ... --dissent-count N "
-                "--synthesis-text ... | --not-resolved]`."),
+            "instructions": instructions,
         }
 
     # ---- terminal signals (always clear the sentinel + write the report) ----------------
