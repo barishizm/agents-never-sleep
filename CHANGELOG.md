@@ -10,15 +10,42 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added — `resolve-park` CLI verb for the F5 grounded-consensus callback (MINOR, additive)
-- New `resolve-park --ticket-id --attempt-id --resolved/--not-resolved [--chosen-reading]
-  [--evidence] [--dissent-count] [--synthesis-text]` subcommand (Experimental), symmetric to
-  `complete`'s `--council-verdict*` flags: the agent reports the structured grounded-consensus
-  `F5Verdict` (plus the offer's `--attempt-id`, validated against the durable ledger offer record)
-  for a ticket `next` previously offered as `PARK_CONSENSUS_ELIGIBLE`. `--resolved`/`--not-resolved`
-  is a required mutually-exclusive group. Delegates to `StepDriver.resolve_park` — RESOLVE routes
-  into the normal PROCEED path, KEEP_PARKED writes a park outcome with a full F5 audit trail. A new
-  verb, not a `complete` flag — PARK never reaches `complete`.
+### Added — F5 wiring: grounded-consensus PARK resolution for `requirement_meaning` (MINOR, additive)
+- Activates the previously dormant, unit-tested `agents_never_sleep/f5.py` at runtime, narrowly for
+  the single eligible category (`requirement_meaning`: FILE-scoped, non-foundational, reversible,
+  one-shot per ticket). `next` now returns a new non-terminal status, `PARK_CONSENSUS_ELIGIBLE`,
+  instead of parking immediately, when `f5.eligible()` holds; the agent runs a grounded tokonomix
+  consensus (never a free-text "should I proceed?") and reports the structured verdict — plus the
+  offer's `attempt_id` — via the new `resolve-park --ticket-id --attempt-id --resolved/--not-resolved
+  [--chosen-reading] [--evidence] [--dissent-count] [--synthesis-text]` subcommand (Experimental),
+  symmetric to `complete`'s `--council-verdict*` flags. `--resolved`/`--not-resolved` is a required
+  mutually-exclusive group. Delegates to `StepDriver.resolve_park`. The deterministic
+  `f5.interpret_verdict()` gate is the only arbiter: RESOLVE routes into the existing PROCEED path
+  (`begin_proceed`); KEEP_PARKED writes a park outcome with a durable audit trail (full verdict +
+  category + the fact consensus was attempted) distinguishable from a cold park. A new verb, not a
+  `complete` flag — PARK never reaches `complete`.
+- Durable, crash-safe, idempotent, attempt-id-keyed bookkeeping: `AttemptLedger.open_f5_offer`
+  records an immutable offer (attempt_id + the category/foundational/safety-net snapshot captured AT
+  OFFER TIME) OPTIMISTICALLY before the agent runs consensus, so a crash between the offer and
+  `resolve-park` (or the agent simply calling `next` again) falls through to a normal park on the
+  next scheduling pass, never re-offering the same ticket. `resolve-park` validates the callback's
+  `--attempt-id` against this durable record and consumes it on return: a forged, stale, or duplicate
+  callback is refused (`ERROR`/`ALREADY_RESOLVED`), and a ticket that already reached a terminal
+  outcome is never re-opened.
+- A deterministic per-run F5 call ceiling (separate from the council's `€`/call caps — F5 makes its
+  own, cheaper single-call tokonomix requests and must never silently borrow the council's budget)
+  throttles a PARK-heavy backlog.
+- The morning report gets a new visibility line for tickets whose F5 attempt was tried and declined.
+- Hard-category PARKs (db-schema/security/money/cross-ticket/foundational) remain structurally
+  unreachable by F5 — re-validated defensively even at `resolve-park` time against the RECORDED
+  offer (never a fresh re-classification of the ticket text, which would reopen a TOCTOU category-
+  drift hole).
+- New acceptance suite `acceptance/test_f5_wiring.py` proves the wiring end-to-end (both the RESOLVE
+  and KEEP_PARKED branches, the CLI round-trip, resume/crash safety, and the budget ceiling);
+  `acceptance/test_f5.py` continues to prove the pure `f5.py` core in isolation.
+- SKILL.md documents the agent-facing protocol: how to recognize `PARK_CONSENSUS_ELIGIBLE`, run the
+  grounded consensus, and report the verdict via `resolve-park`.
+- No change to any existing Stable CLI verb, outcome state, or config key — purely additive.
 
 ### Added — leaked-process reaping + opt-in capability restriction (MINOR, additive)
 - The watchdog now reaps a run's OWN child tree by PARENT-CHAIN lineage (new
