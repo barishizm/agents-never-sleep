@@ -10,6 +10,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-07-07
+
+### Fixed — SKILL.md install: `description` under the 1024-char limit
+- The packaged Agent Skill's `SKILL.md` YAML `description` field had grown to 1030 characters, over
+  the 1024-character limit skill installers enforce — the YAML parsed fine, so it looked healthy, but
+  installation was rejected for new users. Trimmed to 919 characters with every trigger phrase and the
+  mechanism list preserved. No public API-surface change; `name` and the SKILL.md body are unchanged.
+
 ### Added — F5 Plan 2: consensus-assisted hard-PARK categories + explicit setup wizard (MINOR, additive)
 - A project may now opt individual hard-PARK categories (`db_schema_or_migration`, `api_contract`,
   `security_or_tenant`, `money_or_billing`, `cross_ticket_interface`) into a consensus-assisted
