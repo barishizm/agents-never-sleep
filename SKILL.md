@@ -137,6 +137,21 @@ Read the JSON `status`:
   `... complete --attempted "…" [--council-verdict pass|concerns|error --council-cost <€>] \
   [--specialist-concerns architect,security,… --specialist-cost <€>] [--review-coverage "<who ran>"]`.
   Omit a flag only when you ran no such review. (Details: the Council and Specialist sections below.)
+- **`PARK_CONSENSUS_ELIGIBLE`** → the ticket would otherwise PARK on ambiguous **requirement
+  meaning** only (never a hard-PARK category). Run the grounded tokonomix consensus the payload's
+  `prompt` asks for (parallel + blind proposers, a disjoint judge) — **never** ask a free-text
+  "should I proceed?", that is the dangerous framing the prompt explicitly forbids. Then report the
+  structured verdict, echoing back the `attempt_id` from the offer payload:
+  ```
+  ... resolve-park --ticket-id <id> --attempt-id <attempt_id from the offer payload> --resolved \
+      --chosen-reading "<the reading>" --evidence "<exact evidence cited>" --dissent-count <N> \
+      --synthesis-text "<judge synthesis>"
+  ```
+  or `--not-resolved` if the consensus could not disambiguate on cited evidence. The harness's
+  deterministic gate is the ONLY arbiter — a resolved verdict routes into the normal `PROCEED` flow
+  (implement, then `complete` as usual); a declined verdict parks the ticket with an audit trail and
+  moves on. A duplicate `resolve-park` on the same ticket is always a safe no-op (`ALREADY_RESOLVED`).
+  (Details: the F5 section below.)
 - **`DRAINED` / `HALTED` / `LOW_YIELD`** → the run is over; the run report is written. Stop.
 - **`NON_DESTRUCTIVE`** → unattended with no saved config; do a configuring interactive run first.
 
@@ -412,6 +427,53 @@ user explicitly requests it, given the per-run call cap and credit cost. The def
 
 Mode detection is layered: `CLAUDE_UNATTENDED=1` (set by `claude-run`/cron) or a keyword →
 unattended (no prompts, ever); otherwise interactive.
+
+## F5 — grounded-consensus PARK resolution (`requirement_meaning` only, when offered)
+
+`next` may occasionally return `PARK_CONSENSUS_ELIGIBLE` instead of silently parking a ticket. This
+happens ONLY for a ticket whose sole obstacle is ambiguous **requirement meaning** (never a hard-PARK
+category — DB schema, security/auth/tenant, money/billing, a cross-ticket interface, or anything
+foundational are structurally unreachable here) and only ONCE per ticket's lifetime.
+
+> **Why this exists — and why it is this narrow.** A consensus that confidently hallucinates an
+> "unblock" would convert a safe PARK into a bad PROCEED — the exact failure ANS exists to prevent.
+> F5 is defensible only as a **downgrade-only, evidence-gated, one-shot, narrowly-eligible** amplifier;
+> the deterministic gate (`agents_never_sleep/f5.py::interpret_verdict`) is the sole arbiter, not your
+> judgment of the consensus. It never escalates anything else, and never touches a fact/authority/
+> blast-radius PARK.
+
+When you see `PARK_CONSENSUS_ELIGIBLE`:
+1. Run a grounded tokonomix consensus (`tokonomix_consensus_ask`, parallel + blind proposers, a
+   disjoint judge — pull fresh slugs from `tokonomix_list_models`) using the payload's `prompt`
+   VERBATIM. It asks the council to **disambiguate using cited evidence**, explicitly NOT "should I
+   proceed?" — never substitute your own framing.
+2. Report the structured result via `resolve-park` (a NEW verb — a PARK never reaches `complete`),
+   echoing back the `attempt_id` the `next` offer gave you:
+   ```
+   ... resolve-park --repo <project> --tickets <dir> --ticket-id <id> \
+       --attempt-id <attempt_id from the PARK_CONSENSUS_ELIGIBLE offer payload> \
+       [--resolved --chosen-reading "<reading>" --evidence "<exact cited evidence>" \
+        --dissent-count <N> --synthesis-text "<judge synthesis>" | --not-resolved]
+   ```
+   `--resolved` requires a real `--chosen-reading` and `--evidence` — a verdict with no cited
+   evidence, any dissent, or hedge/concern language in the synthesis is treated as undetermined and
+   KEEPS the ticket parked, no matter what `--resolved` claims. `--attempt-id` must match the offer
+   the harness issued — a mismatched, missing, or already-consumed attempt_id is refused, and calling
+   `resolve-park` twice on the same ticket is always a safe no-op.
+3. Read the response:
+   - `status: "PROCEED"` → the ambiguity was disambiguated on cited evidence. Implement exactly as a
+     normal `PROCEED` ticket, then call `complete` as usual.
+   - `status: "KEPT_PARKED"` → the consensus did not resolve it (or you reported `--not-resolved`).
+     The ticket is parked with a full audit trail (the verdict, the category, and the fact F5 was
+     attempted) so the morning report and daylight review see it was tried, not just cold-parked.
+     Call `next` for the next ticket.
+   - `status: "ALREADY_RESOLVED"` → this ticket already reached a terminal outcome, or this exact F5
+     offer was already consumed by an earlier `resolve-park` call. Safe no-op — call `next` for the
+     next ticket.
+
+F5 makes its own, cheaper single-call tokonomix requests and is throttled by its own deterministic
+per-run ceiling — separate from the council's `€`/call budget, so a PARK-heavy backlog can never
+silently spend the council's night budget.
 
 ## Portability
 
