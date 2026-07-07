@@ -211,6 +211,106 @@ def test_f5_budget_counter_increments(failures):
         failures.append(f"[budget] _bump_f5_calls should increment f5_calls, got {after}")
 
 
+def test_driver_resolve_park_resolve_branch_completes_done(failures):
+    work = tempfile.mkdtemp(prefix="ue-f5-resolve-")
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+    ticket = _ambiguous_ticket("t-e2e-resolve")
+    drv = _build(repo, os.path.join(work, "state"), os.path.join(work, "art"), [ticket])
+
+    offer = drv.next_ticket()
+    if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+        failures.append(f"[e2e-resolve] expected an F5 offer, got {offer}")
+        return
+    verdict = f5.F5Verdict(resolved=True, chosen_reading="a status badge",
+                          evidence="components/Badge.tsx already renders status", dissent_count=0,
+                          synthesis_text="clearly reading A")
+    resumed = drv.resolve_park("t-e2e-resolve", offer["attempt_id"], verdict)
+    if resumed.get("status") != "PROCEED":
+        failures.append(f"[e2e-resolve] RESOLVE must hand back a PROCEED payload, got {resumed}")
+        return
+    # Re-entry guard on the RESOLVE path itself: the ticket has no terminal outcome yet (it's mid
+    # PROCEED, pending `complete`), so this exercises the offer-status=="consumed" guard specifically
+    # (not the is_terminal guard the decline/idempotent tests already cover) — the exact hole a
+    # second begin_proceed / clobbered pending token would open.
+    replay = drv.resolve_park("t-e2e-resolve", offer["attempt_id"], verdict)
+    if replay.get("status") != "ALREADY_RESOLVED":
+        failures.append(f"[e2e-resolve] a RESOLVE replay before complete must be a no-op, got {replay}")
+    with open(os.path.join(repo, "app.py"), "a", encoding="utf-8") as fh:
+        fh.write("\n# F5-resolved widget note\n")
+    done = drv.complete_ticket(attempted="implemented reading A")
+    if done.get("state") != OutcomeState.DONE.value:
+        failures.append(f"[e2e-resolve] the F5-resolved ticket should complete DONE, got {done}")
+
+
+def test_driver_resolve_park_decline_branch_keeps_parked(failures):
+    work = tempfile.mkdtemp(prefix="ue-f5-decline-")
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+    ticket = _ambiguous_ticket("t-e2e-decline")
+    drv = _build(repo, os.path.join(work, "state"), os.path.join(work, "art"), [ticket])
+
+    offer = drv.next_ticket()
+    if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+        failures.append(f"[e2e-decline] expected an F5 offer, got {offer}")
+        return
+    result = drv.resolve_park("t-e2e-decline", offer["attempt_id"], f5.F5Verdict(resolved=False))
+    if result.get("status") != "KEPT_PARKED":
+        failures.append(f"[e2e-decline] KEEP_PARKED must return KEPT_PARKED, got {result}")
+    stored = drv.store.read("t-e2e-decline")
+    if stored is None or stored.state != OutcomeState.PARKED_DECISION:
+        failures.append(f"[e2e-decline] ticket should be parked, got {stored}")
+    if "f5-attempted-declined" not in (stored.review_coverage or ""):
+        failures.append(f"[e2e-decline] missing audit tag: {stored.review_coverage!r}")
+    nxt = drv.next_ticket()
+    if nxt.get("status") != "DRAINED":
+        failures.append(f"[e2e-decline] backlog should drain after the declined park, got {nxt}")
+
+
+def test_resolve_park_halts_if_safety_net_lost(failures):
+    """Defensive guard beyond the enumerated gaps: if the safety net vanished between the offer and
+    resolve-park, the explicit ensure_safety_net() check in StepDriver.resolve_park HALTs —
+    resolve-park must surface that, not silently proceed or park against a stale record."""
+    work = tempfile.mkdtemp(prefix="ue-f5-halt-")
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+    ticket = _ambiguous_ticket("t-halt")
+    drv = _build(repo, os.path.join(work, "state"), os.path.join(work, "art"), [ticket])
+    offer = drv.next_ticket()
+    if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+        failures.append(f"[halt] expected an F5 offer, got {offer}")
+        return
+    drv.orch.git.ensure_safety_net = lambda: False   # simulate the safety net vanishing
+    result = drv.resolve_park("t-halt", offer["attempt_id"],
+                             f5.F5Verdict(resolved=True, chosen_reading="x", evidence="y"))
+    if result.get("status") != "HALTED":
+        failures.append(f"[halt] resolve-park must HALT if the safety net vanished, got {result}")
+
+
+def test_resolve_park_twice_is_idempotent(failures):
+    """Re-entry guard (both reviews): a duplicate/stale resolve-park call after the offer was
+    already consumed must be a safe no-op — never a second begin_proceed/park, never a clobbered
+    pending token."""
+    work = tempfile.mkdtemp(prefix="ue-f5-idem-")
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+    ticket = _ambiguous_ticket("t-idem")
+    drv = _build(repo, os.path.join(work, "state"), os.path.join(work, "art"), [ticket])
+    offer = drv.next_ticket()
+    if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+        failures.append(f"[idem] expected an F5 offer, got {offer}")
+        return
+    first = drv.resolve_park("t-idem", offer["attempt_id"], f5.F5Verdict(resolved=False))
+    if first.get("status") != "KEPT_PARKED":
+        failures.append(f"[idem] first resolve-park should KEEP_PARKED, got {first}")
+    second = drv.resolve_park("t-idem", offer["attempt_id"], f5.F5Verdict(resolved=False))
+    if second.get("status") != "ALREADY_RESOLVED":
+        failures.append(f"[idem] duplicate resolve-park must be a no-op, got {second}")
+    stored = drv.store.read("t-idem")
+    if stored is None or stored.state != OutcomeState.PARKED_DECISION:
+        failures.append(f"[idem] outcome must still be the single original park, got {stored}")
+
+
 def main() -> int:
     failures: list = []
     test_ledger_f5_attempted(failures)
@@ -219,6 +319,10 @@ def main() -> int:
     test_report_shows_f5_declined_block(failures)
     test_next_ticket_offers_f5_only_when_eligible(failures)
     test_f5_budget_counter_increments(failures)
+    test_driver_resolve_park_resolve_branch_completes_done(failures)
+    test_driver_resolve_park_decline_branch_keeps_parked(failures)
+    test_resolve_park_halts_if_safety_net_lost(failures)
+    test_resolve_park_twice_is_idempotent(failures)
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — F5 wiring not proven")

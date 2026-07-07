@@ -718,6 +718,58 @@ class StepDriver:
         # No proceedable ticket remains -> the backlog is genuinely drained.
         return self._terminate("DRAINED")
 
+    def resolve_park(self, ticket_id: str, attempt_id: str, verdict) -> dict:
+        """Callback for the agent's grounded F5 consensus result on a ticket `next` previously
+        offered as PARK_CONSENSUS_ELIGIBLE. Never re-classifies the ticket text: validates
+        `attempt_id` against the durable ledger OFFER RECORD (Task 1), short-circuits as a no-op if
+        the ticket already reached a terminal outcome or the offer was already consumed, and checks
+        the CURRENT safety net explicitly before delegating to Orchestrator.resolve_park with the
+        persisted `offer`. RESOLVE routes into the normal PROCEED path (begin_proceed); KEEP_PARKED
+        writes a park outcome with a full F5 audit trail. HALT is surfaced if the safety net vanished
+        meanwhile. The offer is consumed (status flipped to 'consumed') on return either way,
+        closing the re-entry hole a forged/stale/duplicate resolve-park would otherwise open."""
+        self._beat("resolve-park")
+        self._enter_run_branch()
+        ticket = self._ticket_by_id(ticket_id)
+        if ticket is None:
+            return {"status": "ERROR", "error": f"ticket {ticket_id} not found — pass --tickets <dir>"}
+        # Idempotency: a ticket already in a terminal outcome is never re-opened (mirrors
+        # next_ticket's is_terminal skip, driver.py:571). A duplicate/stale resolve-park is a no-op.
+        prior = self.orch.is_terminal(ticket_id)
+        if prior is not None:
+            return {"status": "ALREADY_RESOLVED", "ticket_id": ticket_id, "state": prior.state.value,
+                    "note": "this ticket already reached a terminal outcome; resolve-park ignored"}
+        # Validate the callback against the durable offer record (closes forged/stale/no-offer).
+        offer = self.orch.ledger.get_f5_offer(ticket_id) if self.orch.ledger else None
+        if offer is None:
+            return {"status": "ERROR", "error": f"no F5 offer was issued for {ticket_id}"}
+        if offer.get("status") != "offered":
+            return {"status": "ALREADY_RESOLVED", "ticket_id": ticket_id,
+                    "note": "this F5 offer was already consumed; resolve-park ignored"}
+        if attempt_id != offer.get("attempt_id"):
+            return {"status": "ERROR", "error": "attempt-id does not match the outstanding F5 offer"}
+        # Safety net must exist NOW to proceed (reversibility). Losing it mid-run is HALT-worthy —
+        # checked directly, NOT by re-classifying the (possibly-mutated) ticket text.
+        if not self.orch.git.ensure_safety_net():
+            return self._terminate("HALTED",
+                                   reason=f"reversibility safety net vanished before resolving {ticket_id}")
+        result = self.orch.resolve_park(ticket, offer, verdict)
+        self.orch.ledger.consume_f5_offer(ticket_id)   # flip to terminal status either way
+        if isinstance(result, TicketOutcome):
+            self._bump_progress(is_bad=True)
+            if self._breaker_tripped():
+                return self._terminate("LOW_YIELD")
+            return {"status": "KEPT_PARKED", "ticket_id": ticket.id, "state": result.state.value,
+                    "why": result.why, "next": "call `next` for the next ticket"}
+        self._save_pending(result)
+        self._set_sentinel()
+        return {"status": "PROCEED",
+                "ticket": {"id": ticket.id, "title": ticket.title, "body": ticket.body,
+                           "path": ticket.path},
+                "attempt": result.attempt_n, "snapshot": result.snapshot,
+                "instructions": ("F5 consensus resolved the requirement-meaning ambiguity — implement "
+                                 "ONLY this ticket, then call `complete`. Do not stop or ask.")}
+
     def _attach_council_hint(self, payload: dict, ticket, *, balance_eur=None) -> None:
         """Non-binding pre-work hint so the agent can convene the right council BEFORE implementing.
         The binding tier is recomputed from the actual diff at complete-time (which can only escalate
