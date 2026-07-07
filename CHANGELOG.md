@@ -46,6 +46,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - SKILL.md documents the agent-facing protocol: how to recognize `PARK_CONSENSUS_ELIGIBLE`, run the
   grounded consensus, and report the verdict via `resolve-park`.
 - No change to any existing Stable CLI verb, outcome state, or config key — purely additive.
+- Fix (INT-2412): `resolve-park`'s RESOLVE→PROCEED payload now reaches full parity with
+  `next_ticket`'s — council/specialist/onboarding/scratchpad hints and credits STOP/DEGRADE gating
+  are attached via a new shared `_hand_out_proceed` helper instead of being built inline and omitted.
 
 ### Added — leaked-process reaping + opt-in capability restriction (MINOR, additive)
 - The watchdog now reaps a run's OWN child tree by PARENT-CHAIN lineage (new

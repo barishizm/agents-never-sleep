@@ -71,7 +71,7 @@ def _ambiguous_ticket(tid: str) -> Ticket:
                  meta={}, path="")
 
 
-def _build(repo, state_dir, artifacts_dir, tickets):
+def _build(repo, state_dir, artifacts_dir, tickets, config=None):
     gate = GateRunner(command=[sys.executable, "-m", "unittest", "discover", "-s", ".",
                                "-p", "test_*.py"], cwd=repo, timeout=60)
     ledger = AttemptLedger(os.path.join(state_dir, "ledger.json"))
@@ -79,7 +79,106 @@ def _build(repo, state_dir, artifacts_dir, tickets):
     orch = Orchestrator(repo_dir=repo, store=store, gate=gate, worker=None,
                         artifacts_dir=artifacts_dir, unattended=True, ledger=ledger)
     return StepDriver(orch=orch, tickets=tickets, store=store, state_dir=state_dir,
-                      report_path=os.path.join(os.path.dirname(state_dir), "report.md"))
+                      report_path=os.path.join(os.path.dirname(state_dir), "report.md"),
+                      config=config)
+
+
+# Minimal council-enabled config (mirrors acceptance/test_budget.py's CFG_STOP) — used to prove
+# INT-2412 parity: resolve-park's PROCEED path must attach the SAME hints as next_ticket's.
+_CFG_COUNCIL_ON = {
+    "budget": {
+        "per_night_euro_cap": 2.0,
+        "max_council_calls_per_night": 5,
+        "balance_threshold_euro": 1.0,
+        "on_credits_exhausted": "stop",
+    },
+    "integrations": {"tokonomix": {"enabled": True}},
+    "council": {
+        "enabled": True,
+        "light": {"proposers": ["a"], "judges": ["j"], "mode": "consensus", "max_tokens": 900},
+        "heavy": {"proposers": ["a", "b"], "judges": ["j"], "mode": "consensus", "max_tokens": 1400},
+        "prices_cents_per_mtok": {"a": [500, 2500], "b": [250, 1500], "j": [300, 1500]},
+        "est_prompt_tokens": 3000,
+    },
+}
+
+
+def test_resolve_park_proceed_has_council_parity(failures):
+    """INT-2412: an F5 RESOLVE->PROCEED payload must carry the SAME pre-work hints as a normal
+    next_ticket PROCEED — today resolve_park builds its PROCEED payload inline and skips
+    _attach_council_hint (+specialist/onboarding/scratchpad), so an F5-resolved ticket hands the
+    agent a lighter payload than an identical non-F5 ticket. This is the RED test for that gap."""
+    work = tempfile.mkdtemp(prefix="ue-f5-parity-")
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+
+    # Driver A: a NON-ambiguous ticket goes straight through next_ticket's PROCEED path (the
+    # reference behaviour this fix must match).
+    normal_ticket = Ticket(id="t-normal", title="Fix a typo in the README",
+                           body="Correct a spelling mistake in the README.", meta={}, path="")
+    drv_a = _build(repo, os.path.join(work, "state-a"), os.path.join(work, "art-a"),
+                  [normal_ticket], config=_CFG_COUNCIL_ON)
+    normal_proceed = drv_a.next_ticket()
+    if normal_proceed.get("status") != "PROCEED":
+        failures.append(f"[parity] reference ticket should PROCEED directly, got {normal_proceed}")
+        return
+    if "council" not in normal_proceed:
+        failures.append(f"[parity] reference next_ticket PROCEED missing 'council' hint: "
+                        f"{normal_proceed}")
+
+    # Driver B: an ambiguous ticket is F5-offered, then resolved -> the PROCEED path under test.
+    ambiguous = _ambiguous_ticket("t-ambig-parity")
+    drv_b = _build(repo, os.path.join(work, "state-b"), os.path.join(work, "art-b"),
+                  [ambiguous], config=_CFG_COUNCIL_ON)
+    offer = drv_b.next_ticket()
+    if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+        failures.append(f"[parity] expected an F5 offer, got {offer}")
+        return
+    verdict = f5.F5Verdict(resolved=True, chosen_reading="a status badge",
+                          evidence="components/Badge.tsx already renders status", dissent_count=0,
+                          synthesis_text="clearly reading A")
+    resolved_proceed = drv_b.resolve_park("t-ambig-parity", offer["attempt_id"], verdict)
+    if resolved_proceed.get("status") != "PROCEED":
+        failures.append(f"[parity] RESOLVE must hand back PROCEED, got {resolved_proceed}")
+        return
+    if "council" not in resolved_proceed:
+        failures.append(f"[parity] resolve-park PROCEED missing 'council' hint — the gap INT-2412 "
+                        f"fixes, got keys={sorted(resolved_proceed.keys())}")
+
+    # Same set of hint keys on both PROCEED paths (beyond the fixed status/ticket/attempt/snapshot/
+    # instructions envelope + resolve-park's F5-specific 'instructions' text, which legitimately
+    # differs in content but not in the hint KEYS attached by the shared helper).
+    envelope = {"status", "ticket", "attempt", "snapshot", "instructions"}
+    normal_hint_keys = set(normal_proceed.keys()) - envelope
+    resolved_hint_keys = set(resolved_proceed.keys()) - envelope
+    if normal_hint_keys != resolved_hint_keys:
+        failures.append(f"[parity] hint-key sets diverge between next_ticket PROCEED "
+                        f"({sorted(normal_hint_keys)}) and resolve-park PROCEED "
+                        f"({sorted(resolved_hint_keys)})")
+
+
+def test_resolve_park_proceed_stops_on_credits_exhausted(failures):
+    """INT-2412: resolve-park's PROCEED path must honour the SAME credits STOP gate as
+    next_ticket's — a zero per-night €cap must terminate STOPPED_CREDITS on the F5-resolved ticket
+    instead of handing it out, mirroring next_ticket's _credits_stop handling."""
+    work = tempfile.mkdtemp(prefix="ue-f5-parity-stop-")
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+    cfg = {**_CFG_COUNCIL_ON, "budget": {**_CFG_COUNCIL_ON["budget"], "per_night_euro_cap": 0.0}}
+    ambiguous = _ambiguous_ticket("t-ambig-stop")
+    drv = _build(repo, os.path.join(work, "state"), os.path.join(work, "art"), [ambiguous],
+                config=cfg)
+    offer = drv.next_ticket()
+    if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+        failures.append(f"[parity-stop] expected an F5 offer, got {offer}")
+        return
+    verdict = f5.F5Verdict(resolved=True, chosen_reading="a status badge",
+                          evidence="components/Badge.tsx already renders status", dissent_count=0,
+                          synthesis_text="clearly reading A")
+    result = drv.resolve_park("t-ambig-stop", offer["attempt_id"], verdict)
+    if result.get("status") != "STOPPED_CREDITS":
+        failures.append(f"[parity-stop] expected STOPPED_CREDITS (per_night_euro_cap=0.0 exhausted "
+                        f"immediately), got {result}")
 
 
 def test_orchestrator_resolve_park_resolve_and_decline(failures):
@@ -489,6 +588,8 @@ def main() -> int:
     test_f5_budget_ceiling_stops_offering(failures)
     test_cli_resolve_park_round_trip(failures)
     test_cli_resolve_park_not_resolved_flag(failures)
+    test_resolve_park_proceed_has_council_parity(failures)
+    test_resolve_park_proceed_stops_on_credits_exhausted(failures)
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — F5 wiring not proven")

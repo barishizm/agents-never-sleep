@@ -699,24 +699,32 @@ class StepDriver:
                 "instructions": ("Implement ONLY this ticket by editing files under the repo, then "
                                  "call `complete`. Do not edit any other ticket. Do not stop or ask."),
             }
-            self._attach_council_hint(payload, ticket, balance_eur=balance_eur)
-            # STOP decision from decide_budget: terminate cleanly before handing the ticket out.
-            if "_credits_stop" in payload:
-                reason = payload.pop("_credits_stop")
-                # Revert the snapshot commit (nothing was done, just an accounting commit).
-                try:
-                    self.orch.git.revert_to(began.snapshot)
-                except Exception:  # noqa: BLE001 — revert failure must not shadow the credits stop
-                    pass
-                self._clear_pending()
-                return self._terminate("STOPPED_CREDITS", reason=reason)
-            self._attach_specialist_hint(payload, ticket)
-            self._attach_onboarding_hint(payload)
-            self._attach_scratchpad_hint(payload, ticket)
-            return payload
+            return self._hand_out_proceed(payload, ticket, began, balance_eur=balance_eur)
 
         # No proceedable ticket remains -> the backlog is genuinely drained.
         return self._terminate("DRAINED")
+
+    def _hand_out_proceed(self, payload: dict, ticket, token, *, balance_eur=None) -> dict:
+        """Attach the pre-work hints to a PROCEED payload and hand it out — the SHARED tail of both
+        PROCEED paths (a fresh `next` handout and an F5-resolved resolve-park handout), so the two
+        stay in lockstep. `token` is the ProceedToken whose snapshot is reverted if the council
+        budget gate returns STOP. On STOP: revert the accounting snapshot, clear pending, terminate
+        STOPPED_CREDITS (nothing was handed out). Otherwise: attach specialist/onboarding/scratchpad
+        hints and return the payload."""
+        self._attach_council_hint(payload, ticket, balance_eur=balance_eur)
+        if "_credits_stop" in payload:
+            reason = payload.pop("_credits_stop")
+            # Revert the snapshot commit (nothing was done, just an accounting commit).
+            try:
+                self.orch.git.revert_to(token.snapshot)
+            except Exception:  # noqa: BLE001 — revert failure must not shadow the credits stop
+                pass
+            self._clear_pending()
+            return self._terminate("STOPPED_CREDITS", reason=reason)
+        self._attach_specialist_hint(payload, ticket)
+        self._attach_onboarding_hint(payload)
+        self._attach_scratchpad_hint(payload, ticket)
+        return payload
 
     def resolve_park(self, ticket_id: str, attempt_id: str, verdict) -> dict:
         """Callback for the agent's grounded F5 consensus result on a ticket `next` previously
@@ -763,12 +771,14 @@ class StepDriver:
                     "why": result.why, "next": "call `next` for the next ticket"}
         self._save_pending(result)
         self._set_sentinel()
-        return {"status": "PROCEED",
-                "ticket": {"id": ticket.id, "title": ticket.title, "body": ticket.body,
-                           "path": ticket.path},
-                "attempt": result.attempt_n, "snapshot": result.snapshot,
-                "instructions": ("F5 consensus resolved the requirement-meaning ambiguity — implement "
-                                 "ONLY this ticket, then call `complete`. Do not stop or ask.")}
+        payload = {"status": "PROCEED",
+                   "ticket": {"id": ticket.id, "title": ticket.title, "body": ticket.body,
+                              "path": ticket.path},
+                   "attempt": result.attempt_n, "snapshot": result.snapshot,
+                   "instructions": ("F5 consensus resolved the requirement-meaning ambiguity — "
+                                    "implement ONLY this ticket, then call `complete`. Do not stop "
+                                    "or ask.")}
+        return self._hand_out_proceed(payload, ticket, result, balance_eur=None)
 
     def _attach_council_hint(self, payload: dict, ticket, *, balance_eur=None) -> None:
         """Non-binding pre-work hint so the agent can convene the right council BEFORE implementing.
