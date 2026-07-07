@@ -58,6 +58,7 @@ about the one seam it doesn't.
 | `reset-attempts`, `reset-spend` | **Stable** | Operator escapes. |
 | `parked protect|restore` | **Experimental** | WIP-protection surface (INT-1735). |
 | `note --ticket --text` | **Experimental** | Revert-surviving per-ticket scratchpad (ticket 04); tied to the flag-gated `autonomy.scratchpad` feature, still evolving. |
+| `resolve-park --ticket-id --attempt-id --resolved/--not-resolved ...` | **Experimental** | F5 grounded-consensus callback for a `PARK_CONSENSUS_ELIGIBLE` offer from `next`; tied to F5, still evolving. |
 | JSON output shapes in ARCHITECTURE.md §1 | **Stable** | Documented keys only; undocumented keys may appear/disappear. |
 
 ### 2.2 CLI — the launcher (`bin/ans-run` / `ans-run`)

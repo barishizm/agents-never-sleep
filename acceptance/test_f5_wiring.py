@@ -9,7 +9,9 @@ report's declined-consensus visibility line.
 
 Exit 0 = GREEN.
 """
+import json
 import os
+import subprocess
 import sys
 import tempfile
 
@@ -311,6 +313,106 @@ def test_resolve_park_twice_is_idempotent(failures):
         failures.append(f"[idem] outcome must still be the single original park, got {stored}")
 
 
+def _run_cli(args, cwd, env):
+    proc = subprocess.run([sys.executable, "-m", "agents_never_sleep.run", *args],
+                          cwd=cwd, env=env, capture_output=True, text=True, timeout=60)
+    if proc.returncode != 0:
+        raise AssertionError(f"CLI {args} exited {proc.returncode}: {proc.stderr}")
+    return json.loads(proc.stdout)
+
+
+def _write_config(repo):
+    """Second fixture fix discovered in Task 6 TDD (not in the original brief): `cmd_next` refuses
+    with NON_DESTRUCTIVE whenever CLAUDE_UNATTENDED=1 and no config was ever persisted to disk
+    (run.py's `ensure_config`/wizard path never writes one unattended — by design, see config.py).
+    A real CLI round-trip test therefore needs a saved config, exactly like
+    acceptance/test_agent_bridge.py's `_write_config` (same sandbox, same gate command)."""
+    cfg = {
+        "schema_version": 1,
+        "gates": [{"name": "tests",
+                  "command": [sys.executable, "-m", "unittest", "discover", "-s", ".",
+                              "-p", "test_*.py"],
+                  "blocking": True}],
+        "budget": {"per_ticket_timeout_s": 60, "per_ticket_fix_iterations": 3},
+        "autonomy": {"non_destructive_only": False, "requirement_ambiguity": "hybrid"},
+        "report": {"local_path": "morning-report.md"},
+    }
+    os.makedirs(os.path.join(repo, ".claude"), exist_ok=True)
+    with open(os.path.join(repo, ".claude", "agents-never-sleep.json"), "w",
+             encoding="utf-8") as fh:
+        json.dump(cfg, fh, indent=2)
+
+
+def _git_repo_with_ticket(work, ticket_id):
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+    for cmd in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                ["git", "config", "user.name", "t"]):
+        subprocess.run(cmd, cwd=repo, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "baseline"], cwd=repo, check=True)
+    # BLOCKER 1 fix: the ticket must live INSIDE the repo, not under `work` — _Context resolves
+    # --tickets relative to --repo (run.py:125; precedent: acceptance/test_agent_bridge.py:83-86).
+    tickets_dir = os.path.join(repo, "tickets")
+    os.makedirs(tickets_dir)
+    with open(os.path.join(tickets_dir, f"{ticket_id}.md"), "w", encoding="utf-8") as fh:
+        fh.write(f"---\nid: {ticket_id}\ntitle: Add a widget\n---\n\n"
+                f"Add a widget — unclear which kind of widget?\n")
+    subprocess.run(["git", "add", "tickets"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "add ticket"], cwd=repo, check=True)
+    _write_config(repo)
+    return repo
+
+
+def test_cli_resolve_park_round_trip(failures):
+    work = tempfile.mkdtemp(prefix="ue-f5-cli-")
+    repo = _git_repo_with_ticket(work, "t-cli")
+    env = dict(os.environ, PYTHONPATH=SKILL_ROOT, CLAUDE_UNATTENDED="1")
+    common = ["--repo", repo, "--tickets", "tickets"]
+
+    offer = _run_cli(["next", *common], repo, env)
+    if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+        failures.append(f"[cli] expected PARK_CONSENSUS_ELIGIBLE from `next`, got {offer}")
+        return
+    attempt_id = offer.get("attempt_id")
+    if not attempt_id:
+        failures.append(f"[cli] `next` offer missing attempt_id: {offer}")
+        return
+    resumed = _run_cli(["resolve-park", *common, "--ticket-id", "t-cli", "--attempt-id", attempt_id,
+                       "--resolved", "--chosen-reading", "a status badge",
+                       "--evidence", "components/Badge.tsx already renders status",
+                       "--dissent-count", "0", "--synthesis-text", "clearly reading A"], repo, env)
+    if resumed.get("status") != "PROCEED":
+        failures.append(f"[cli] expected PROCEED from `resolve-park`, got {resumed}")
+        return
+    with open(os.path.join(repo, "app.py"), "a", encoding="utf-8") as fh:
+        fh.write("\n# cli f5 note\n")
+    done = _run_cli(["complete", *common, "--attempted", "implemented via CLI"], repo, env)
+    if done.get("state") != "DONE":
+        failures.append(f"[cli] expected DONE after complete, got {done}")
+
+
+def test_cli_resolve_park_not_resolved_flag(failures):
+    """--not-resolved must be honoured symmetrically to --resolved (argparse wiring check)."""
+    work = tempfile.mkdtemp(prefix="ue-f5-cli-decline-")
+    repo = _git_repo_with_ticket(work, "t-cli2")
+    env = dict(os.environ, PYTHONPATH=SKILL_ROOT, CLAUDE_UNATTENDED="1")
+    common = ["--repo", repo, "--tickets", "tickets"]
+
+    offer = _run_cli(["next", *common], repo, env)
+    if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+        failures.append(f"[cli-decline] expected PARK_CONSENSUS_ELIGIBLE, got {offer}")
+        return
+    attempt_id = offer.get("attempt_id")
+    if not attempt_id:
+        failures.append(f"[cli-decline] `next` offer missing attempt_id: {offer}")
+        return
+    result = _run_cli(["resolve-park", *common, "--ticket-id", "t-cli2", "--attempt-id", attempt_id,
+                       "--not-resolved"], repo, env)
+    if result.get("status") != "KEPT_PARKED":
+        failures.append(f"[cli-decline] --not-resolved should KEEP_PARKED, got {result}")
+
+
 def main() -> int:
     failures: list = []
     test_ledger_f5_attempted(failures)
@@ -323,6 +425,8 @@ def main() -> int:
     test_driver_resolve_park_decline_branch_keeps_parked(failures)
     test_resolve_park_halts_if_safety_net_lost(failures)
     test_resolve_park_twice_is_idempotent(failures)
+    test_cli_resolve_park_round_trip(failures)
+    test_cli_resolve_park_not_resolved_flag(failures)
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — F5 wiring not proven")

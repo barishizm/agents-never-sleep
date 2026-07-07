@@ -10,6 +10,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — `resolve-park` CLI verb for the F5 grounded-consensus callback (MINOR, additive)
+- New `resolve-park --ticket-id --attempt-id --resolved/--not-resolved [--chosen-reading]
+  [--evidence] [--dissent-count] [--synthesis-text]` subcommand (Experimental), symmetric to
+  `complete`'s `--council-verdict*` flags: the agent reports the structured grounded-consensus
+  `F5Verdict` (plus the offer's `--attempt-id`, validated against the durable ledger offer record)
+  for a ticket `next` previously offered as `PARK_CONSENSUS_ELIGIBLE`. `--resolved`/`--not-resolved`
+  is a required mutually-exclusive group. Delegates to `StepDriver.resolve_park` — RESOLVE routes
+  into the normal PROCEED path, KEEP_PARKED writes a park outcome with a full F5 audit trail. A new
+  verb, not a `complete` flag — PARK never reaches `complete`.
+
 ### Added — leaked-process reaping + opt-in capability restriction (MINOR, additive)
 - The watchdog now reaps a run's OWN child tree by PARENT-CHAIN lineage (new
   `agents_never_sleep/reap.py`) — on restart, on a graceful SIGTERM/SIGINT, and via a rolling

@@ -26,8 +26,11 @@ from agents_never_sleep.state import OutcomeState          # noqa: E402
 
 # "note" added in the ticket-04 MINOR: a revert-surviving per-ticket progress note (its shape
 # --ticket/--text is simple and now part of the Stable surface). SEMVER.md §2 updated in lockstep.
+# "resolve-park" added in F5 Task 6: the agent's grounded-consensus callback for a
+# PARK_CONSENSUS_ELIGIBLE offer — Experimental (tied to F5, still evolving). SEMVER.md §2 updated
+# in lockstep.
 FROZEN_SUBCOMMANDS = {"next", "complete", "report", "reset-attempts", "reset-spend", "parked",
-                      "note"}
+                      "note", "resolve-park"}
 
 # Core Stable flags per subcommand (SEMVER §2.1). Experimental flags (council/specialist on
 # `complete`) are deliberately NOT frozen here — they may change in a MINOR before stabilizing.

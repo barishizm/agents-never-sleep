@@ -419,6 +419,22 @@ def cmd_complete(args) -> int:
     return _emit(out)
 
 
+def cmd_resolve_park(args) -> int:
+    """F5 callback (Plan 1, requirement_meaning only): the agent reports the structured grounded-
+    consensus verdict for a ticket `next` previously offered as PARK_CONSENSUS_ELIGIBLE. Symmetric
+    to `complete`'s --council-verdict* flags, but a NEW verb — PARK never reaches `complete`."""
+    ctx = _Context(args)
+    from .f5 import F5Verdict
+    verdict = F5Verdict(resolved=args.resolved, chosen_reading=args.chosen_reading or "",
+                        evidence=args.evidence or "", dissent_count=args.dissent_count,
+                        synthesis_text=args.synthesis_text or "")
+    out = ctx.driver.resolve_park(args.ticket_id, args.attempt_id, verdict)
+    if isinstance(out, dict):
+        out.setdefault("repo_abs", ctx.repo)
+        out.setdefault("tickets_abs", getattr(ctx, "tickets_dir", None))
+    return _emit(out)
+
+
 def cmd_reset_attempts(args) -> int:
     # INT-1675 P3: first-class operator escape for the documented "kill+resume / tooling round-trip
     # inflated the attempt counter -> healthy ticket force-parked at the cap" case. Replaces the rough
@@ -542,6 +558,30 @@ def build_parser() -> argparse.ArgumentParser:
                     help="HTTP status code returned by the council gateway (402 = insufficient_balance "
                          "→ triggers the configured credits-exhaustion policy)")
     pc.set_defaults(func=cmd_complete)
+
+    presolve = sub.add_parser("resolve-park",
+                              help="report the agent's F5 grounded-consensus verdict for a "
+                                   "PARK_CONSENSUS_ELIGIBLE ticket")
+    _add_common(presolve)
+    presolve.add_argument("--ticket-id", required=True, dest="ticket_id",
+                          help="the ticket id `next` offered as PARK_CONSENSUS_ELIGIBLE")
+    presolve.add_argument("--attempt-id", required=True, dest="attempt_id",
+                          help="the attempt_id from the PARK_CONSENSUS_ELIGIBLE offer payload — "
+                               "must match the outstanding ledger offer or the call is refused")
+    resolved_grp = presolve.add_mutually_exclusive_group(required=True)
+    resolved_grp.add_argument("--resolved", dest="resolved", action="store_true",
+                              help="the grounded consensus reached a single-reading resolution")
+    resolved_grp.add_argument("--not-resolved", dest="resolved", action="store_false",
+                              help="the consensus did not resolve the ambiguity — stays PARK")
+    presolve.add_argument("--chosen-reading", default="", dest="chosen_reading",
+                          help="the reading the consensus picked (required for RESOLVE to succeed)")
+    presolve.add_argument("--evidence", default="",
+                          help="exact evidence cited from the repo/spec context")
+    presolve.add_argument("--dissent-count", type=int, default=0, dest="dissent_count",
+                          help="number of proposers disagreeing with the chosen reading")
+    presolve.add_argument("--synthesis-text", default="", dest="synthesis_text",
+                          help="the judge synthesis text (concern-language backstop)")
+    presolve.set_defaults(func=cmd_resolve_park)
 
     pr = sub.add_parser("report", help="(re)write the morning report from the store")
     _add_common(pr)
