@@ -67,6 +67,14 @@ def default_config(profile) -> dict:
             "balance_threshold_euro": 1.0,         # agent stops convening councils below this balance
             "on_credits_exhausted": "stop",        # "stop" (A) or "degrade" (B) — see decide_budget
         },
+        "classify": {
+            "overrides": {},
+            # Hard-PARK categories the project opted into a consensus-assisted resolution attempt
+            # (Plan 2). Empty = today's behavior (only requirement_meaning is F5-eligible). Members
+            # must be exact HARD_PARK_CATEGORIES keys — validated fail-fast at load (see
+            # validate_consensus_config). requirement_meaning is never listed (always eligible).
+            "consensus_assisted_categories": [],
+        },
         "autonomy": {
             # unattended-no-config is conservative: non-destructive only until a human configures
             "non_destructive_only": True,
@@ -149,6 +157,26 @@ def default_config(profile) -> dict:
         },
         "_note": "Generated defaults. Run the wizard (interactive) to confirm/extend.",
     }
+
+
+def validate_consensus_config(config: dict) -> None:
+    """Fail-fast on a misconfigured consensus-assisted opt-in. A safety toggle must NEVER silently
+    no-op: a typo'd or unknown category, or a `requirement_meaning` entry (eligible by definition —
+    naming it signals a misunderstanding), is a hard config error surfaced at load, never ignored."""
+    from .decide import HARD_PARK_CATEGORIES
+    cats = ((config.get("classify") or {}).get("consensus_assisted_categories")) or []
+    if not isinstance(cats, list):
+        raise ValueError("classify.consensus_assisted_categories must be a list")
+    valid = set(HARD_PARK_CATEGORIES)
+    for entry in cats:
+        if entry == "requirement_meaning":
+            raise ValueError(
+                "classify.consensus_assisted_categories must not list 'requirement_meaning' "
+                "— it is always F5-eligible by definition")
+        if entry not in valid:
+            raise ValueError(
+                f"classify.consensus_assisted_categories has unknown category {entry!r}; "
+                f"valid keys: {sorted(valid)}")
 
 
 def is_interactive() -> bool:
