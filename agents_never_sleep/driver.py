@@ -118,6 +118,14 @@ def _run_start_credits_preflight(balance_eur: float | None,
               "to change the policy before launching an unattended run.")
 
 
+# F5 (build-narrow, requirement_meaning only): a deterministic PER-RUN ceiling on how many tickets
+# get an F5 offer. Separate from the council's €/call caps — F5 makes its own, cheaper single-call
+# tokonomix requests and must never silently borrow the council's per-night budget. NOT a config
+# field in Plan 1 (no config-schema change in scope) — Plan 2 may expose it as
+# budget.max_f5_calls_per_night once F5 gains a config schema.
+_F5_MAX_CALLS_PER_RUN = 5
+
+
 class StepDriver:
     """One-ticket-at-a-time driver. See module docstring for the two structural guarantees."""
 
@@ -335,7 +343,7 @@ class StepDriver:
         # a later bump MUST be normalized here — credits_stop_requested in particular,
         # else the reactive 402 STOP flag gets erased before `next` reads it.
         base = {"processed": 0, "bad": 0, "council_cost_eur": 0.0, "council_calls": 0,
-                "credits_exhausted_degrade": False, "credits_stop_requested": None}
+                "credits_exhausted_degrade": False, "credits_stop_requested": None, "f5_calls": 0}
         if not os.path.exists(self.progress_path):
             return base
         try:
@@ -345,14 +353,16 @@ class StepDriver:
                     "council_cost_eur": float(d.get("council_cost_eur", 0.0) or 0.0),
                     "council_calls": int(d.get("council_calls", 0) or 0),
                     "credits_exhausted_degrade": bool(d.get("credits_exhausted_degrade", False)),
-                    "credits_stop_requested": d.get("credits_stop_requested")}
+                    "credits_stop_requested": d.get("credits_stop_requested"),
+                    "f5_calls": int(d.get("f5_calls", 0) or 0)}
         except (json.JSONDecodeError, OSError, ValueError, TypeError):
             return base
 
     def _reset_progress(self) -> None:
         _atomic_write_json(self.progress_path,
                            {"processed": 0, "bad": 0, "council_cost_eur": 0.0, "council_calls": 0,
-                            "credits_exhausted_degrade": False, "credits_stop_requested": None})
+                            "credits_exhausted_degrade": False, "credits_stop_requested": None,
+                            "f5_calls": 0})
 
     def _reset_run_counters(self) -> None:
         # INT-1675 P4: a fresh-run ENTRY must reset the low-yield breaker counters (processed/bad)
@@ -368,7 +378,8 @@ class StepDriver:
         _atomic_write_json(self.progress_path,
                            {"processed": 0, "bad": 0,
                             "council_cost_eur": p["council_cost_eur"], "council_calls": p["council_calls"],
-                            "credits_exhausted_degrade": False, "credits_stop_requested": None})
+                            "credits_exhausted_degrade": False, "credits_stop_requested": None,
+                            "f5_calls": p["f5_calls"]})
 
     def reset_spend(self) -> dict:
         # INT-1675 P4 follow-on: operator escape to zero the per-night spend accounting
@@ -425,6 +436,14 @@ class StepDriver:
         p["council_cost_eur"] = round(p["council_cost_eur"] + amount, 4)
         _atomic_write_json(self.progress_path, p)
 
+    def _bump_f5_calls(self) -> None:
+        """Accumulate this run's F5 call count for the deterministic per-run ceiling (gap #5).
+        Mirrors _bump_council's accounting shape but is a SEPARATE counter — F5 must never silently
+        borrow the council's per-night €/call budget."""
+        p = self._load_progress()
+        p["f5_calls"] = int(p.get("f5_calls", 0)) + 1
+        _atomic_write_json(self.progress_path, p)
+
     def _breaker_tripped(self) -> bool:
         p = self._load_progress()
         return self.orch.breaker.tripped(p["processed"], p["bad"])
@@ -434,6 +453,58 @@ class StepDriver:
             if t.id == ticket_id:
                 return t
         return None
+
+    def _f5_offer(self, ticket, decision, has_net: bool) -> dict | None:
+        """F5 (build-narrow, gap #3): check eligibility for a PARK decision. If eligible, open a
+        durable OFFER RECORD OPTIMISTICALLY — BEFORE the agent runs consensus — so a crash, a
+        persistently-erroring council, or the agent simply calling `next` again without resolving
+        can never cause an infinite re-offer of the same ticket; the very next scheduling pass sees
+        already_attempted=True and falls through to a normal park. The record's category/foundational
+        snapshot (taken HERE, at offer time) is the trusted anchor resolve_park re-checks against
+        later — never a fresh re-classification of the ticket text.
+
+        Returns the PARK_CONSENSUS_ELIGIBLE payload (including a fresh attempt_id the agent must echo
+        back on resolve-park), or None (caller falls through to a normal park: either structurally
+        ineligible, already attempted, or the per-run budget ceiling is reached — in ALL cases the
+        ticket then gets an ordinary, terminal park, exactly like any other PARK reason; hitting the
+        ceiling does not defer or re-queue it, it just doesn't get F5 this run)."""
+        if self.orch.ledger is None:
+            return None
+        from . import f5
+        already = self.orch.ledger.f5_attempted(ticket.id)
+        if not f5.eligible(decision, has_safety_net=has_net, already_attempted=already):
+            return None
+        if self._load_progress().get("f5_calls", 0) >= _F5_MAX_CALLS_PER_RUN:
+            return None
+        import uuid
+        attempt_id = uuid.uuid4().hex[:16]
+        self.orch.ledger.open_f5_offer(
+            ticket.id, attempt_id=attempt_id, category=decision.category,
+            has_safety_net=has_net, foundational=decision.foundational)
+        self._bump_f5_calls()
+        prompt = f5.build_grounding_prompt(
+            ticket_title=ticket.title, ticket_body=ticket.body,
+            candidate_readings=["derive the plausible distinct readings from the ticket body below"],
+            repo_context=f"See the repository under the ticket's stated path "
+                        f"({ticket.path or 'repo root'}) for existing conventions relevant to "
+                        "disambiguation.",
+            safety_net_desc="git revert to the pre-ticket snapshot is available "
+                           "(reversibility safety net confirmed).")
+        return {
+            "status": "PARK_CONSENSUS_ELIGIBLE",
+            "ticket": {"id": ticket.id, "title": ticket.title, "body": ticket.body,
+                       "path": ticket.path},
+            "category": decision.category,
+            "attempt_id": attempt_id,
+            "prompt": prompt,
+            "instructions": (
+                "This ticket would otherwise PARK because its requirement meaning is ambiguous. Run "
+                "a grounded tokonomix consensus (parallel+blind proposers, a disjoint judge) using "
+                "the supplied `prompt` VERBATIM — never ask a free-text 'should I proceed?'. Then "
+                "call `resolve-park --ticket-id <id> --attempt-id <the attempt_id from this payload> "
+                "[--resolved --chosen-reading ... --evidence ... --dissent-count N "
+                "--synthesis-text ... | --not-resolved]`."),
+        }
 
     # ---- terminal signals (always clear the sentinel + write the report) ----------------
 
@@ -579,6 +650,9 @@ class StepDriver:
                 return self._terminate("HALTED", reason=decision.why)
 
             if decision.action == Action.PARK:
+                offer = self._f5_offer(ticket, decision, has_net)
+                if offer is not None:
+                    return offer
                 self.orch.park(ticket, decision)
                 self._bump_progress(is_bad=True)
                 if self._breaker_tripped():

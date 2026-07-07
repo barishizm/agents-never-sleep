@@ -154,12 +154,71 @@ def test_report_shows_f5_declined_block(failures):
         failures.append("[report] declined ticket id missing from the report")
 
 
+def test_next_ticket_offers_f5_only_when_eligible(failures):
+    work = tempfile.mkdtemp(prefix="ue-f5-offer-")
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+    state_dir = os.path.join(work, "state")
+    ambiguous = _ambiguous_ticket("t-ambig")
+    hard = Ticket(id="t-hard", title="x", body="Add a discount to checkout — which percentage?",
+                 meta={}, path="")
+    drv = _build(repo, state_dir, os.path.join(work, "art"), [ambiguous, hard])
+
+    r1 = drv.next_ticket()
+    if r1.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+        failures.append(f"[offer] requirement_meaning PARK should offer F5, got {r1}")
+    if r1.get("ticket", {}).get("id") != "t-ambig":
+        failures.append(f"[offer] wrong ticket offered: {r1}")
+    if "disambiguat" not in (r1.get("prompt") or "").lower():
+        failures.append(f"[offer] payload missing the grounding prompt: {r1}")
+    if not (r1.get("attempt_id") or "").strip():
+        failures.append(f"[offer] payload missing a non-empty attempt_id: {r1}")
+    led = AttemptLedger(os.path.join(state_dir, "ledger.json"))
+    if not led.f5_attempted("t-ambig"):
+        failures.append("[offer] eligibility check must mark already_attempted BEFORE returning "
+                        "(optimistic marking — gap #3)")
+    offer_rec = led.get_f5_offer("t-ambig")
+    if offer_rec is None or offer_rec.get("status") != "offered":
+        failures.append(f"[offer] durable offer record must be status='offered', got {offer_rec}")
+
+    # No resolve-park was called — the very next `next` falls through to a NORMAL park (this is
+    # both "the agent ignored the offer" and "the process crashed" cases; gap #3 proper is Task 7).
+    r2 = drv.next_ticket()
+    if r2.get("status") != "DRAINED":
+        failures.append(f"[offer] second next() (no resolve-park) should fall through + drain, got {r2}")
+    o1 = drv.store.read("t-ambig")
+    if o1 is None or o1.state != OutcomeState.PARKED_DECISION:
+        failures.append(f"[offer] t-ambig should be parked normally on the fallthrough, got {o1}")
+    if "f5-attempted-declined" in (o1.review_coverage or ""):
+        failures.append("[offer] a fallthrough park (no verdict was ever rendered) must NOT carry "
+                        "the declined-consensus audit tag")
+    o2 = drv.store.read("t-hard")
+    if o2 is None or o2.state != OutcomeState.PARKED_DECISION:
+        failures.append(f"[offer] hard-category ticket should park normally, got {o2}")
+
+
+def test_f5_budget_counter_increments(failures):
+    work = tempfile.mkdtemp(prefix="ue-f5-budget-")
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+    drv = _build(repo, os.path.join(work, "state"), os.path.join(work, "art"), [])
+    before = drv._load_progress().get("f5_calls", -1)
+    if before != 0:
+        failures.append(f"[budget] f5_calls should start at 0, got {before}")
+    drv._bump_f5_calls()
+    after = drv._load_progress().get("f5_calls")
+    if after != 1:
+        failures.append(f"[budget] _bump_f5_calls should increment f5_calls, got {after}")
+
+
 def main() -> int:
     failures: list = []
     test_ledger_f5_attempted(failures)
     test_orchestrator_resolve_park_resolve_and_decline(failures)
     test_orchestrator_resolve_park_rejects_forged_hard_category(failures)
     test_report_shows_f5_declined_block(failures)
+    test_next_ticket_offers_f5_only_when_eligible(failures)
+    test_f5_budget_counter_increments(failures)
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — F5 wiring not proven")
