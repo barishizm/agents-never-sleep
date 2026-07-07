@@ -427,7 +427,8 @@ def cmd_resolve_park(args) -> int:
     from .f5 import F5Verdict
     verdict = F5Verdict(resolved=args.resolved, chosen_reading=args.chosen_reading or "",
                         evidence=args.evidence or "", dissent_count=args.dissent_count,
-                        synthesis_text=args.synthesis_text or "")
+                        synthesis_text=args.synthesis_text or "",
+                        defect_found=getattr(args, "defect_found", False))
     out = ctx.driver.resolve_park(args.ticket_id, args.attempt_id, verdict)
     if isinstance(out, dict):
         out.setdefault("repo_abs", ctx.repo)
@@ -581,6 +582,9 @@ def build_parser() -> argparse.ArgumentParser:
                           help="number of proposers disagreeing with the chosen reading")
     presolve.add_argument("--synthesis-text", default="", dest="synthesis_text",
                           help="the judge synthesis text (concern-language backstop)")
+    presolve.add_argument("--defect-found", dest="defect_found", action="store_true",
+                          help="(hard-category soundness path) the consensus found a concrete "
+                               "defect — a deterministic veto that keeps the ticket parked")
     presolve.set_defaults(func=cmd_resolve_park)
 
     pr = sub.add_parser("report", help="(re)write the morning report from the store")
