@@ -234,6 +234,28 @@ def run_wizard(repo_dir: str, profile) -> dict:
             cfg["budget"]["on_credits_exhausted"] = (
                 "degrade" if ans.strip().upper().startswith("B") else "stop")
 
+        cfg.setdefault("specialists", {})["enabled"] = ask(
+            "Enable specialist reviewer lenses (architect/security/etc.)? (y/n)", "y"
+        ).lower().startswith("y")
+
+        from .decide import HARD_PARK_CATEGORIES
+        explain = {
+            "db_schema_or_migration": "database schema / migration changes",
+            "api_contract": "public API request/response shape changes",
+            "security_or_tenant": "auth, permissions, or tenant-isolation changes",
+            "money_or_billing": "pricing, billing, invoicing, or payment changes",
+            "cross_ticket_interface": "shared interfaces other tickets depend on",
+        }
+        opted = []
+        print("  For each high-risk area, ANS normally STOPS and waits for you. You can instead let")
+        print("  ANS attempt a multi-model consensus resolution and apply it unattended — the result")
+        print("  is always flagged for your daylight review, and git is the reverse button.")
+        for cat in HARD_PARK_CATEGORIES:
+            if ask(f"  Allow consensus-assisted resolution for {explain[cat]}? (y/n)",
+                   "n").lower().startswith("y"):
+                opted.append(cat)
+        cfg.setdefault("classify", {})["consensus_assisted_categories"] = opted
+
     # Launcher presets: scaffold one preset per INSTALLED known agent CLI, and make the
     # autonomy decision explicit per CLI (security review 2026-06-10: autonomy flags are
     # never applied silently — the human sees what the flag grants and confirms).

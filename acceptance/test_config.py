@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 import os
+import shutil
 import sys
+import tempfile
+import unittest.mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
 from agents_never_sleep import config  # noqa: E402
+from agents_never_sleep.preflight import CapabilityProfile  # noqa: E402
 
 
 class _Profile:
@@ -13,6 +17,31 @@ class _Profile:
     # default_config() reads profile.gates directly (no getattr fallback) to build the
     # "gates" section; every other attr it reads defensively via getattr(..., False).
     gates = []
+
+
+def _canned_input(answers):
+    """Feed answers to input() in order; extra input() calls beyond the list get "" (default)."""
+    remaining = list(answers)
+
+    def _fake(_prompt):
+        return remaining.pop(0) if remaining else ""
+    return _fake
+
+
+def _run_wizard_isolated(profile, answers):
+    """Run run_wizard in a scratch repo dir with is_interactive/installed_clis/trust store
+    all redirected so the test never touches the real home dir or a real tty."""
+    work = tempfile.mkdtemp(prefix="ans-wizard-test-")
+    trust_store = os.path.join(work, "trusted.json")
+    try:
+        with unittest.mock.patch("agents_never_sleep.config.is_interactive", return_value=True), \
+             unittest.mock.patch("agents_never_sleep.agent_clis.installed_clis", return_value=[]), \
+             unittest.mock.patch("builtins.input", side_effect=_canned_input(answers)), \
+             unittest.mock.patch.dict(os.environ, {"ANS_TRUST_STORE": trust_store,
+                                                    "ANS_TEST_MODE": "1"}):
+            return config.run_wizard(os.path.join(work, "repo"), profile)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def test_default_has_empty_consensus_list(failures):
@@ -64,11 +93,76 @@ def test_validate_rejects_non_list_including_falsy(failures):
             failures.append(f"absent/empty config {ok!r} must NOT raise; raised {e!r}")
 
 
+def test_wizard_no_tokonomix_skips_consensus_questions(failures):
+    """Plan 2 §3: with no Tokonomix credential, the wizard must not ask the specialist or
+    per-category consensus-opt-in questions at all, and consensus_assisted_categories stays []."""
+    profile = CapabilityProfile(has_tokonomix=False, has_paperclip=False)
+    # Any "y" answers here would be wrong picks IF the (gated) questions were asked anyway —
+    # if the gate is missing, this would wrongly opt every category in.
+    cfg = _run_wizard_isolated(profile, ["y", "hybrid", "y", "y", "y", "y", "y", "y", "y"])
+    got = (cfg.get("classify") or {}).get("consensus_assisted_categories")
+    if got != []:
+        failures.append(f"[no-tokonomix] consensus_assisted_categories must stay []; got {got!r}")
+
+
+def test_wizard_tokonomix_specialist_and_category_opt_in(failures):
+    """With a Tokonomix credential, the wizard asks an explicit specialist-enable question and
+    one opt-in question per HARD_PARK_CATEGORIES key (default no), and only opted keys land in
+    consensus_assisted_categories — which must stay a validate_consensus_config-accepted set."""
+    from agents_never_sleep.decide import HARD_PARK_CATEGORIES
+    profile = CapabilityProfile(has_tokonomix=True, has_paperclip=False)
+    # Order: autonomy(y), ambiguity(hybrid), council-enable(y), credits-policy(A),
+    # specialists-enable(n), then one y/n per HARD_PARK_CATEGORIES key (opt in only the last one).
+    cats = list(HARD_PARK_CATEGORIES)
+    per_cat_answers = ["n"] * (len(cats) - 1) + ["y"]
+    answers = ["y", "hybrid", "y", "A", "n"] + per_cat_answers
+    cfg = _run_wizard_isolated(profile, answers)
+
+    if cfg.get("specialists", {}).get("enabled") is not False:
+        failures.append(
+            f"[specialist] answering 'n' must set specialists.enabled False; "
+            f"got {cfg.get('specialists', {}).get('enabled')!r}")
+
+    got = (cfg.get("classify") or {}).get("consensus_assisted_categories")
+    if got != [cats[-1]]:
+        failures.append(
+            f"[per-category] expected only {cats[-1]!r} opted in (last answer was 'y'); got {got!r}")
+
+    try:
+        config.validate_consensus_config(cfg)
+    except Exception as e:  # noqa: BLE001
+        failures.append(f"[per-category] wizard-produced config must pass validation; raised {e!r}")
+
+
+def test_wizard_unattended_keeps_conservative_default(failures):
+    """Non-interactive/unattended path (no config yet) must never prompt and must keep the
+    empty consensus opt-in default — an unattended first-run is never silently opted in."""
+    profile = CapabilityProfile(has_tokonomix=True, has_paperclip=True)
+    work = tempfile.mkdtemp(prefix="ans-wizard-unattended-")
+    input_called = []
+    try:
+        with unittest.mock.patch("agents_never_sleep.config.is_interactive", return_value=False), \
+             unittest.mock.patch("builtins.input",
+                                  side_effect=lambda p: input_called.append(p) or "y"):
+            cfg = config.run_wizard(os.path.join(work, "repo"), profile)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+    if input_called:
+        failures.append(f"[unattended] must never call input(); calls were: {input_called!r}")
+    got = (cfg.get("classify") or {}).get("consensus_assisted_categories")
+    if got != []:
+        failures.append(f"[unattended] consensus_assisted_categories must stay []; got {got!r}")
+
+
 def main():
     failures = []
     for fn in (test_default_has_empty_consensus_list, test_validate_accepts_known_categories,
                test_validate_rejects_typo, test_validate_rejects_requirement_meaning,
-               test_validate_rejects_non_list_including_falsy):
+               test_validate_rejects_non_list_including_falsy,
+               test_wizard_no_tokonomix_skips_consensus_questions,
+               test_wizard_tokonomix_specialist_and_category_opt_in,
+               test_wizard_unattended_keeps_conservative_default):
         fn(failures)
     if failures:
         print("RESULT: ❌")
