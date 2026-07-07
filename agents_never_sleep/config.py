@@ -164,7 +164,9 @@ def validate_consensus_config(config: dict) -> None:
     no-op: a typo'd or unknown category, or a `requirement_meaning` entry (eligible by definition —
     naming it signals a misunderstanding), is a hard config error surfaced at load, never ignored."""
     from .decide import HARD_PARK_CATEGORIES
-    cats = ((config.get("classify") or {}).get("consensus_assisted_categories")) or []
+    # Only a genuinely-absent key defaults to []; a present-but-wrong-type value (including falsy
+    # ones like {}, "", 0, False) must reach the isinstance check and raise — never silently no-op.
+    cats = (config.get("classify") or {}).get("consensus_assisted_categories", [])
     if not isinstance(cats, list):
         raise ValueError("classify.consensus_assisted_categories must be a list")
     valid = set(HARD_PARK_CATEGORIES)

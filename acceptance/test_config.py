@@ -48,10 +48,27 @@ def test_validate_rejects_requirement_meaning(failures):
         pass
 
 
+def test_validate_rejects_non_list_including_falsy(failures):
+    for bad in ({}, "", 0, False, "db_schema_or_migration"):
+        try:
+            config.validate_consensus_config(
+                {"classify": {"consensus_assisted_categories": bad}})
+            failures.append(f"non-list value {bad!r} must raise ValueError, not silently pass")
+        except ValueError:
+            pass
+    # A genuinely-absent key must still pass (no false positive on the common case).
+    for ok in ({}, {"classify": {}}, {"classify": {"consensus_assisted_categories": []}}):
+        try:
+            config.validate_consensus_config(ok)
+        except Exception as e:  # noqa: BLE001
+            failures.append(f"absent/empty config {ok!r} must NOT raise; raised {e!r}")
+
+
 def main():
     failures = []
     for fn in (test_default_has_empty_consensus_list, test_validate_accepts_known_categories,
-               test_validate_rejects_typo, test_validate_rejects_requirement_meaning):
+               test_validate_rejects_typo, test_validate_rejects_requirement_meaning,
+               test_validate_rejects_non_list_including_falsy):
         fn(failures)
     if failures:
         print("RESULT: ❌")
