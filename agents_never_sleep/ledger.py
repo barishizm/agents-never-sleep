@@ -84,15 +84,19 @@ class AttemptLedger:
         return self.attempts(ticket_id) >= cap
 
     def open_f5_offer(self, ticket_id: str, *, attempt_id: str, category: str,
-                      has_safety_net: bool, foundational: bool) -> None:
+                      has_safety_net: bool, foundational: bool,
+                      consensus_assisted_categories=None) -> None:
         """Record an F5 offer BEFORE the agent runs consensus (optimistic — one-shot per ticket
         lifetime; a crash/erroring-council/repeat-`next` can never re-offer). Immutable except for
         the status flip in consume_f5_offer: the category/foundational/safety-net captured HERE are
         what resolve_park re-checks against — never a fresh re-classification (closes the TOCTOU
-        category-drift + the forged-`--ticket-id` hole)."""
+        category-drift + the forged-`--ticket-id` hole). consensus_assisted_categories snapshots the
+        EFFECTIVE opt-in set at offer time (Plan 2 anti-TOCTOU anchor) — a mid-run config edit can
+        never retroactively change what an already-open offer is checked against."""
         self._data["f5_attempted"][ticket_id] = {
             "attempt_id": attempt_id, "category": category,
             "has_safety_net": bool(has_safety_net), "foundational": bool(foundational),
+            "consensus_assisted_categories": list(consensus_assisted_categories or []),
             "status": "offered",
         }
         self._flush()
