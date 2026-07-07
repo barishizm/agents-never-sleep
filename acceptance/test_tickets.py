@@ -134,9 +134,14 @@ def test_consensus_assisted_tristate(failures):
         "t_true.md": "---\nid: T1\ntitle: X\nconsensus_assisted: true\n---\nbody\n",
         "t_false.md": "---\nid: T2\ntitle: X\nconsensus_assisted: false\n---\nbody\n",
         "t_unset.md": "---\nid: T3\ntitle: X\n---\nbody\n",
+        # case-insensitive + whitespace-stripped (docstring promise): uppercase/padded still resolve.
+        "t_upper.md": "---\nid: T4\ntitle: X\nconsensus_assisted:   TRUE  \n---\nbody\n",
+        "t_cap.md": "---\nid: T5\ntitle: X\nconsensus_assisted: False\n---\nbody\n",
+        # a non-bool value is NOT a silent True/False — it falls through to None (project default).
+        "t_nonsense.md": "---\nid: T6\ntitle: X\nconsensus_assisted: maybe\n---\nbody\n",
     })
     loaded = {t.id: t for t in load_tickets(d)}
-    cases = {"T1": True, "T2": False, "T3": None}
+    cases = {"T1": True, "T2": False, "T3": None, "T4": True, "T5": False, "T6": None}
     for tid, expect in cases.items():
         got = loaded[tid].declared_consensus_assisted
         if got is not expect:
