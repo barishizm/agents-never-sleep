@@ -199,6 +199,36 @@ def test_next_ticket_offers_f5_only_when_eligible(failures):
         failures.append(f"[offer] hard-category ticket should park normally, got {o2}")
 
 
+def test_f5_offer_survives_a_simulated_crash(failures):
+    """Simulate: process 1 calls `next`, gets PARK_CONSENSUS_ELIGIBLE, then 'crashes' (never calls
+    resolve-park). A FRESH process (new Orchestrator/StepDriver, same repo/state/ledger paths) must
+    NOT re-offer F5 on this ticket — it falls through to a normal, un-tagged park."""
+    work = tempfile.mkdtemp(prefix="ue-f5-crash-")
+    repo = os.path.join(work, "repo")
+    shutil.copytree(os.path.join(HERE, "sandbox"), repo)
+    state_dir = os.path.join(work, "state")
+    ticket = _ambiguous_ticket("t-crash")
+
+    proc1 = _build(repo, state_dir, os.path.join(work, "art"), [ticket])
+    offer = proc1.next_ticket()
+    if offer.get("status") != "PARK_CONSENSUS_ELIGIBLE":
+        failures.append(f"[crash] process 1 should get an F5 offer, got {offer}")
+        return
+    # 'crash' — proc1 is dropped, resolve-park is NEVER called.
+
+    proc2 = _build(repo, state_dir, os.path.join(work, "art"), [ticket])  # fresh process, same disk
+    resumed = proc2.next_ticket()
+    if resumed.get("status") != "DRAINED":
+        failures.append(f"[crash] fresh process should fall through to a normal park + drain, "
+                        f"got {resumed}")
+    stored = proc2.store.read("t-crash")
+    if stored is None or stored.state != OutcomeState.PARKED_DECISION:
+        failures.append(f"[crash] ticket should be parked normally after the fallthrough, got {stored}")
+    if "f5-attempted-declined" in (stored.review_coverage or ""):
+        failures.append("[crash] a fallthrough (never-resolved) park must NOT carry the "
+                        "declined-consensus audit tag — no verdict was ever actually rendered")
+
+
 def test_f5_budget_counter_increments(failures):
     work = tempfile.mkdtemp(prefix="ue-f5-budget-")
     repo = os.path.join(work, "repo")
@@ -420,6 +450,7 @@ def main() -> int:
     test_orchestrator_resolve_park_rejects_forged_hard_category(failures)
     test_report_shows_f5_declined_block(failures)
     test_next_ticket_offers_f5_only_when_eligible(failures)
+    test_f5_offer_survives_a_simulated_crash(failures)
     test_f5_budget_counter_increments(failures)
     test_driver_resolve_park_resolve_branch_completes_done(failures)
     test_driver_resolve_park_decline_branch_keeps_parked(failures)
