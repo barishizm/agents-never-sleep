@@ -60,6 +60,7 @@ class AttemptLedger:
         # can never KeyError later in record_failure/record_attempt and crash the run.
         self._data.setdefault("attempts", {})
         self._data.setdefault("signatures", {})
+        self._data.setdefault("f5_attempted", {})
 
     def _flush(self) -> None:
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
@@ -81,6 +82,38 @@ class AttemptLedger:
 
     def over_cap(self, ticket_id: str, cap: int) -> bool:
         return self.attempts(ticket_id) >= cap
+
+    def open_f5_offer(self, ticket_id: str, *, attempt_id: str, category: str,
+                      has_safety_net: bool, foundational: bool) -> None:
+        """Record an F5 offer BEFORE the agent runs consensus (optimistic — one-shot per ticket
+        lifetime; a crash/erroring-council/repeat-`next` can never re-offer). Immutable except for
+        the status flip in consume_f5_offer: the category/foundational/safety-net captured HERE are
+        what resolve_park re-checks against — never a fresh re-classification (closes the TOCTOU
+        category-drift + the forged-`--ticket-id` hole)."""
+        self._data["f5_attempted"][ticket_id] = {
+            "attempt_id": attempt_id, "category": category,
+            "has_safety_net": bool(has_safety_net), "foundational": bool(foundational),
+            "status": "offered",
+        }
+        self._flush()
+
+    def f5_attempted(self, ticket_id: str) -> bool:
+        """True once an offer has EVER been opened for this ticket (any status) — the one-shot gate
+        consumed by _f5_offer in next_ticket."""
+        return ticket_id in self._data["f5_attempted"]
+
+    def get_f5_offer(self, ticket_id: str) -> dict | None:
+        """The durable offer record (attempt_id/category/foundational/has_safety_net/status), or
+        None if never offered. resolve_park validates the callback against THIS, not the ticket."""
+        rec = self._data["f5_attempted"].get(ticket_id)
+        return dict(rec) if isinstance(rec, dict) else None
+
+    def consume_f5_offer(self, ticket_id: str) -> None:
+        """Flip the offer to a terminal status so a duplicate/stale resolve-park cannot re-enter."""
+        rec = self._data["f5_attempted"].get(ticket_id)
+        if isinstance(rec, dict):
+            rec["status"] = "consumed"
+            self._flush()
 
     def reset_attempts(self, ticket_id: str) -> int:
         # INT-1675 P3: a first-class operator escape hatch for the documented "kill+resume / tooling
