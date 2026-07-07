@@ -3,15 +3,14 @@ name: agents-never-sleep
 description: >-
   Run large, multi-step work UNATTENDED — a backlog of tickets or milestones — without stopping
   to ask the human trivial clarifying questions. Use this whenever the user hands off a big job to
-  run overnight / "while I'm away" / "keep going till it's done", points you at a list of tickets or
-  a milestone, or says "unattended", "don't stop and ask", "work through the backlog", or "finish
+  run overnight / "while I'm away" / "keep going till it's done", points at a ticket backlog or
+  milestone, or says "unattended", "don't stop and ask", "work through the backlog", or "finish
   this tonight". Also use when a long autonomous run keeps stalling on questions. It gives you a
-  durable per-ticket state machine, an ASK/PARK/HALT autonomy contract (never block the run on a
-  single ticket), deterministic-gate quality checks with a failure taxonomy, git-backed
-  reversibility, attempt/loop caps, a stale-heartbeat restart watchdog (recovers a run frozen by
-  an overload wave), leaked-process reaping, and a run report — so the run never idles and nothing
-  irreversible happens unsupervised. Make sure to reach for this even when the user does not say
-  "unattended" but is clearly handing off long, autonomous, run-to-completion work.
+  durable per-ticket state machine, an ASK/PARK/HALT autonomy contract, deterministic quality gates
+  with a failure taxonomy, git-backed reversibility, attempt/loop caps, a stale-heartbeat restart
+  watchdog, leaked-process reaping, and a run report — so the run never idles and nothing
+  irreversible happens unsupervised. Reach for this even when the user does not say "unattended"
+  but is clearly handing off long, autonomous, run-to-completion work.
 ---
 
 # Agents Never Sleep (ANS)
