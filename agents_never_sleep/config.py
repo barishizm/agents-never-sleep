@@ -91,7 +91,8 @@ def default_config(profile) -> dict:
                           "write_enabled": False},   # write_enabled=False -> dry-run (no live mutation)
             "vault": {"enabled": bool(getattr(profile, "has_vault", False))},
             "tokonomix": {"enabled": bool(getattr(profile, "has_tokonomix", False)),
-                          "token_ref": None, "council": [], "judges": []},
+                          "token_ref": None, "council": [], "judges": [],
+                          "pending_onboard": False},
         },
         # Multi-model council review (advisory; agent calls it via the tokonomix MCP gateway). Slugs
         # are a starting point — pull FRESH ones from tokonomix_list_models, they drift. Disabled
@@ -157,6 +158,14 @@ def default_config(profile) -> dict:
         },
         "_note": "Generated defaults. Run the wizard (interactive) to confirm/extend.",
     }
+
+
+def enable_tokonomix_review(cfg: dict) -> None:
+    """Flip the three tokonomix-review consumers ON in-place. Used when a credential becomes present
+    (Paste path at wizard time, or the ensure_config re-probe after a keyless onboard). Idempotent."""
+    cfg.setdefault("integrations", {}).setdefault("tokonomix", {})["enabled"] = True
+    cfg.setdefault("council", {})["enabled"] = True
+    cfg.setdefault("specialists", {})["enabled"] = True
 
 
 def validate_consensus_config(config: dict) -> None:

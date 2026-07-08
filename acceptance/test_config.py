@@ -155,6 +155,22 @@ def test_wizard_unattended_keeps_conservative_default(failures):
         failures.append(f"[unattended] consensus_assisted_categories must stay []; got {got!r}")
 
 
+def test_pending_onboard_default_false(failures):
+    c = config.default_config(_Profile())
+    val = ((c.get("integrations") or {}).get("tokonomix") or {}).get("pending_onboard")
+    if val is not False:
+        failures.append(f"integrations.tokonomix.pending_onboard must default to False; got {val!r}")
+
+
+def test_enable_tokonomix_review_flips_all_three(failures):
+    cfg = {"integrations": {"tokonomix": {"enabled": False}},
+           "council": {"enabled": False}, "specialists": {"enabled": False}}
+    config.enable_tokonomix_review(cfg)
+    if not (cfg["integrations"]["tokonomix"]["enabled"] and cfg["council"]["enabled"]
+            and cfg["specialists"]["enabled"]):
+        failures.append(f"enable_tokonomix_review must flip all three True; got {cfg!r}")
+
+
 def main():
     failures = []
     for fn in (test_default_has_empty_consensus_list, test_validate_accepts_known_categories,
@@ -162,7 +178,9 @@ def main():
                test_validate_rejects_non_list_including_falsy,
                test_wizard_no_tokonomix_skips_consensus_questions,
                test_wizard_tokonomix_specialist_and_category_opt_in,
-               test_wizard_unattended_keeps_conservative_default):
+               test_wizard_unattended_keeps_conservative_default,
+               test_pending_onboard_default_false,
+               test_enable_tokonomix_review_flips_all_three):
         fn(failures)
     if failures:
         print("RESULT: ❌")
