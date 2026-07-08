@@ -309,6 +309,20 @@ def run_wizard(repo_dir: str, profile) -> dict:
 def ensure_config(repo_dir: str, profile) -> dict:
     existing = load_config(repo_dir)
     if existing:
+        # Re-activation (keyless onboard completed between runs): a durable pending_onboard marker
+        # means "the newcomer chose Create; enable review as soon as the key exists". Silent (no
+        # prompt) so it is safe in unattended runs too. Any flip re-records TOFU trust — trust.py
+        # keys on the sha256 of the config bytes, so a silent flip would otherwise bounce the next
+        # detached run as untrusted.
+        tok = (existing.get("integrations") or {}).get("tokonomix") or {}
+        if tok.get("pending_onboard"):
+            from . import onboarding
+            if onboarding.credential_present():
+                enable_tokonomix_review(existing)
+                existing["integrations"]["tokonomix"]["pending_onboard"] = False
+                save_config(repo_dir, existing)
+                from .trust import record_trust
+                record_trust(repo_dir, config_path(repo_dir))
         return existing
     if is_interactive():
         return run_wizard(repo_dir, profile)

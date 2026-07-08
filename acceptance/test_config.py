@@ -171,6 +171,33 @@ def test_enable_tokonomix_review_flips_all_three(failures):
         failures.append(f"enable_tokonomix_review must flip all three True; got {cfg!r}")
 
 
+def test_ensure_config_reprobe_enables_review_and_rerecords_trust(failures):
+    import agents_never_sleep.config as C, agents_never_sleep.onboarding as OB
+    from agents_never_sleep import trust
+    orig_cred = OB.credential_present
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            os.environ["ANS_TEST_MODE"] = "1"; os.environ["ANS_TRUST_STORE"] = os.path.join(d, "t.json")
+            # seed a keyless config with the pending marker + trust recorded on it
+            cfg = C.default_config(_Profile())
+            cfg["integrations"]["tokonomix"]["pending_onboard"] = True
+            C.save_config(d, cfg)
+            trust.record_trust(d, C.config_path(d))
+            # now a credential appears
+            OB.credential_present = lambda: True
+            out = C.ensure_config(d, _Profile())
+            if not out["council"]["enabled"]:
+                failures.append("re-probe must enable review once the credential is present")
+            if out["integrations"]["tokonomix"].get("pending_onboard"):
+                failures.append("re-probe must clear the pending_onboard marker")
+            # trust must match the NEW bytes (else a detached run bounces untrusted)
+            if not trust.is_trusted(d, C.config_path(d)):
+                failures.append("re-probe must re-record trust on the flipped config")
+    finally:
+        OB.credential_present = orig_cred
+        os.environ.pop("ANS_TEST_MODE", None); os.environ.pop("ANS_TRUST_STORE", None)
+
+
 def main():
     failures = []
     for fn in (test_default_has_empty_consensus_list, test_validate_accepts_known_categories,
@@ -180,7 +207,8 @@ def main():
                test_wizard_tokonomix_specialist_and_category_opt_in,
                test_wizard_unattended_keeps_conservative_default,
                test_pending_onboard_default_false,
-               test_enable_tokonomix_review_flips_all_three):
+               test_enable_tokonomix_review_flips_all_three,
+               test_ensure_config_reprobe_enables_review_and_rerecords_trust):
         fn(failures)
     if failures:
         print("RESULT: ❌")
