@@ -141,6 +141,19 @@ def test_end_to_end(failures, tmp):
         failures.append("[e2e] present credential should yield no blind-spot note")
 
 
+def test_protocol_names_beta_gate_and_credentials_file(failures):
+    p = onboarding._ONBOARD_PROTOCOL
+    if "accept_beta_terms" not in p:
+        failures.append("protocol must tell the agent about accept_beta_terms (beta-gate)")
+    if "credentials.json" not in p:
+        failures.append("protocol must say the key auto-lands in ~/.tokonomix/credentials.json")
+    if "re-run the wizard" in p or "re-run preflight" in p:
+        failures.append("drop the no-op 're-run the wizard/preflight' recovery line")
+    low = p.lower()
+    if "after your human" not in low and "after the human" not in low:
+        failures.append("accept_beta_terms must be set only AFTER the human confirms the beta terms")
+
+
 def main() -> int:
     failures = []
     saved = {k: os.environ.get(k) for k in ("TOKONOMIX_API_KEY", "TOKONOMIX_CREDS_FILE")}
@@ -149,6 +162,7 @@ def main() -> int:
         test_logic(failures, tmp)
         test_report_note(failures)
         test_end_to_end(failures, tmp)
+        test_protocol_names_beta_gate_and_credentials_file(failures)
     finally:
         for k, v in saved.items():
             if v is None:
