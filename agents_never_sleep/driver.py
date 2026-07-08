@@ -327,6 +327,15 @@ class StepDriver:
         if os.path.exists(self.runbranch_path):
             os.unlink(self.runbranch_path)
 
+    def _clear_resume_halt(self) -> None:
+        """Clear the launcher stop-marker written by run.py on a RunResumeUnsafe HALT. Called on
+        every healthy run-branch entry so that once the operator resolves the stale state (or a
+        fresh run starts cleanly), the fresh-session loop stops treating the run as halted."""
+        try:
+            os.unlink(os.path.join(self.state_dir, "resume-halt"))
+        except OSError:
+            pass
+
     def _enter_run_branch(self) -> None:
         """Ensure the harness is ON its dedicated run branch before any snapshot/commit/revert.
 
@@ -351,6 +360,7 @@ class StepDriver:
                         "to start a fresh run.")
                 if git.current_ref() != state["run_branch"]:
                     git.checkout(state["run_branch"])
+                self._clear_resume_halt()  # safe resume — no longer halted
                 return
             original = git.current_ref()
             base = git.head()  # the operator-branch tip the run branch is cut from
@@ -367,6 +377,7 @@ class StepDriver:
             run_branch = f"ans/run-{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
             git.create_run_branch(run_branch)
             self._save_runbranch(run_branch, original, base)
+            self._clear_resume_halt()  # fresh run started cleanly — no longer halted
         except GitError as exc:
             self.key_blind_spots.append(
                 f"run-branch isolation unavailable ({exc}); harness commits may land on the "
@@ -624,11 +635,16 @@ class StepDriver:
         stop_notes = list(notes)
         if status == "STOPPED_CREDITS":
             stop_notes.insert(0, f"CREDITS EXHAUSTED — run stopped cleanly: {reason}")
+        try:
+            backup_refs = self.orch.git.list_backup_refs()
+        except GitError:
+            backup_refs = []
         report = build_report(
             outcomes, run_label=self.run_label,
             halted=(status == "HALTED"), halt_reason=reason,
             stopped_low_yield=(status == "LOW_YIELD"), notes=stop_notes,
             work_branch=(run_branch if done else None),
+            backup_refs=backup_refs,
         )
         with open(self.report_path, "w", encoding="utf-8") as fh:
             fh.write(report)

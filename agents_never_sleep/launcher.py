@@ -682,6 +682,16 @@ def run_fresh_session_loop(repo, cfg, full_argv, child_env, fresh_n, lock_fd, re
                     pass_fds=(lock_fd,) if lock_fd is not None else (),
                 )
             rc = proc.wait()
+            # Resume-safety HALT is TERMINAL and needs operator action: run.py drops a `resume-halt`
+            # marker when a stale/stranger run branch cannot be resumed. Respawning would only HALT
+            # again every session until the cap, so stop NOW and point the operator at it. (The
+            # driver clears the marker once a fresh/safe run branch is (re)entered.)
+            if os.path.exists(os.path.join(state_dir, "resume-halt")):
+                print(f"ans-run: HALT after session #{session} (rc={rc}) — a stale/unsafe run branch "
+                      f"cannot be resumed. The backlog is stopped pending operator action; inspect "
+                      f"{os.path.join(state_dir, 'resume-halt')} and the run report. Not respawning.",
+                      file=sys.stderr)
+                return EX_NOGO
             # Terminal detection: the driver clears the sentinel on DRAINED/HALTED/LOW_YIELD/
             # STOPPED_CREDITS. Absent => the backlog is done => stop the loop (success).
             if not os.path.exists(sentinel):

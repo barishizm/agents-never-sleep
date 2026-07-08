@@ -135,6 +135,20 @@ class Git:
         (`--is-ancestor` never throws on a normal false; only a missing/hung git binary raises.)"""
         return self._run("merge-base", "--is-ancestor", ancestor, descendant).returncode == 0
 
+    def list_backup_refs(self) -> list:
+        """Enumerate durable pre-revert WIP backups (`refs/ans-backup/*`) so the morning report can
+        point an operator at recoverable working-tree state a `revert_to` set aside. Read-only,
+        best-effort: any git failure yields [] (the report simply omits the section)."""
+        r = self._run("for-each-ref", "--format=%(refname) %(objectname:short)", "refs/ans-backup/")
+        if r.returncode != 0:
+            return []
+        out = []
+        for ln in r.stdout.splitlines():
+            parts = ln.split()
+            if len(parts) == 2:
+                out.append((parts[0], parts[1]))
+        return out
+
     def commit_all(self, message: str) -> str:
         self._ensure_gitignore()
         self._run("add", "-A")

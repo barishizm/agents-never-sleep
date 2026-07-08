@@ -41,7 +41,8 @@ def build_report(outcomes: list, *, run_label: str = "unattended run",
                  halted: bool = False, halt_reason: str = "",
                  stopped_low_yield: bool = False, notes=(),
                  work_branch: str | None = None,
-                 active_agent: str | None = None, agent_hints: dict | None = None) -> str:
+                 active_agent: str | None = None, agent_hints: dict | None = None,
+                 backup_refs=()) -> str:
     total = len(outcomes)
     done = sum(1 for o in outcomes if o.state == OutcomeState.DONE)
     low_yield = sum(1 for o in outcomes if o.state in _LOW_YIELD)
@@ -93,6 +94,20 @@ def build_report(outcomes: list, *, run_label: str = "unattended run",
         for o in f5_declined:
             cat = f" [{o.category}]" if o.category else ""
             lines.append(f">   - {o.ticket_id}{cat}: {o.why}")
+        lines.append("")
+    # Recoverable WIP backups (G1'): a `revert_to` set working-tree changes aside but anchored them
+    # (tracked + untracked) into a durable `refs/ans-backup/*` commit before the reset. Surface them
+    # so "recoverable in principle" becomes "findable in practice" — the peer incident had to dig one
+    # out by hand. The restore hint is NON-destructive (inspect in a scratch worktree first).
+    if backup_refs:
+        lines.append(f"> ♻️ **{len(backup_refs)} recoverable WIP backup(s)** — a revert set "
+                     "working-tree changes aside but anchored them (tracked + untracked):")
+        for ref, sha in backup_refs:
+            lines.append(f">   - `{ref}` ({sha})")
+        newest = backup_refs[-1][0]
+        lines.append(f">   Inspect the latest without touching your tree: "
+                     f"`git worktree add /tmp/ans-recover {newest}` "
+                     f"(or restore one file: `git checkout {newest} -- <path>`).")
         lines.append("")
     # Where the work lives (INT-1825 bug 2): the run is isolated to its own branch, so point the
     # operator at it explicitly — this is an info pointer, NOT a blind spot.

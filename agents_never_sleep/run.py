@@ -479,8 +479,13 @@ def _agent_hint_kwargs(ctx) -> dict:
 
 def cmd_report(args) -> int:
     ctx = _Context(args)
+    from .vcs import Git, GitError
+    try:
+        backup_refs = Git(ctx.repo).list_backup_refs()
+    except GitError:
+        backup_refs = []
     report = build_report(ctx.store.all(), run_label="unattended run",
-                          **_agent_hint_kwargs(ctx))
+                          backup_refs=backup_refs, **_agent_hint_kwargs(ctx))
     with open(ctx.report_path, "w", encoding="utf-8") as fh:
         fh.write(report)
     out = {"status": "REPORT_WRITTEN", "report_path": ctx.report_path}
@@ -638,6 +643,18 @@ def main(argv=None) -> int:
         # Loud HALT: a stale/stranger run branch cannot be safely resumed. Emit a structured signal
         # and exit non-zero. run-branch.json is left intact (we raised before any checkout) so the
         # operator can inspect; every re-invocation HALTs identically until they act.
+        # Also drop a durable `resume-halt` marker so the fresh-session launcher STOPS instead of
+        # respawning a fresh agent that would only HALT again (up to its cap). The driver clears the
+        # marker once a fresh/safe run branch is (re)entered. Best-effort; a write failure just
+        # falls back to the (bounded) respawn-cap behavior.
+        try:
+            repo = os.path.abspath(getattr(args, "repo", ".") or ".")
+            sd = os.path.join(repo, getattr(args, "state_dir", None) or ".unattended/state")
+            os.makedirs(sd, exist_ok=True)
+            with open(os.path.join(sd, "resume-halt"), "w", encoding="utf-8") as fh:
+                fh.write(str(exc) + "\n")
+        except OSError:
+            pass
         return _emit({"status": "HALT_RESUME_UNSAFE", "error": str(exc)}, code=3)
 
 
