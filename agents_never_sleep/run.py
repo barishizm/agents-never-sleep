@@ -40,6 +40,43 @@ def _unattended() -> bool:
     return bool(os.environ.get("CLAUDE_UNATTENDED")) or not sys.stdin.isatty()
 
 
+def _resolve_writable_state_dirs(repo: str, state_dir: str, artifacts_dir: str,
+                                  blind_spots: list) -> tuple[str, str]:
+    """The harness's own bookkeeping (outcome store, ledger, heartbeat, capability profile) lives
+    under <repo>/.unattended by default. A repo that is read-only end to end (a locked-down
+    working tree, a `:ro` mount) can't create that directory even when git itself still works —
+    reversibility and the harness's scratch space are independent concerns, so a blocked scratch
+    space must degrade, not crash. Before this, the very first disk write in _Context.__init__
+    (preflight.write_profile) died with an unhandled PermissionError, so the driver never got a
+    chance to run its own read-only handling (HALT / BLOCKED_ENV) (2026-07-08 E2E, second
+    session). Redirect both dirs outside the repo, keyed by the repo's own path so repeated
+    next/complete calls against the same repo keep finding the same fallback location."""
+    try:
+        os.makedirs(state_dir, exist_ok=True)
+        os.makedirs(artifacts_dir, exist_ok=True)
+        return state_dir, artifacts_dir
+    except OSError:
+        pass
+    import hashlib
+    import tempfile
+    tag = hashlib.sha1(os.path.abspath(repo).encode("utf-8")).hexdigest()[:16]
+    base = os.path.join(tempfile.gettempdir(), f"agents-never-sleep-state-{tag}")
+    fallback_state = os.path.join(base, "state")
+    fallback_artifacts = os.path.join(base, "artifacts")
+    try:
+        os.makedirs(fallback_state, exist_ok=True)
+        os.makedirs(fallback_artifacts, exist_ok=True)
+        blind_spots.append(
+            f"repo state dir {state_dir!r} is not writable — harness bookkeeping redirected to "
+            f"{base!r} for this repo (read-only-repo degrade)")
+        return fallback_state, fallback_artifacts
+    except OSError as exc:
+        blind_spots.append(
+            f"repo state dir {state_dir!r} AND the fallback {base!r} are both unwritable "
+            f"({exc}) — harness bookkeeping cannot persist")
+        return state_dir, artifacts_dir
+
+
 def _primary_gate(config: dict, repo: str):
     for g in config.get("gates", []):
         if g.get("blocking", True):
@@ -85,8 +122,10 @@ class _Context:
 
         self.repo = os.path.abspath(args.repo)
         self.unattended = _unattended()
-        self.state_dir = os.path.join(self.repo, args.state_dir)
-        self.artifacts_dir = os.path.join(self.repo, args.artifacts_dir)
+        self.key_blind_spots = []
+        self.state_dir, self.artifacts_dir = _resolve_writable_state_dirs(
+            self.repo, os.path.join(self.repo, args.state_dir),
+            os.path.join(self.repo, args.artifacts_dir), self.key_blind_spots)
 
         # Preflight (git probes + a Paperclip socket probe) only needs to run when there is no
         # saved config yet — its sole consumer is config creation. On every later next/complete a
@@ -106,7 +145,6 @@ class _Context:
         # Resolve a Vault-backed tokonomix key into the env the existing consumers read (the
         # onboarding gate + council both probe TOKONOMIX_API_KEY). Only when not already set; the
         # resolved value is registered for redaction. A failure degrades (no env set), never crashes.
-        self.key_blind_spots = []
         tk_ref = (self.config.get("integrations", {}).get("tokonomix", {}) or {}).get("token_ref")
         if tk_ref and not os.environ.get("TOKONOMIX_API_KEY"):
             from .keysource import resolve_ref

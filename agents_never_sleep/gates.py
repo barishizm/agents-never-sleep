@@ -18,6 +18,7 @@ from __future__ import annotations
 import dataclasses
 import enum
 import os
+import shlex
 import subprocess
 
 
@@ -66,8 +67,12 @@ def _run_command(command: list[str], cwd: str, timeout: int) -> tuple[int, str, 
 
 
 class GateRunner:
-    def __init__(self, command: list[str], cwd: str, timeout: int = 120):
-        self.command = command
+    def __init__(self, command: list[str] | str, cwd: str, timeout: int = 120):
+        # A config-authored gate command is natural JSON as a single string (e.g. "bash gate.sh");
+        # subprocess.run needs argv, so split it exactly like launcher.py's agent-cmd normalization
+        # (_as_argv) does — a bare string handed straight through makes subprocess treat the whole
+        # line as one executable name and raise FileNotFoundError (2026-07-08 E2E, second session).
+        self.command = shlex.split(command) if isinstance(command, str) else list(command)
         self.cwd = cwd
         self.timeout = timeout
 
