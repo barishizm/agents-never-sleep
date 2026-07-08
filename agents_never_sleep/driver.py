@@ -646,12 +646,33 @@ class StepDriver:
             work_branch=(run_branch if done else None),
             backup_refs=backup_refs,
         )
-        with open(self.report_path, "w", encoding="utf-8") as fh:
-            fh.write(report)
-        return {"status": status, "reason": reason, "report_path": self.report_path,
-                "processed": len(outcomes), "done": done, "run_branch": run_branch,
-                "message": f"backlog {status}; report written to {self.report_path}"
-                           + (f"; work on branch {run_branch}" if run_branch and done else "")}
+        # The terminal JSON is the agent-facing contract — it must reach the agent even when
+        # the repo root is unwritable (read-only fs is the flagship HALT case, so the report
+        # write fails in exactly the scenario that needs the HALTED signal most). Degrade:
+        # fall back to the (usually still-writable) state dir, else report_path=null with an
+        # explanatory note — never an unhandled traceback (2026-07-08 E2E finding).
+        report_path, report_error = self.report_path, None
+        try:
+            with open(report_path, "w", encoding="utf-8") as fh:
+                fh.write(report)
+        except OSError as exc:
+            report_error = str(exc)
+            fallback = os.path.join(self.state_dir, os.path.basename(self.report_path))
+            try:
+                with open(fallback, "w", encoding="utf-8") as fh:
+                    fh.write(report)
+                report_path = fallback
+            except OSError:
+                report_path = None
+        out = {"status": status, "reason": reason, "report_path": report_path,
+               "processed": len(outcomes), "done": done, "run_branch": run_branch,
+               "message": (f"backlog {status}; report written to {report_path}"
+                           if report_path else
+                           f"backlog {status}; report could NOT be written ({report_error})")
+                          + (f"; work on branch {run_branch}" if run_branch and done else "")}
+        if report_error:
+            out["report_error"] = report_error
+        return out
 
     # ---- the two entry points the agent calls -------------------------------------------
 

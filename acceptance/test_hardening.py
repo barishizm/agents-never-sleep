@@ -178,6 +178,74 @@ def test_bug4_hard_fail_on_path_mismatch(failures):
     if proc_ok.returncode != 0:
         failures.append(f"[BUG4] run from repo root should pass, got {proc_ok.returncode} "
                         f"({proc_ok.stdout!r} {proc_ok.stderr!r})")
+    # A SYMLINKED spelling of the same repo must ALSO pass: the guard compares directory
+    # IDENTITY, not spelling. This is the macOS default — TMPDIR lives under /var/folders,
+    # a symlink to /private/var/folders, so getcwd() (always physical) never string-equals
+    # a --repo passed through the symlink even though CWD *is* the repo (2026-07-08 E2E).
+    link_parent = tempfile.mkdtemp(prefix="ue-h-cwd-link-")
+    link = os.path.join(link_parent, "repo-link")
+    os.symlink(repo, link)
+    proc_link = subprocess.run([sys.executable, "-m", "harness.run", "next", "--repo", link,
+                                "--tickets", "tickets", "--state-dir", "state",
+                                "--artifacts-dir", "artifacts"], cwd=repo, env=env,
+                               capture_output=True, text=True)
+    if proc_link.returncode != 0:
+        failures.append(f"[BUG4-symlink] symlinked --repo spelling of CWD should pass, got "
+                        f"{proc_link.returncode} ({proc_link.stdout!r} {proc_link.stderr!r})")
+
+
+def test_halt_readonly_repo_report_degrades(failures):
+    """HALT in a read-only repo root (the flagship no-safety-net case: no VCS, git init
+    impossible) must still emit the terminal HALTED JSON on exit 0 — the report write DEGRADES
+    (fallback under .unattended/, or a report_error note), it never becomes an unhandled
+    PermissionError traceback that breaks the agent-facing JSON contract (2026-07-08 E2E)."""
+    work = tempfile.mkdtemp(prefix="ue-h-ro-halt-")
+    repo = os.path.join(work, "repo")
+    os.makedirs(os.path.join(repo, "tickets"))
+    with open(os.path.join(repo, "tickets", "h1.md"), "w", encoding="utf-8") as fh:
+        fh.write("---\nid: h1\ntitle: Tidy a comment\n---\n\nFix the typo in notes.txt.\n")
+    with open(os.path.join(repo, "notes.txt"), "w", encoding="utf-8") as fh:
+        fh.write("# nots\n")
+    os.makedirs(os.path.join(repo, ".claude"))
+    with open(os.path.join(repo, ".claude", "agents-never-sleep.json"), "w",
+              encoding="utf-8") as fh:
+        json.dump({"schema_version": 1,
+                   "gates": [{"name": "noop", "command": ["true"], "blocking": True}],
+                   "autonomy": {"non_destructive_only": False},
+                   "report": {"local_path": "night-report.md"}}, fh)
+    # .unattended stays writable (state/heartbeat live there); only the repo ROOT is read-only,
+    # so git init AND the night-report write both fail — exactly the reproduced scenario.
+    os.makedirs(os.path.join(repo, ".unattended"))
+    env = dict(os.environ)
+    env["CLAUDE_UNATTENDED"] = "1"
+    env.pop("UE_RUN_INCOMPLETE", None)
+    env["PYTHONPATH"] = SKILL_ROOT + os.pathsep + env.get("PYTHONPATH", "")
+    os.chmod(repo, 0o555)
+    try:
+        proc = subprocess.run([sys.executable, "-m", "agents_never_sleep.run", "next",
+                               "--repo", ".", "--tickets", "tickets"], cwd=repo, env=env,
+                              capture_output=True, text=True)
+    finally:
+        os.chmod(repo, 0o755)
+    if proc.returncode != 0:
+        failures.append(f"[ro-halt] expected exit 0 with HALTED JSON, got {proc.returncode} "
+                        f"(stderr: {proc.stderr[-300:]!r})")
+        return
+    try:
+        out = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        failures.append(f"[ro-halt] non-JSON output: {proc.stdout!r}")
+        return
+    if out.get("status") != "HALTED":
+        failures.append(f"[ro-halt] expected status HALTED, got {out!r}")
+    # The degraded report must be honest: either a fallback path that really exists,
+    # or report_path null + an explanatory report_error.
+    rp = out.get("report_path")
+    if rp:
+        if not os.path.exists(rp):
+            failures.append(f"[ro-halt] report_path {rp!r} does not exist")
+    elif not out.get("report_error"):
+        failures.append(f"[ro-halt] no report_path and no report_error note: {out!r}")
 
 
 def test_frontmatter_horizontal_rule(failures):
@@ -239,6 +307,7 @@ def main() -> int:
     test_pending_recovery_preserves_committed_done(failures)
     test_driver_beats_heartbeat(failures)
     test_bug4_hard_fail_on_path_mismatch(failures)
+    test_halt_readonly_repo_report_degrades(failures)
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — hardening regressions")

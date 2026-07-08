@@ -203,6 +203,13 @@ def _emit(obj: dict, code: int = 0) -> int:
     return code
 
 
+def _error_code(out) -> int:
+    """Exit code for a driver result: `status: ERROR` exits 2, matching cmd_next's sentinel
+    hard-fail — one convention for every subcommand, so a scripting agent can trust the exit
+    code as well as the JSON (2026-07-08 E2E: resolve-park's attempt-id-mismatch ERROR exited 0)."""
+    return 2 if isinstance(out, dict) and out.get("status") == "ERROR" else 0
+
+
 def _load_paperclip_tickets_for(ctx) -> list | None:
     """If Paperclip is configured, pull open issues as tickets; else None (fall back to local .md)."""
     pc_cfg = (ctx.config.get("integrations", {}).get("paperclip", {}) or {})
@@ -294,12 +301,19 @@ def _sentinel_path_ok(ctx: "_Context") -> bool:
     """The Stop-hook checks ${UE_RUN_INCOMPLETE:-$PWD/.unattended/run-incomplete}; the driver writes
     the same env-or-repo path. They agree automatically only when UE_RUN_INCOMPLETE is set OR the
     agent's CWD equals --repo. Otherwise never-stop silently breaks — so this is a HARD failure in
-    unattended mode, not a warning."""
+    unattended mode, not a warning.
+
+    Compared by directory IDENTITY (realpath), not spelling: getcwd() is always the physical
+    path, while --repo may arrive through a symlink — the macOS default, where TMPDIR lives
+    under /var/folders, a symlink to /private/var/folders. A string compare would hard-fail a
+    run whose CWD *is* the repo. (The Stop-hook's $PWD is physical too, so when this check
+    passes the hook and driver agree on the same real file.) Path CONSTRUCTION elsewhere stays
+    abspath on purpose — see cmd_note — only this identity check resolves symlinks."""
     if not ctx.unattended:
         return True
     if os.environ.get("UE_RUN_INCOMPLETE"):
         return True
-    return os.path.abspath(os.getcwd()) == ctx.repo
+    return os.path.realpath(os.getcwd()) == os.path.realpath(ctx.repo)
 
 
 _TERMINAL = {"DRAINED", "HALTED", "LOW_YIELD", "STOPPED_CREDITS"}
@@ -424,7 +438,7 @@ def cmd_complete(args) -> int:
     pcp = _push_paperclip(ctx)
     if isinstance(out, dict) and pcp is not None:
         out["paperclip"] = pcp
-    return _emit(out)
+    return _emit(out, code=_error_code(out))
 
 
 def cmd_resolve_park(args) -> int:
@@ -441,7 +455,7 @@ def cmd_resolve_park(args) -> int:
     if isinstance(out, dict):
         out.setdefault("repo_abs", ctx.repo)
         out.setdefault("tickets_abs", getattr(ctx, "tickets_dir", None))
-    return _emit(out)
+    return _emit(out, code=_error_code(out))
 
 
 def cmd_reset_attempts(args) -> int:

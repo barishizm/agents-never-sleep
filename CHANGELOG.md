@@ -10,6 +10,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed — 2026-07-08 E2E review findings
+- **Sentinel path guard compares directory identity, not spelling.** `next`'s unattended
+  CWD-vs-`--repo` hard-fail used a string compare (`abspath`), so a `--repo` passed through a
+  symlink — the macOS default, where TMPDIR lives under `/var/folders`, a symlink to
+  `/private/var/folders` — spuriously exited 2 even when CWD *was* the repo. Now compared via
+  `realpath` (identity); path construction elsewhere intentionally stays `abspath`.
+- **A terminal signal survives an unwritable repo root.** `driver._terminate` crashed with an
+  unhandled `PermissionError` writing the night report in a read-only repo — exactly the
+  flagship no-safety-net HALT case — breaking the agent-facing JSON contract. The report write
+  now degrades: fallback to the state dir, else `report_path: null` + a `report_error` note;
+  the HALTED/DRAINED JSON is always emitted.
+- **Leaked-process reaping now works on macOS/BSD.** `reap.py` was `/proc`-only, so on Darwin
+  `descendants()` silently returned `[]` (no-op reaper, permanently-red `test_reap`). Where
+  `/proc` is absent the same pid→ppid table now comes from one `ps -axo pid=,ppid=` snapshot —
+  still pure parent-chain lineage, never a name match.
+- **One ERROR exit-code convention.** `complete` and `resolve-park` returned exit 0 with
+  `status: "ERROR"` (e.g. an attempt-id mismatch); they now exit 2 like `next`'s sentinel
+  hard-fail, so scripts can trust the exit code as well as the JSON.
+- **py3.9 really is supported by the test suite.** Four acceptance suites used PEP 604
+  annotations evaluated at def time and crashed on import under Python 3.9
+  (`requires-python >= 3.9`); they now carry `from __future__ import annotations`.
+- **`run_all.sh` no longer runs the pytest-marked integration test.** `test_real_claude.py`
+  (real `claude -p`, needs pytest + credentials; out of the hermetic suite by its own header)
+  is skipped with a pointer to `pytest -m integration`.
+- **Docs: `complete` examples carry `--tickets`.** README/SKILL showed `complete` without
+  `--tickets`, which errors whenever the tickets dir is not `<repo>/tickets`. README version
+  pointers refreshed 1.0.0 → 1.3.0.
+
 ## [1.3.0] — 2026-07-08
 
 ### Added — keyless first-run Tokonomix onboarding offer (MINOR, additive)
