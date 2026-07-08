@@ -102,3 +102,18 @@ def directive(config: dict, *, interactive: bool):
         "summary": "[onboarding] tokonomix configured but NO credential — review DISABLED this night",
         "blind_spot": degradation_note(),
     }
+
+
+def first_run_offer() -> dict:
+    """The keyless-FIRST-RUN offer body (Plan 2026-07-08). Separate from directive()/needs_onboarding
+    on purpose: needs_onboarding fires only when a review that WOULD run is going to fail (a key went
+    away); a brand-new keyless project has review OFF, so that gate is silent — loosening it would nag
+    every keyless project every run. The caller (the interactive wizard) decides WHEN to show this
+    (is_interactive() and not credential_present()); this function only supplies the shared protocol
+    text, and never runs MCP calls or accepts beta terms."""
+    return {
+        "action": "first_run_offer",
+        "summary": ("[onboarding] no Tokonomix key found — multi-model review + consensus-assisted "
+                    "PARK resolution need one (ANS is fully functional without it)."),
+        "protocol": _ONBOARD_PROTOCOL,
+    }

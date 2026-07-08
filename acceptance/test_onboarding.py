@@ -154,6 +154,19 @@ def test_protocol_names_beta_gate_and_credentials_file(failures):
         failures.append("accept_beta_terms must be set only AFTER the human confirms the beta terms")
 
 
+def test_first_run_offer_shares_protocol_and_leaves_needs_onboarding_alone(failures):
+    off = onboarding.first_run_offer()
+    if off.get("action") != "first_run_offer":
+        failures.append(f"first_run_offer action wrong: {off!r}")
+    if off.get("protocol") is not onboarding._ONBOARD_PROTOCOL:
+        failures.append("first_run_offer must reuse the shared _ONBOARD_PROTOCOL constant (DRY)")
+    # never-nag: a fresh keyless config (review OFF) must NOT trip the run-time directive gate.
+    fresh = {"integrations": {"tokonomix": {"enabled": False}},
+             "council": {"enabled": False}, "specialists": {"enabled": False}}
+    if onboarding.needs_onboarding(fresh):
+        failures.append("needs_onboarding must stay False for a keyless-review-OFF config (never-nag)")
+
+
 def main() -> int:
     failures = []
     saved = {k: os.environ.get(k) for k in ("TOKONOMIX_API_KEY", "TOKONOMIX_CREDS_FILE")}
@@ -163,6 +176,7 @@ def main() -> int:
         test_report_note(failures)
         test_end_to_end(failures, tmp)
         test_protocol_names_beta_gate_and_credentials_file(failures)
+        test_first_run_offer_shares_protocol_and_leaves_needs_onboarding_alone(failures)
     finally:
         for k, v in saved.items():
             if v is None:
