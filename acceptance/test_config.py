@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import contextlib
+import io
 import os
 import shutil
 import sys
@@ -198,6 +200,44 @@ def test_ensure_config_reprobe_enables_review_and_rerecords_trust(failures):
         os.environ.pop("ANS_TEST_MODE", None); os.environ.pop("ANS_TRUST_STORE", None)
 
 
+def test_keyless_wizard_offers_three_way_and_skip_leaves_review_off(failures):
+    # Keyless first-run (has_tokonomix False), Skip (option 3, the default). Mirrors the file's
+    # _run_wizard_isolated idiom; credential_present pinned False so the offer path is deterministic.
+    profile = CapabilityProfile(has_tokonomix=False, has_paperclip=False)
+    buf = io.StringIO()
+    with unittest.mock.patch("agents_never_sleep.onboarding.credential_present", return_value=False), \
+         contextlib.redirect_stdout(buf):
+        cfg = _run_wizard_isolated(profile, ["y", "hybrid", "3"])
+    blob = buf.getvalue()
+    if "no Tokonomix key" not in blob and "No Tokonomix key" not in blob:
+        failures.append("keyless wizard must surface the no-key 3-way offer")
+    if cfg["council"]["enabled"] or cfg["integrations"]["tokonomix"]["enabled"]:
+        failures.append("Skip must leave review OFF")
+    if cfg["integrations"]["tokonomix"].get("pending_onboard"):
+        failures.append("Skip must NOT set pending_onboard")
+
+
+def test_keyless_wizard_create_sets_pending_marker_and_no_mcp(failures):
+    # Keyless first-run, Create (option 1): marker set, review NOT enabled this session, zero MCP.
+    profile = CapabilityProfile(has_tokonomix=False, has_paperclip=False)
+    with unittest.mock.patch("agents_never_sleep.onboarding.credential_present", return_value=False):
+        cfg = _run_wizard_isolated(profile, ["y", "hybrid", "1"])
+    if not cfg["integrations"]["tokonomix"].get("pending_onboard"):
+        failures.append("Create must set pending_onboard=True")
+    if cfg["council"]["enabled"]:
+        failures.append("Create must NOT enable review this session (activates after reload)")
+
+
+def test_unattended_wizard_never_offers(failures):
+    # CLAUDE_UNATTENDED path: run_wizard bails before the offer; no marker, no prompt.
+    profile = CapabilityProfile(has_tokonomix=False, has_paperclip=False)
+    with unittest.mock.patch("agents_never_sleep.config.is_interactive", return_value=False), \
+         tempfile.TemporaryDirectory() as d:
+        cfg = config.run_wizard(os.path.join(d, "repo"), profile)
+    if cfg["integrations"]["tokonomix"].get("pending_onboard"):
+        failures.append("unattended run must never reach the offer / set pending_onboard")
+
+
 def main():
     failures = []
     for fn in (test_default_has_empty_consensus_list, test_validate_accepts_known_categories,
@@ -208,7 +248,10 @@ def main():
                test_wizard_unattended_keeps_conservative_default,
                test_pending_onboard_default_false,
                test_enable_tokonomix_review_flips_all_three,
-               test_ensure_config_reprobe_enables_review_and_rerecords_trust):
+               test_ensure_config_reprobe_enables_review_and_rerecords_trust,
+               test_keyless_wizard_offers_three_way_and_skip_leaves_review_off,
+               test_keyless_wizard_create_sets_pending_marker_and_no_mcp,
+               test_unattended_wizard_never_offers):
         fn(failures)
     if failures:
         print("RESULT: ❌")

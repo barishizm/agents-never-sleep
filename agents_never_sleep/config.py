@@ -264,6 +264,34 @@ def run_wizard(repo_dir: str, profile) -> dict:
                    "n").lower().startswith("y"):
                 opted.append(cat)
         cfg.setdefault("classify", {})["consensus_assisted_categories"] = opted
+    else:
+        # Keyless first-run: no credential detected. Offer once (interactive only — we are already
+        # past the is_interactive() bail). Never runs MCP / never accepts beta terms; the agent+human
+        # do that. Skip is the default (bare Enter = today's fully-functional, review-OFF behaviour).
+        from . import onboarding
+        offer = onboarding.first_run_offer()
+        print("")
+        print(offer["summary"])
+        print("  1) Create a free Tokonomix account now (keyless onboard — needs your email + a")
+        print("     6-digit code + one beta-terms confirmation; review activates after a reload).")
+        print("  2) Paste an existing key (set TOKONOMIX_API_KEY or drop it in ~/.tokonomix/credentials.json).")
+        print("  3) Skip — proceed with council/specialist/F5-consensus review OFF (you can enable it")
+        print("     later by re-running this setup, or it auto-enables once a key is present).")
+        choice = ask("Choose 1/2/3", "3").strip()
+        if choice == "1":
+            print("")
+            print(offer["protocol"])
+            cfg["integrations"]["tokonomix"]["pending_onboard"] = True
+            print("  → Recorded: review will auto-enable on the next run once the key is in place.")
+        elif choice == "2":
+            input("  Put the key in place (env TOKONOMIX_API_KEY or ~/.tokonomix/credentials.json), "
+                  "then press Enter... ")
+            if onboarding.credential_present():
+                enable_tokonomix_review(cfg)
+                print("  → Key detected — multi-model review enabled.")
+            else:
+                print("  → No key detected yet; leaving review OFF. Re-run setup once the key is in place.")
+        # choice 3 / anything else: Skip — leave review OFF, no marker, zero MCP activity.
 
     # Launcher presets: scaffold one preset per INSTALLED known agent CLI, and make the
     # autonomy decision explicit per CLI (security review 2026-06-10: autonomy flags are
