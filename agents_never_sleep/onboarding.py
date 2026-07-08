@@ -33,6 +33,24 @@ _MCP_INSTALL = (
     "then reload so the tokonomix_* tools load."
 )
 
+# Shared keyless-onboard protocol text, consumed by directive() (interactive branch) and by
+# first_run_offer() (the keyless-first-run case). Fixes two stale-copy defects: the server is
+# BETA-gated on accept_beta_terms (a 400 without it), and the resulting key auto-lands in
+# ~/.tokonomix/credentials.json (no env var needed) once the MCP tools reload.
+_ONBOARD_PROTOCOL = (
+    _MCP_INSTALL + " THEN run the keyless onboarding via MCP. The server is in BETA: "
+    "tokonomix_onboard requires accept_beta_terms — first show your human the beta terms "
+    "(https://tokonomix.ai/beta) and, ONLY after the human confirms, call tokonomix_onboard(email, "
+    "accept_beta_terms=true). It emails a 6-digit code; then call tokonomix_onboard_verify(email, "
+    "code). On success the API key is written to ~/.tokonomix/credentials.json (shown once) and is "
+    "loaded automatically — no env var needed — after the tools reload. Distinguish the two failure "
+    "modes: a 400 asking to accept the beta terms means confirm-and-recall; ANY OTHER error (or if "
+    "the email already has an account) means STOP the keyless flow and use an existing key instead "
+    "— get one at https://tokonomix.ai/dashboard/keys and set TOKONOMIX_API_KEY (or drop it in "
+    "~/.tokonomix/credentials.json). Adding the MCP server surfaces its tools only after a Claude "
+    "Code reload/new session, so review activates on the NEXT run, not mid-session."
+)
+
 
 def credential_present() -> bool:
     """Same probe as preflight: a tokonomix credential in env or the well-known creds file. The
@@ -77,16 +95,25 @@ def directive(config: dict, *, interactive: bool):
             "action": "onboard",
             "summary": "[onboarding] tokonomix configured but NO credential found — review is OFF",
             "mcp_install": _MCP_INSTALL,
-            "protocol": (_MCP_INSTALL + " THEN run the keyless onboarding via MCP: tokonomix_onboard "
-                         "(with your email), then tokonomix_onboard_verify with the emailed code. "
-                         "(If you already have an account, no code arrives — get a key at "
-                         "https://tokonomix.ai/dashboard/keys and set TOKONOMIX_API_KEY instead.) "
-                         "When it succeeds, re-run preflight (delete the cached capability-profile / "
-                         "re-run the wizard) so the council + specialists re-enable. Until then review "
-                         "is disabled — proceed."),
+            "protocol": _ONBOARD_PROTOCOL,
         }
     return {
         "action": "degraded",
         "summary": "[onboarding] tokonomix configured but NO credential — review DISABLED this night",
         "blind_spot": degradation_note(),
+    }
+
+
+def first_run_offer() -> dict:
+    """The keyless-FIRST-RUN offer body (Plan 2026-07-08). Separate from directive()/needs_onboarding
+    on purpose: needs_onboarding fires only when a review that WOULD run is going to fail (a key went
+    away); a brand-new keyless project has review OFF, so that gate is silent — loosening it would nag
+    every keyless project every run. The caller (the interactive wizard) decides WHEN to show this
+    (is_interactive() and not credential_present()); this function only supplies the shared protocol
+    text, and never runs MCP calls or accepts beta terms."""
+    return {
+        "action": "first_run_offer",
+        "summary": ("[onboarding] no Tokonomix key found — multi-model review + consensus-assisted "
+                    "PARK resolution need one (ANS is fully functional without it)."),
+        "protocol": _ONBOARD_PROTOCOL,
     }

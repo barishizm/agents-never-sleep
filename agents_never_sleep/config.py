@@ -91,7 +91,8 @@ def default_config(profile) -> dict:
                           "write_enabled": False},   # write_enabled=False -> dry-run (no live mutation)
             "vault": {"enabled": bool(getattr(profile, "has_vault", False))},
             "tokonomix": {"enabled": bool(getattr(profile, "has_tokonomix", False)),
-                          "token_ref": None, "council": [], "judges": []},
+                          "token_ref": None, "council": [], "judges": [],
+                          "pending_onboard": False},
         },
         # Multi-model council review (advisory; agent calls it via the tokonomix MCP gateway). Slugs
         # are a starting point — pull FRESH ones from tokonomix_list_models, they drift. Disabled
@@ -157,6 +158,14 @@ def default_config(profile) -> dict:
         },
         "_note": "Generated defaults. Run the wizard (interactive) to confirm/extend.",
     }
+
+
+def enable_tokonomix_review(cfg: dict) -> None:
+    """Flip the three tokonomix-review consumers ON in-place. Used when a credential becomes present
+    (Paste path at wizard time, or the ensure_config re-probe after a keyless onboard). Idempotent."""
+    cfg.setdefault("integrations", {}).setdefault("tokonomix", {})["enabled"] = True
+    cfg.setdefault("council", {})["enabled"] = True
+    cfg.setdefault("specialists", {})["enabled"] = True
 
 
 def validate_consensus_config(config: dict) -> None:
@@ -255,6 +264,34 @@ def run_wizard(repo_dir: str, profile) -> dict:
                    "n").lower().startswith("y"):
                 opted.append(cat)
         cfg.setdefault("classify", {})["consensus_assisted_categories"] = opted
+    else:
+        # Keyless first-run: no credential detected. Offer once (interactive only — we are already
+        # past the is_interactive() bail). Never runs MCP / never accepts beta terms; the agent+human
+        # do that. Skip is the default (bare Enter = today's fully-functional, review-OFF behaviour).
+        from . import onboarding
+        offer = onboarding.first_run_offer()
+        print("")
+        print(offer["summary"])
+        print("  1) Create a free Tokonomix account now (keyless onboard — needs your email + a")
+        print("     6-digit code + one beta-terms confirmation; review activates after a reload).")
+        print("  2) Paste an existing key (set TOKONOMIX_API_KEY or drop it in ~/.tokonomix/credentials.json).")
+        print("  3) Skip — proceed with council/specialist/F5-consensus review OFF (you can enable it")
+        print("     later by re-running this setup, or it auto-enables once a key is present).")
+        choice = ask("Choose 1/2/3", "3").strip()
+        if choice == "1":
+            print("")
+            print(offer["protocol"])
+            cfg["integrations"]["tokonomix"]["pending_onboard"] = True
+            print("  → Recorded: review will auto-enable on the next run once the key is in place.")
+        elif choice == "2":
+            input("  Put the key in place (env TOKONOMIX_API_KEY or ~/.tokonomix/credentials.json), "
+                  "then press Enter... ")
+            if onboarding.credential_present():
+                enable_tokonomix_review(cfg)
+                print("  → Key detected — multi-model review enabled.")
+            else:
+                print("  → No key detected yet; leaving review OFF. Re-run setup once the key is in place.")
+        # choice 3 / anything else: Skip — leave review OFF, no marker, zero MCP activity.
 
     # Launcher presets: scaffold one preset per INSTALLED known agent CLI, and make the
     # autonomy decision explicit per CLI (security review 2026-06-10: autonomy flags are
@@ -300,6 +337,20 @@ def run_wizard(repo_dir: str, profile) -> dict:
 def ensure_config(repo_dir: str, profile) -> dict:
     existing = load_config(repo_dir)
     if existing:
+        # Re-activation (keyless onboard completed between runs): a durable pending_onboard marker
+        # means "the newcomer chose Create; enable review as soon as the key exists". Silent (no
+        # prompt) so it is safe in unattended runs too. Any flip re-records TOFU trust — trust.py
+        # keys on the sha256 of the config bytes, so a silent flip would otherwise bounce the next
+        # detached run as untrusted.
+        tok = (existing.get("integrations") or {}).get("tokonomix") or {}
+        if tok.get("pending_onboard"):
+            from . import onboarding
+            if onboarding.credential_present():
+                enable_tokonomix_review(existing)
+                existing["integrations"]["tokonomix"]["pending_onboard"] = False
+                save_config(repo_dir, existing)
+                from .trust import record_trust
+                record_trust(repo_dir, config_path(repo_dir))
         return existing
     if is_interactive():
         return run_wizard(repo_dir, profile)

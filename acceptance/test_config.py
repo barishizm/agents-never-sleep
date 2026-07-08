@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import contextlib
+import io
 import os
 import shutil
 import sys
@@ -155,6 +157,87 @@ def test_wizard_unattended_keeps_conservative_default(failures):
         failures.append(f"[unattended] consensus_assisted_categories must stay []; got {got!r}")
 
 
+def test_pending_onboard_default_false(failures):
+    c = config.default_config(_Profile())
+    val = ((c.get("integrations") or {}).get("tokonomix") or {}).get("pending_onboard")
+    if val is not False:
+        failures.append(f"integrations.tokonomix.pending_onboard must default to False; got {val!r}")
+
+
+def test_enable_tokonomix_review_flips_all_three(failures):
+    cfg = {"integrations": {"tokonomix": {"enabled": False}},
+           "council": {"enabled": False}, "specialists": {"enabled": False}}
+    config.enable_tokonomix_review(cfg)
+    if not (cfg["integrations"]["tokonomix"]["enabled"] and cfg["council"]["enabled"]
+            and cfg["specialists"]["enabled"]):
+        failures.append(f"enable_tokonomix_review must flip all three True; got {cfg!r}")
+
+
+def test_ensure_config_reprobe_enables_review_and_rerecords_trust(failures):
+    import agents_never_sleep.config as C, agents_never_sleep.onboarding as OB
+    from agents_never_sleep import trust
+    orig_cred = OB.credential_present
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            os.environ["ANS_TEST_MODE"] = "1"; os.environ["ANS_TRUST_STORE"] = os.path.join(d, "t.json")
+            # seed a keyless config with the pending marker + trust recorded on it
+            cfg = C.default_config(_Profile())
+            cfg["integrations"]["tokonomix"]["pending_onboard"] = True
+            C.save_config(d, cfg)
+            trust.record_trust(d, C.config_path(d))
+            # now a credential appears
+            OB.credential_present = lambda: True
+            out = C.ensure_config(d, _Profile())
+            if not out["council"]["enabled"]:
+                failures.append("re-probe must enable review once the credential is present")
+            if out["integrations"]["tokonomix"].get("pending_onboard"):
+                failures.append("re-probe must clear the pending_onboard marker")
+            # trust must match the NEW bytes (else a detached run bounces untrusted)
+            if not trust.is_trusted(d, C.config_path(d)):
+                failures.append("re-probe must re-record trust on the flipped config")
+    finally:
+        OB.credential_present = orig_cred
+        os.environ.pop("ANS_TEST_MODE", None); os.environ.pop("ANS_TRUST_STORE", None)
+
+
+def test_keyless_wizard_offers_three_way_and_skip_leaves_review_off(failures):
+    # Keyless first-run (has_tokonomix False), Skip (option 3, the default). Mirrors the file's
+    # _run_wizard_isolated idiom; credential_present pinned False so the offer path is deterministic.
+    profile = CapabilityProfile(has_tokonomix=False, has_paperclip=False)
+    buf = io.StringIO()
+    with unittest.mock.patch("agents_never_sleep.onboarding.credential_present", return_value=False), \
+         contextlib.redirect_stdout(buf):
+        cfg = _run_wizard_isolated(profile, ["y", "hybrid", "3"])
+    blob = buf.getvalue()
+    if "no Tokonomix key" not in blob and "No Tokonomix key" not in blob:
+        failures.append("keyless wizard must surface the no-key 3-way offer")
+    if cfg["council"]["enabled"] or cfg["integrations"]["tokonomix"]["enabled"]:
+        failures.append("Skip must leave review OFF")
+    if cfg["integrations"]["tokonomix"].get("pending_onboard"):
+        failures.append("Skip must NOT set pending_onboard")
+
+
+def test_keyless_wizard_create_sets_pending_marker_and_no_mcp(failures):
+    # Keyless first-run, Create (option 1): marker set, review NOT enabled this session, zero MCP.
+    profile = CapabilityProfile(has_tokonomix=False, has_paperclip=False)
+    with unittest.mock.patch("agents_never_sleep.onboarding.credential_present", return_value=False):
+        cfg = _run_wizard_isolated(profile, ["y", "hybrid", "1"])
+    if not cfg["integrations"]["tokonomix"].get("pending_onboard"):
+        failures.append("Create must set pending_onboard=True")
+    if cfg["council"]["enabled"]:
+        failures.append("Create must NOT enable review this session (activates after reload)")
+
+
+def test_unattended_wizard_never_offers(failures):
+    # CLAUDE_UNATTENDED path: run_wizard bails before the offer; no marker, no prompt.
+    profile = CapabilityProfile(has_tokonomix=False, has_paperclip=False)
+    with unittest.mock.patch("agents_never_sleep.config.is_interactive", return_value=False), \
+         tempfile.TemporaryDirectory() as d:
+        cfg = config.run_wizard(os.path.join(d, "repo"), profile)
+    if cfg["integrations"]["tokonomix"].get("pending_onboard"):
+        failures.append("unattended run must never reach the offer / set pending_onboard")
+
+
 def main():
     failures = []
     for fn in (test_default_has_empty_consensus_list, test_validate_accepts_known_categories,
@@ -162,7 +245,13 @@ def main():
                test_validate_rejects_non_list_including_falsy,
                test_wizard_no_tokonomix_skips_consensus_questions,
                test_wizard_tokonomix_specialist_and_category_opt_in,
-               test_wizard_unattended_keeps_conservative_default):
+               test_wizard_unattended_keeps_conservative_default,
+               test_pending_onboard_default_false,
+               test_enable_tokonomix_review_flips_all_three,
+               test_ensure_config_reprobe_enables_review_and_rerecords_trust,
+               test_keyless_wizard_offers_three_way_and_skip_leaves_review_off,
+               test_keyless_wizard_create_sets_pending_marker_and_no_mcp,
+               test_unattended_wizard_never_offers):
         fn(failures)
     if failures:
         print("RESULT: ❌")

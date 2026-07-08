@@ -583,6 +583,17 @@ keyless `tokonomix_onboard` → `tokonomix_onboard_verify` handshake (interactiv
 run proceeds with review disabled and the run report carries a **BLIND SPOT** note. The MCP
 calls are yours; the harness owns only the gate.
 
+### Keyless first-run offer (interactive setup, no key yet)
+
+Separately from the mid-run gate above, an INTERACTIVE first-run setup with no Tokonomix credential
+configured offers a one-time 3-way choice: **Create** a keyless account, **Paste** an existing key, or
+**Skip** (the default — ANS is fully functional without a key; Enter performs zero MCP activity).
+Create runs the same `tokonomix_onboard` → `tokonomix_onboard_verify` handshake — the human supplies
+an email, a 6-digit code, and one beta-terms confirmation at https://tokonomix.ai/beta — and review
+activates after the next Claude Code reload, not mid-session. Paste is checked and, if valid, review
+is enabled immediately. To turn review on later after choosing Skip: re-run setup, or add a key and
+it is picked up automatically on the next launch. An unattended first-run never sees this offer.
+
 
 ## Related skills
 
