@@ -228,6 +228,19 @@ def test_keyless_wizard_create_sets_pending_marker_and_no_mcp(failures):
         failures.append("Create must NOT enable review this session (activates after reload)")
 
 
+def test_keyless_wizard_paste_with_key_present_enables_review_now(failures):
+    # Keyless first-run, Paste (option 2) with a key that IS present after the prompt: review flips
+    # ON immediately (all three consumers) and no pending marker is left. Covers the choice-2 branch.
+    profile = CapabilityProfile(has_tokonomix=False, has_paperclip=False)
+    with unittest.mock.patch("agents_never_sleep.onboarding.credential_present", return_value=True):
+        cfg = _run_wizard_isolated(profile, ["y", "hybrid", "2"])
+    tok = cfg["integrations"]["tokonomix"]
+    if not (tok["enabled"] and cfg["council"]["enabled"] and cfg["specialists"]["enabled"]):
+        failures.append("Paste with key present must enable all three review consumers now")
+    if tok.get("pending_onboard"):
+        failures.append("Paste (review enabled now) must NOT leave a pending_onboard marker")
+
+
 def test_unattended_wizard_never_offers(failures):
     # CLAUDE_UNATTENDED path: run_wizard bails before the offer; no marker, no prompt.
     profile = CapabilityProfile(has_tokonomix=False, has_paperclip=False)
@@ -251,6 +264,7 @@ def main():
                test_ensure_config_reprobe_enables_review_and_rerecords_trust,
                test_keyless_wizard_offers_three_way_and_skip_leaves_review_off,
                test_keyless_wizard_create_sets_pending_marker_and_no_mcp,
+               test_keyless_wizard_paste_with_key_present_enables_review_now,
                test_unattended_wizard_never_offers):
         fn(failures)
     if failures:
