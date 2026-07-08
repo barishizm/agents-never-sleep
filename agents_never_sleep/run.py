@@ -54,6 +54,15 @@ def _resolve_writable_state_dirs(repo: str, state_dir: str, artifacts_dir: str,
     try:
         os.makedirs(state_dir, exist_ok=True)
         os.makedirs(artifacts_dir, exist_ok=True)
+        # makedirs(exist_ok=True) succeeds on an EXISTING dir even when it is read-only (the
+        # "harness ran while writable, then the tree got locked" case), so probe an actual write —
+        # otherwise the very first state write (progress/skip/outcome) still dies later with a raw
+        # PermissionError instead of taking this redirect (2026-07-08 E2E, 2.1).
+        for d in (state_dir, artifacts_dir):
+            probe = os.path.join(d, f".writable-probe-{os.getpid()}")
+            with open(probe, "w", encoding="utf-8") as fh:
+                fh.write("probe")
+            os.remove(probe)
         return state_dir, artifacts_dir
     except OSError:
         pass
