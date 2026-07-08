@@ -12,8 +12,8 @@ This file complements two existing documents — read them together:
 - **`CHANGELOG.md`** — the per-version record of what changed; it already carries a "Roadmap to
   v1.0" list, which §4 here makes concrete and checkable.
 
-The current published version is **`1.2.0`** (source of truth: `agents_never_sleep/__init__.py`
-`__version__`), tagged `v1.2.0` on 2026-07-07 (`pip install git+…@v1.2.0`).
+The current published version is **`1.3.0`** (source of truth: `agents_never_sleep/__init__.py`
+`__version__`), tagged `v1.3.0` on 2026-07-08 (`pip install git+…@v1.3.0`).
 
 ---
 

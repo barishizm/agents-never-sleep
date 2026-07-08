@@ -10,6 +10,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-07-08
+
 ### Added — keyless first-run Tokonomix onboarding offer (MINOR, additive)
 - On an INTERACTIVE first-run with no Tokonomix credential, the wizard now offers a one-time 3-way
   choice — create a free account (keyless onboard), paste an existing key, or skip (default) — instead
