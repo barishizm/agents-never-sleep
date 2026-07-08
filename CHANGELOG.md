@@ -10,6 +10,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — keyless first-run Tokonomix onboarding offer (MINOR, additive)
+- On an INTERACTIVE first-run with no Tokonomix credential, the wizard now offers a one-time 3-way
+  choice — create a free account (keyless onboard), paste an existing key, or skip (default) — instead
+  of silently running with multi-model review OFF. Unattended first-runs are unchanged (never prompted).
+- The chosen path actually activates review: Paste flips review on immediately; Create records a
+  `pending_onboard` marker that `ensure_config` re-probes on the next launch and enables review once the
+  key is present — re-recording TOFU trust so a detached run does not bounce on the changed config bytes.
+- The onboarding directive copy now names the beta-gate (`accept_beta_terms`, set only after the human
+  confirms https://tokonomix.ai/beta) and that the key auto-lands in `~/.tokonomix/credentials.json`.
+- No config-schema break; the harness never calls the gateway or accepts beta terms — the agent + human
+  do. `needs_onboarding`/the run-time directive are unchanged (never-nag preserved).
+
 ## [1.2.0] — 2026-07-07
 
 ### Fixed — SKILL.md install: `description` under the 1024-char limit
