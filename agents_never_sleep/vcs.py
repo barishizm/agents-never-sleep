@@ -119,6 +119,22 @@ class Git:
         if r.returncode != 0:
             raise GitError(f"git checkout {ref}: {r.stderr.strip()}")
 
+    def branch_exists(self, name: str) -> bool:
+        """True if a local branch `name` currently exists. Non-zero rc (absent/deleted) → False."""
+        return self._run("rev-parse", "--verify", "--quiet", f"refs/heads/{name}").returncode == 0
+
+    def object_exists(self, ref: str) -> bool:
+        """True if `ref` resolves to a present commit object. False when it was gc'd / never existed —
+        used so an unresolvable recorded base is treated as stale rather than silently trusted."""
+        return self._run("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode == 0
+
+    def is_ancestor(self, ancestor: str, descendant: str) -> bool:
+        """True iff `ancestor` is an ancestor of `descendant` (a commit is its own ancestor). A
+        non-ancestor OR any resolve error yields False — the SAFE direction here: an unverifiable
+        lineage is treated as 'not an ancestor' so the caller HALTs rather than resuming blindly.
+        (`--is-ancestor` never throws on a normal false; only a missing/hung git binary raises.)"""
+        return self._run("merge-base", "--is-ancestor", ancestor, descendant).returncode == 0
+
     def commit_all(self, message: str) -> str:
         self._ensure_gitignore()
         self._run("add", "-A")
@@ -160,7 +176,15 @@ class Git:
         # throw on its own, so we must check returncodes explicitly and never fall through to reset).
         head = self._run("rev-parse", "HEAD")
         parent = head.stdout.strip() if head.returncode == 0 else ""
-        tmp_index = os.path.join(self.cwd, ".git", f"ans-backup-index.{os.getpid()}.{time.time_ns()}")
+        # Resolve the real git dir so this works in a linked worktree, where `<cwd>/.git` is a FILE
+        # (a `gitdir:` pointer), not a directory. `--git-dir` returns the per-worktree, writable dir
+        # (main/.git/worktrees/<name>), avoiding cross-worktree temp-index collisions; in a normal
+        # repo it is just `.git`, so this is behaviour-identical for main-tree runs.
+        gd = self._run("rev-parse", "--git-dir")
+        git_dir = gd.stdout.strip() if gd.returncode == 0 and gd.stdout.strip() else ".git"
+        if not os.path.isabs(git_dir):
+            git_dir = os.path.join(self.cwd, git_dir)
+        tmp_index = os.path.join(git_dir, f"ans-backup-index.{os.getpid()}.{time.time_ns()}")
         env = dict(os.environ, GIT_INDEX_FILE=tmp_index)
 
         def _g(*args) -> str:

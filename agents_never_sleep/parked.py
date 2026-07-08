@@ -48,7 +48,15 @@ class ParkedGuard:
         return bool(self.tracked or self.globs)
 
     def _exclude_path(self) -> str:
-        return os.path.join(self.repo, ".git", "info", "exclude")
+        # Resolve the shared common git dir so this works in a linked worktree, where `<repo>/.git`
+        # is a FILE (a `gitdir:` pointer), not a directory. `info/exclude` lives in the COMMON dir
+        # (shared across worktrees). In a normal repo `--git-common-dir` returns `.git`, so this is
+        # behaviour-identical for main-tree runs.
+        r = self._git("rev-parse", "--git-common-dir")
+        gcd = r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else ".git"
+        if not os.path.isabs(gcd):
+            gcd = os.path.join(self.repo, gcd)
+        return os.path.join(gcd, "info", "exclude")
 
     def _add_fence(self) -> None:
         path = self._exclude_path()

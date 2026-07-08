@@ -35,6 +35,14 @@ from .state import (ContaminationScope, OutcomeState, TERMINAL_SKIP_ON_RESUME,
                     OutcomeStore, TicketOutcome)
 
 
+class RunResumeUnsafe(Exception):
+    """A persisted run-branch cannot be safely resumed: its recorded base is no longer an ancestor
+    of the operator's branch (a stale/stranger run left behind by a prior kill-9), or the branch/base
+    vanished. Raised — deliberately NOT a GitError, so the `_enter_run_branch` degrade-catch does not
+    swallow it — to force a LOUD HALT (non-zero exit, run-branch.json left intact for inspection)
+    instead of a silent checkout that would move HEAD off live commits and delete untracked files."""
+
+
 def _atomic_write_json(path: str, data: dict) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=".tmp-", suffix=".json")
@@ -284,9 +292,27 @@ class StepDriver:
         except (json.JSONDecodeError, OSError):
             return None
 
-    def _save_runbranch(self, run_branch: str, original_branch: str) -> None:
+    def _save_runbranch(self, run_branch: str, original_branch: str, base: str) -> None:
+        # `base` = HEAD SHA at branch creation. Persisted so a later process can assert the run is
+        # still descended from the operator's branch before resuming it (stale-resume guard).
         _atomic_write_json(self.runbranch_path,
-                           {"run_branch": run_branch, "original_branch": original_branch})
+                           {"run_branch": run_branch, "original_branch": original_branch,
+                            "base": base})
+
+    def _resume_is_safe(self, git, state: dict) -> bool:
+        """Deterministic freshness check before resuming a persisted run branch. Safe iff the branch
+        still exists, the recorded base still resolves, and that base is an ancestor of BOTH the
+        operator's branch (`original_branch` — the ground truth, NEVER current HEAD, which in a
+        shared checkout may be junk left by the prior process) AND the run branch's own tip (so a
+        force-rewound run branch is rejected too). Any missing field / vanished ref → unsafe."""
+        run_branch = state.get("run_branch")
+        base = state.get("base")
+        original = state.get("original_branch")
+        if not run_branch or not base or not original:
+            return False  # pre-guard or truncated state — unverifiable, treat as stale
+        if not git.branch_exists(run_branch) or not git.object_exists(base):
+            return False
+        return git.is_ancestor(base, original) and git.is_ancestor(base, run_branch)
 
     def _clear_runbranch(self) -> None:
         if os.path.exists(self.runbranch_path):
@@ -304,13 +330,24 @@ class StepDriver:
         try:
             state = self._load_runbranch()
             if state and state.get("run_branch"):
+                # Stale-resume guard: never blindly check out a persisted run branch. A kill-9 leaves
+                # run-branch.json behind; resuming a run whose base no longer descends from the
+                # operator's branch would move HEAD off live commits and delete untracked files.
+                if not self._resume_is_safe(git, state):
+                    raise RunResumeUnsafe(
+                        f"refusing to resume run branch {state.get('run_branch')!r}: its recorded "
+                        f"base is no longer an ancestor of {state.get('original_branch')!r} (stale "
+                        "state from a prior interrupted run). No files were touched. Inspect the run "
+                        f"branch, then remove {self.runbranch_path} (or run in an isolated worktree) "
+                        "to start a fresh run.")
                 if git.current_ref() != state["run_branch"]:
                     git.checkout(state["run_branch"])
                 return
             original = git.current_ref()
+            base = git.head()  # the operator-branch tip the run branch is cut from
             run_branch = f"ans/run-{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
             git.create_run_branch(run_branch)
-            self._save_runbranch(run_branch, original)
+            self._save_runbranch(run_branch, original, base)
         except GitError as exc:
             self.key_blind_spots.append(
                 f"run-branch isolation unavailable ({exc}); harness commits may land on the "

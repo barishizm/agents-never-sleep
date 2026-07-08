@@ -27,7 +27,7 @@ import sys
 
 from . import config
 from .config import ensure_config, load_config
-from .driver import StepDriver
+from .driver import RunResumeUnsafe, StepDriver
 from .gates import GateRunner
 from .heartbeat import Heartbeat
 from .ledger import AttemptLedger
@@ -632,7 +632,13 @@ def main(argv=None) -> int:
     if not getattr(args, "func", None):
         ap.print_help()
         return 2
-    return args.func(args)
+    try:
+        return args.func(args)
+    except RunResumeUnsafe as exc:
+        # Loud HALT: a stale/stranger run branch cannot be safely resumed. Emit a structured signal
+        # and exit non-zero. run-branch.json is left intact (we raised before any checkout) so the
+        # operator can inspect; every re-invocation HALTs identically until they act.
+        return _emit({"status": "HALT_RESUME_UNSAFE", "error": str(exc)}, code=3)
 
 
 if __name__ == "__main__":
