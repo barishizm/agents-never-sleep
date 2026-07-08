@@ -157,11 +157,69 @@ def test_healthy_resume_still_proceeds(failures):
     os.environ.pop("UE_RUN_INCOMPLETE", None)
 
 
+def test_git_error_in_safety_check_halts_not_degrades(failures):
+    """Review finding #1: a GitError raised BY the safety check itself (git binary missing/hung)
+    must fail to the SAFE side (HALT), not be swallowed by the degrade-catch and silently proceed."""
+    from agents_never_sleep.vcs import GitError
+    repo = _new_repo()
+    work = tempfile.mkdtemp(prefix="ue-freshness-wk-")
+    os.environ["UE_RUN_INCOMPLETE"] = os.path.join(work, "state", "run-incomplete")
+    _driver(repo, work).next_ticket()  # process 1: persist a valid run-branch.json
+
+    drv = _driver(repo, work)  # process 2
+
+    def _boom(*_a, **_k):
+        raise GitError("git binary vanished mid-check")
+    drv.orch.git.branch_exists = _boom  # the safety check now hits the raise class
+
+    try:
+        r = drv.next_ticket()
+        failures.append(f"[fresh] GitError in safety check must HALT, not degrade; got {r.get('status')!r}")
+    except RunResumeUnsafe:
+        pass  # correct: unverifiable lineage -> HALT
+    os.environ.pop("UE_RUN_INCOMPLETE", None)
+
+
+def test_unborn_repo_defers_isolation_no_bogus_base(failures):
+    """Review finding #2 (refined): a repo with no commit yet (unborn HEAD). `git.head()` returns a
+    non-SHA ("HEAD" or "") there, so persisting it as `base` either wedges the next process OR
+    silently DEFEATS the guard (is_ancestor("HEAD","HEAD") is always True). Correct behavior: defer
+    isolation until a real baseline commit exists — never persist a non-commit base; never HALT."""
+    import re
+    repo = tempfile.mkdtemp(prefix="ue-freshness-unborn-")
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    with open(os.path.join(repo, "app.py"), "w") as fh:
+        fh.write("print('hi')\n")  # present but UNCOMMITTED -> HEAD is unborn
+    work = tempfile.mkdtemp(prefix="ue-freshness-wk-")
+    os.environ["UE_RUN_INCOMPLETE"] = os.path.join(work, "state", "run-incomplete")
+    runbranch_path = os.path.join(work, "state", "run-branch.json")
+    try:
+        r1 = _driver(repo, work).next_ticket()
+        if r1.get("status") not in ("PROCEED", "DRAINED"):
+            failures.append(f"[fresh] unborn-repo next should proceed/drain, got {r1.get('status')!r}")
+        # If a run branch was persisted, its base MUST be a real commit SHA — never "HEAD"/"".
+        if os.path.exists(runbranch_path):
+            base = json.load(open(runbranch_path, encoding="utf-8")).get("base", "")
+            if not re.fullmatch(r"[0-9a-f]{40}", base):
+                failures.append(f"[fresh] unborn repo persisted a non-SHA base {base!r} "
+                                "(guard defeated / wedge risk) — isolation should be deferred instead")
+        with open(os.path.join(repo, "app.py"), "a") as fh:
+            fh.write("# greeting\n")
+        _driver(repo, work).complete_ticket(attempted="added a comment")
+    except RunResumeUnsafe:
+        failures.append("[fresh] unborn repo wedged on a false HALT (non-commit base persisted)")
+    os.environ.pop("UE_RUN_INCOMPLETE", None)
+
+
 def main() -> int:
     failures = []
     test_stale_resume_halts_and_preserves_untracked(failures)
     test_missing_base_is_treated_as_stale(failures)
     test_healthy_resume_still_proceeds(failures)
+    test_git_error_in_safety_check_halts_not_degrades(failures)
+    test_unborn_repo_defers_isolation_no_bogus_base(failures)
     print("=" * 60)
     if failures:
         print("RESULT: ❌ RED — stale run-branch resume is not guarded")

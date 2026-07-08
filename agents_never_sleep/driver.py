@@ -310,9 +310,18 @@ class StepDriver:
         original = state.get("original_branch")
         if not run_branch or not base or not original:
             return False  # pre-guard or truncated state — unverifiable, treat as stale
-        if not git.branch_exists(run_branch) or not git.object_exists(base):
+        try:
+            if not git.branch_exists(run_branch) or not git.object_exists(base):
+                return False
+            return git.is_ancestor(base, original) and git.is_ancestor(base, run_branch)
+        except GitError:
+            # The safety check itself hit the raise class (git binary missing / hung / timeout), so
+            # the lineage is UNVERIFIABLE. Fail to the SAFE side (⇒ HALT) — matching this guard's
+            # stated 'unverifiable ⇒ HALT' intent. Without this, the outer `except GitError` in
+            # _enter_run_branch would swallow it and silently degrade-and-proceed (the opposite of
+            # HALT). A transient timeout self-heals: the next invocation with healthy git re-checks
+            # and resumes, since the HALT left run-branch.json intact.
             return False
-        return git.is_ancestor(base, original) and git.is_ancestor(base, run_branch)
 
     def _clear_runbranch(self) -> None:
         if os.path.exists(self.runbranch_path):
@@ -345,6 +354,16 @@ class StepDriver:
                 return
             original = git.current_ref()
             base = git.head()  # the operator-branch tip the run branch is cut from
+            if not git.object_exists(base):
+                # Unborn HEAD (a `git init`'d repo with no commit yet): git.head() yields a non-commit
+                # ("HEAD" or ""), not a SHA. Persisting it as `base` would either wedge the next
+                # process on a false HALT or, worse, silently DEFEAT the guard (is_ancestor of a
+                # symbolic HEAD against itself is always true). There is no baseline to record or
+                # revert to, so defer isolation (like the git-unavailable degrade) until a real
+                # baseline commit exists — the next process re-creates the branch off a real base.
+                self.key_blind_spots.append(
+                    "run-branch isolation deferred: repo has no baseline commit yet (unborn HEAD)")
+                return
             run_branch = f"ans/run-{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
             git.create_run_branch(run_branch)
             self._save_runbranch(run_branch, original, base)
