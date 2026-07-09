@@ -54,9 +54,12 @@ def live_tree_decision(is_linked: bool, is_clean: bool, policy) -> str:
     risk = (not is_linked) and (not is_clean)
     if not risk:
         return "ok"
-    if policy == "ack":
+    # Normalize so a case/format variant of a policy fails SAFE, not open: without this,
+    # "Require_Isolation" would fall through to warn (proceed) when the operator demanded a HALT.
+    p = policy.strip().lower() if isinstance(policy, str) else ""
+    if p == "ack":
         return "ok"
-    if policy == "require_isolation":
+    if p == "require_isolation":
         return "halt"
     return "warn"
 
@@ -365,19 +368,24 @@ class StepDriver:
         it) and prints to stderr; on 'ack'/'ok' clears any stale note. Best-effort: a git error here
         does NOT block (the run-branch layer's own degrade path handles an unhealthy git)."""
         git = self.orch.git
+        # Drop any stale note from a prior run FIRST, so a GitError below (git unhealthy → we cannot
+        # re-evaluate) never leaves an old warning to be surfaced by this run's terminal report.
+        note_path = os.path.join(self.state_dir, "live-tree-note")
         try:
+            os.unlink(note_path)
+        except OSError:
+            pass
+        try:
+            # Measure HUMAN dirt only: exclude the harness's own paths (self.protect, e.g. .unattended),
+            # which are untracked here because ensure_safety_net has not gitignored them yet — counting
+            # them would false-positive a pristine tree (spurious warn, or a spurious HALT).
             decision = live_tree_decision(
-                git.is_linked_worktree(), git.is_clean(),
+                git.is_linked_worktree(), git.is_clean(exclude=git.protect),
                 (self.config.get("autonomy", {}) or {}).get("live_tree", "warn"))
         except GitError:
             return None
         if decision == "halt":
             return self._terminate("HALTED", reason="live-tree isolation required: " + self._LIVE_TREE_MSG)
-        note_path = os.path.join(self.state_dir, "live-tree-note")
-        try:
-            os.unlink(note_path)  # drop a stale note from a prior run before re-evaluating
-        except OSError:
-            pass
         if decision == "warn":
             try:
                 os.makedirs(self.state_dir, exist_ok=True)

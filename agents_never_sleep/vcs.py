@@ -46,9 +46,30 @@ class Git:
         except GitError:
             return False
 
-    def is_clean(self) -> bool:
+    def is_clean(self, *, exclude=()) -> bool:
+        """True if the working tree has no changes. `exclude` drops any porcelain entry UNDER the
+        given paths (e.g. the harness's own `.unattended/` bookkeeping, which is untracked until
+        ensure_safety_net gitignores it) so a caller measuring HUMAN dirt is not fooled by harness
+        artifacts. Without `exclude` this is the plain 'porcelain empty' check (unchanged)."""
         r = self._run("status", "--porcelain")
-        return r.returncode == 0 and r.stdout.strip() == ""
+        if r.returncode != 0:
+            return False
+        if not exclude:
+            return r.stdout.strip() == ""
+        excl = tuple(e.rstrip("/") for e in exclude if e)
+        for line in r.stdout.splitlines():
+            if not line.strip():
+                continue
+            path = line[3:].strip()                    # porcelain: 2 status chars + space, then path
+            if path.startswith('"') and path.endswith('"'):
+                path = path[1:-1]
+            if " -> " in path:                         # rename: "old -> new"
+                path = path.split(" -> ", 1)[1]
+            p = path.rstrip("/")
+            if any(p == e or p.startswith(e + "/") for e in excl):
+                continue                               # under an excluded (harness-owned) path
+            return False                               # a real, non-excluded change
+        return True
 
     def _ensure_gitignore(self) -> None:
         """Make sure the harness's own dirs are gitignored, so `git add -A` never tracks them
