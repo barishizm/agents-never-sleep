@@ -728,7 +728,7 @@ def open_log(repo: str, cfg: dict) -> str:
 
 
 def run_fresh_session_loop(repo, cfg, full_argv, child_env, fresh_n, lock_fd, release,
-                           preset_name) -> int:
+                           preset_name, log_repo=None) -> int:
     """Opt-in context strategy: instead of ONE long accumulating agent session, spawn a FRESH
     agent every N completed tickets so a long backlog doesn't degrade as one session.
 
@@ -762,7 +762,7 @@ def run_fresh_session_loop(repo, cfg, full_argv, child_env, fresh_n, lock_fd, re
     if full_argv:
         full_argv[-1] = full_argv[-1] + budget_note
 
-    log_path = open_log(repo, cfg)
+    log_path = open_log(log_repo or repo, cfg)  # logs land on the primary when isolated (log_repo)
     print(f"Fresh-session mode: respawn every {fresh_n} ticket(s), preset '{preset_name}' "
           f"(supervisor in foreground; lock held for the whole loop)")
     print(f"  log:   {log_path}")
@@ -964,20 +964,30 @@ def main() -> int:
     worktree = None
     if should_isolate(full_config, primary_repo):
         if args.fg:
-            print("ans-run: auto_worktree is ignored under --fg (foreground) — use a detached run "
-                  "for worktree isolation.", file=sys.stderr)
-        else:
-            try:
-                worktree = create_isolated_worktree(
-                    primary_repo, f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}")
-            except WorktreeError as exc:
-                _release()
-                print(f"== NO-GO: auto_worktree requested but isolation failed: {exc} ==",
-                      file=sys.stderr)
-                return EX_NOGO  # fail-closed: NEVER fall back to running in the live tree
-            os.chdir(worktree)
-            repo = worktree  # downstream run-local paths (log/heartbeat/loop/watchdog) use the worktree
-            print(f"  isolated: session runs in a dedicated git worktree — {worktree}")
+            # Fail-closed (matches the doctrine below): the operator asked for isolation, so running
+            # unisolated in the live tree is exactly the hazard to avoid. --fg execs THIS process into
+            # the agent (foreground), so we refuse rather than run in-place.
+            _release()
+            print("== NO-GO: auto_worktree is not supported under --fg — run detached (drop --fg), "
+                  "or unset autonomy.live_tree=auto_worktree ==", file=sys.stderr)
+            return EX_NOGO
+        try:
+            worktree = create_isolated_worktree(
+                primary_repo, f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}")
+        except WorktreeError as exc:
+            _release()
+            print(f"== NO-GO: auto_worktree requested but isolation failed: {exc} ==",
+                  file=sys.stderr)
+            return EX_NOGO  # fail-closed: NEVER fall back to running in the live tree
+        os.chdir(worktree)
+        repo = worktree  # run-local state/heartbeat/sentinel become worktree-scoped (isolated)
+        # But the morning report is ANS's DELIVERABLE — pin it to the PRIMARY tree so it survives the
+        # worktree's removal (the driver honors UE_REPORT_PATH). Logs likewise go to the primary
+        # (open_log below), so the operator finds both where they expect them.
+        report_name = (full_config.get("report") or {}).get("local_path") or "night-report.md"
+        child_env["UE_REPORT_PATH"] = os.path.join(primary_repo, report_name)
+        print(f"  isolated: session runs in a dedicated git worktree — {worktree}")
+        print(f"  report:   {child_env['UE_REPORT_PATH']} (kept on your primary tree)")
 
     if args.fg:
         # exec: this process BECOMES the agent; the inherited FD keeps the lock held for
@@ -999,7 +1009,8 @@ def main() -> int:
         # in the shared store and survives.
         try:
             return run_fresh_session_loop(
-                repo, cfg, full_argv, child_env, fresh_n, lock_fd, _release, preset_name)
+                repo, cfg, full_argv, child_env, fresh_n, lock_fd, _release, preset_name,
+                log_repo=primary_repo if worktree is not None else None)
         finally:
             if worktree is not None and not cleanup_isolated_worktree(primary_repo, worktree):
                 print(f"ans-run: isolated worktree left in place for inspection: {worktree}",
@@ -1030,7 +1041,9 @@ def main() -> int:
         if skill_root not in parts:
             child_env["PYTHONPATH"] = os.pathsep.join([skill_root, *parts])
 
-    log_path = open_log(repo, cfg)
+    # Logs go to the PRIMARY when isolated, so they outlive the worktree (which the next launch
+    # reclaims); state/heartbeat stay worktree-scoped via `repo`.
+    log_path = open_log(primary_repo if worktree is not None else repo, cfg)
     # 0600: the agent's raw, UNREDACTED stream may contain a resolved gateway key — never
     # world-readable. fchmod tightens it even if the file pre-existed looser.
     log_fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)

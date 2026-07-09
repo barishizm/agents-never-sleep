@@ -132,6 +132,26 @@ def test_cleanup_removes_dirty_worktree_but_keeps_branch(failures):
         failures.append("[g4b] cleanup destroyed the run branch — the night's work is gone")
 
 
+def test_report_path_honors_env(failures):
+    """G4b: an isolated run must write its morning report to the PRIMARY tree, not the (soon-removed)
+    worktree. run.py resolves the report path from UE_REPORT_PATH first (set by the launcher when
+    isolating), exactly like UE_HEARTBEAT — so the deliverable survives worktree cleanup."""
+    from agents_never_sleep.run import _resolve_report_path
+    # env unset -> repo-relative (unchanged default)
+    os.environ.pop("UE_REPORT_PATH", None)
+    got = _resolve_report_path("/repo", {}, "night-report.md")
+    if got != os.path.join("/repo", "night-report.md"):
+        failures.append(f"[g4b] default report path wrong: {got!r}")
+    # env set -> absolute primary path wins
+    os.environ["UE_REPORT_PATH"] = "/primary/night-report.md"
+    try:
+        got = _resolve_report_path("/worktree", {"report": {"local_path": "x.md"}}, "night-report.md")
+        if got != "/primary/night-report.md":
+            failures.append(f"[g4b] UE_REPORT_PATH not honored: {got!r}")
+    finally:
+        os.environ.pop("UE_REPORT_PATH", None)
+
+
 def test_create_on_non_repo_raises(failures):
     junk = tempfile.mkdtemp(prefix="ue-g4b-nonrepo-")
     try:
@@ -148,6 +168,7 @@ def main() -> int:
     test_create_is_linked_external_and_isolates(failures)
     test_create_force_removes_a_leftover(failures)
     test_cleanup_removes_dirty_worktree_but_keeps_branch(failures)
+    test_report_path_honors_env(failures)
     test_create_on_non_repo_raises(failures)
     print("=" * 60)
     if failures:
