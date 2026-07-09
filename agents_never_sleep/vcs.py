@@ -119,6 +119,20 @@ class Git:
         if r.returncode != 0:
             raise GitError(f"git checkout {ref}: {r.stderr.strip()}")
 
+    def is_linked_worktree(self) -> bool:
+        """True if this working tree is a LINKED `git worktree` — its per-worktree git dir differs
+        from the shared common dir. False for the primary worktree. Any git error → False (assume
+        primary, the conservative choice for the isolation gate: better to warn than miss it)."""
+        gd = self._run("rev-parse", "--git-dir")
+        cd = self._run("rev-parse", "--git-common-dir")
+        if gd.returncode != 0 or cd.returncode != 0:
+            return False
+
+        def _abs(p: str) -> str:
+            p = p.strip()
+            return p if os.path.isabs(p) else os.path.join(self.cwd, p)
+        return os.path.realpath(_abs(gd.stdout)) != os.path.realpath(_abs(cd.stdout))
+
     def branch_exists(self, name: str) -> bool:
         """True if a local branch `name` currently exists. Non-zero rc (absent/deleted) → False."""
         return self._run("rev-parse", "--verify", "--quiet", f"refs/heads/{name}").returncode == 0
