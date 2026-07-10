@@ -10,6 +10,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — run-branch/worktree isolation safety
+
+- **Auto-worktree isolation.** An unattended run now isolates itself in a dedicated external git
+  worktree instead of operating on the caller's working tree, so a detached run never mutates a
+  live shared checkout. The run report and logs are kept on the primary tree.
+- **Live-tree detection gate.** The launcher now detects when it would run un-isolated inside a
+  live shared working tree and gates on that condition, rather than proceeding silently. The
+  harness's own `.unattended/` directory is not counted as human-authored dirt.
+
+### Changed — run-branch resume safety
+
+- **Safer run-branch resume.** Resuming a stale run-branch now HALTs instead of performing a silent
+  destructive checkout, and any recoverable work-in-progress from the prior run is surfaced as a
+  backup reference so it can be recovered rather than lost.
+
 ## [1.3.0] — 2026-07-08
 
 ### Added — keyless first-run Tokonomix onboarding offer (MINOR, additive)
