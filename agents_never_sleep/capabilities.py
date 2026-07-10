@@ -27,7 +27,7 @@ _MATRIX = {
     "copilot":  {DENY_IRREVERSIBLE: NATIVE, NEVER_STOP: NATIVE,   NEVER_ASK: NATIVE},
     "cursor":   {DENY_IRREVERSIBLE: NATIVE, NEVER_STOP: DEGRADED, NEVER_ASK: DEGRADED},
     "windsurf": {DENY_IRREVERSIBLE: NATIVE, NEVER_STOP: DEGRADED, NEVER_ASK: DEGRADED},
-    # v1.1 — DIFFERENT adapter SHAPES (see references/v1.1-aider-hermes-adapter-analysis.md):
+    # v1.1 — DIFFERENT adapter SHAPES:
     # hermes = native in-process plugin (Mes's modifiable orchestrator) → deny + never-ASK
     #   NATIVE via the pre_tool_call hook that fires before the clarify special-case (denying
     #   `clarify` preempts the fail-open clarify-timeout that invents consent). never-stop has

@@ -47,3 +47,8 @@ BUGFIX-PLAN-*.md
 /site-src/
 /site-mockups/
 /index.html
+
+# Internal planning docs — removed from the public surface (security remediation); block re-adding.
+docs/outreach/
+docs/discoverability-notes.md
+references/v1.1-aider-hermes-adapter-analysis.md
