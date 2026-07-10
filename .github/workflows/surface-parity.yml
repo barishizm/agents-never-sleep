@@ -3,6 +3,7 @@
 # run: script (that is the GitHub Actions script-injection sink). BASE/HEAD are commit SHAs.
 name: surface-parity
 on:
+  push:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 jobs:
@@ -13,8 +14,8 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - name: Redaction lint (SSOT public-safe)
-        run: python3 site-src/tools/redact_lint.py
+      - name: Redaction lint (public-surface content gate, self-contained)
+        run: bash scripts/redact_lint.sh
       - name: Surface-parity gate
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
