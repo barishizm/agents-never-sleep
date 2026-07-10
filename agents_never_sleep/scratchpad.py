@@ -1,6 +1,6 @@
 """Per-ticket revert-surviving scratchpad + do-not-repeat digest (ticket 04).
 
-Two learnings from the external "endless-loop" skill (Mes review 2026-06-15) that ANS did not
+Two learnings from the external "endless-loop" skill (maintainer review 2026-06-15) that ANS did not
 yet cover:
 
   1. A crash mid-ticket reverts the CODE to last-green (correct) but the agent's reasoning /

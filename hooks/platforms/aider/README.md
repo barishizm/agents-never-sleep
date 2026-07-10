@@ -71,4 +71,4 @@ Built to the documented behavioral contract + hermetically tested
 (2026-06-28) on the real `aider 0.86.2` — that test FOUND the onboarding/network hang paths
 above and drove the `--no-show-model-warnings` + mandatory-timeout hardening. **Not** in
 `LIVE_VERIFIED`: a full keyed end-to-end ticket (real edit → auto-commit → revert to pre-SHA)
-needs aider's own LLM key + spend and is Mes-side.
+needs aider's own LLM key + spend and is maintainer-side.

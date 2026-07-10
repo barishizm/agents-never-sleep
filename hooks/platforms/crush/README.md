@@ -29,7 +29,7 @@ reason.
 Built to Crush's documented hook contract (`docs/hooks/README.md` + `internal/hooks`) and proven
 hermetically (`acceptance/test_enforce_platforms.py`: the crush payload denies an irreversible
 command with exit 2, allows a benign one). **Not** in `LIVE_VERIFIED` — a live smoke-test on the
-real `crush` CLI is Mes-side (Crush is not installed here).
+real `crush` CLI is maintainer-side (Crush is not installed here).
 
 ## Notes
 

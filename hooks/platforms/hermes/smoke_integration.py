@@ -12,13 +12,13 @@ Not covered (install/config, do this separately): the systemd gateway auto-disco
 plugin from ~/.hermes/plugins/ and the plugins.enabled gate — that is the deploy step.
 
 Usage:  python3 hooks/platforms/hermes/smoke_integration.py
-Env:    HERMES_CODE=/path/to/hermes/code   (default /opt/hermes-orch-beta/code)
+Env:    HERMES_CODE=/path/to/hermes/code   (default /opt/your-orchestrator/code)
 """
 import importlib.util
 import os
 import sys
 
-HERMES = os.environ.get("HERMES_CODE", "/opt/hermes-orch-beta/code")
+HERMES = os.environ.get("HERMES_CODE", "/opt/your-orchestrator/code")
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(os.path.dirname(HERE))  # .../agents-never-sleep
 

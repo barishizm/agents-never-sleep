@@ -1,6 +1,7 @@
 # Hermes enforcement adapter (in-process plugin)
 
-Hermes (`hermes-orch-beta`) is Mes's own in-process Python orchestrator. Unlike the
+Hermes is the maintainer's own in-process Python orchestrator (a self-hosted in-process agent
+orchestrator). Unlike the
 out-of-process dispatcher platforms (gemini/codex/copilot/cursor/windsurf), Hermes has a
 **native `pre_tool_call` plugin hook** that fires *before* the clarify/inline special-cases on
 every dispatch path — so ANS enforces here by registering a hook that calls the shared
@@ -39,7 +40,7 @@ askable tool sitting behind a real pre-hook.
   denied with the ANS PARK steer instead of timing out into "agent will decide".
 - Until that live smoke-test passes, Hermes is **not** in `LIVE_VERIFIED` — the run report
   says "built to the documented contract, NOT yet live-verified". `systemctl --user` is not
-  reachable from an unattended Claude shell, so this step is Mes-side.
+  reachable from an unattended Claude shell, so this step is maintainer-side.
 
 ## Open items (carry these)
 

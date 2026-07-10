@@ -1,5 +1,5 @@
 # Packaging for agents-never-sleep — makes `pip install agents-never-sleep` work so external
-# users no longer need to clone the repo and hand-set PYTHONPATH (ticket INT-1964).
+# users no longer need to clone the repo and hand-set PYTHONPATH.
 #
 # The harness is pure standard-library Python (no runtime dependencies), so the wheel installs
 # fast and offline. The version is read from agents_never_sleep/__init__.py (single source of truth) —

@@ -33,7 +33,7 @@ night-report.md
 *.zip
 phase2-night-report*.md
 
-# Internal working docs — host-only, NEVER distributed (parked design: Paperclip INT-2337)
+# Internal working docs — host-only, NEVER distributed (parked design tracked in Paperclip)
 CLAUDE.local.md
 docs/superpowers/
 COUNCIL-SETUP.md

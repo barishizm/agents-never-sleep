@@ -108,7 +108,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - SKILL.md documents the agent-facing protocol: how to recognize `PARK_CONSENSUS_ELIGIBLE`, run the
   grounded consensus, and report the verdict via `resolve-park`.
 - No change to any existing Stable CLI verb, outcome state, or config key — purely additive.
-- Fix (INT-2412): `resolve-park`'s RESOLVE→PROCEED payload now reaches full parity with
+- Fix: `resolve-park`'s RESOLVE→PROCEED payload now reaches full parity with
   `next_ticket`'s — council/specialist/onboarding/scratchpad hints and credits STOP/DEGRADE gating
   are attached via a new shared `_hand_out_proceed` helper instead of being built inline and omitted.
 
@@ -134,12 +134,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   off the PROCEED payload is byte-identical. New module `agents_never_sleep/scratchpad.py`.
 
 ### Added — four new enforcement platforms (MINOR, additive)
-- **Hermes** (`hermes-orch-beta`) — ANS's first **in-process** adapter. A native plugin
+- **Hermes** (a self-hosted in-process agent orchestrator) — ANS's first **in-process** adapter. A native plugin
   (`hooks/platforms/hermes/`, logic in `agents_never_sleep.hermes_plugin.ans_pre_tool`) registers
   on Hermes's `pre_tool_call` hook and calls the shared `decide()` core directly. Matrix:
   **deny-irreversible NATIVE / never-stop soft-enforced / never-ASK NATIVE**. Denying the `clarify`
   tool preempts Hermes's fail-open clarify-timeout (invented consent) → explicit PARK. Opt-in
-  (`plugins.enabled`) + env-gated (`UE_UNATTENDED=1`); not live-verified (Mes smoke-test).
+  (`plugins.enabled`) + env-gated (`UE_UNATTENDED=1`); not live-verified (maintainer smoke-test).
 - **Aider** (0.86.2) — ANS's first **wrapper** adapter (no hook API). Hardened launch preset
   (`agents_never_sleep.aider_launcher.build_aider_argv`) + git-reversibility + prose. All three
   guarantees soft-enforced; the first platform where **deny-irreversible is not native** (breaks the
@@ -211,7 +211,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 _Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
 
 ### Added (groundwork)
-- **Packaging — `pyproject.toml` (ticket INT-1964).** `pip install agents-never-sleep` now works
+- **Packaging — `pyproject.toml`.** `pip install agents-never-sleep` now works
   in a fresh venv with **zero runtime dependencies** (the harness is pure standard library).
   - Two console scripts: `ans-run` → `harness.launcher:main` (pre-token preflight launcher) and
     `ans` → `harness.run:main` (the `next`/`complete` loop). External users no longer clone the
@@ -220,16 +220,16 @@ _Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
     source of truth, no second place to bump.
   - Verified locally: wheel builds offline (`pip wheel . --no-deps`), installs into a throwaway
     venv, and `ans-run --check` runs from the installed entry point with no checkout on PATH.
-  - **PyPI publish is a Mes action** (not done here): `twine upload` with the project's PyPI token.
-- **`SEMVER.md` (DRAFT, ticket INT-1966).** Formal SemVer commitment: Stable-vs-Experimental
+  - **PyPI publish is a maintainer action** (not done here): `twine upload` with the project's PyPI token.
+- **`SEMVER.md` (DRAFT).** Formal SemVer commitment: Stable-vs-Experimental
   classification of every public surface (loop CLI, launcher CLI, ticket format, gate/config,
   outcome states, import surface) + a deprecation policy + a checkable v1.0 roadmap. Draft only —
   1.0 is not declared; flags the `harness`→`agents_never_sleep` package-rename as a v1.0 blocker.
-- **`PIP-INSTALL-PLAN.md` (ticket INT-1964).** Grounded plan for `pip install agents-never-sleep`:
+- **`PIP-INSTALL-PLAN.md`.** Grounded plan for `pip install agents-never-sleep`:
   documents the (verified) install path, the two-track distribution (pip = harness CLI vs the
   Agent Skill = repo/hooks), and the remaining steps (name claim, build+twine, 3.9–3.12 smoke
-  matrix, PyPI publish = Mes). Also published to `/internip/ans-pip-install-plan-2026-06-20.html`.
-- **`COUNCIL-SETUP.md` (ticket INT-1963).** Reproducible record of how to make the Tokonomix
+  matrix, PyPI publish = maintainer). Also published to `/internip/ans-pip-install-plan-2026-06-20.html`.
+- **`COUNCIL-SETUP.md`.** Reproducible record of how to make the Tokonomix
   council fire (`cncl>0`): the two gates (`council.enabled` + `integrations.tokonomix.enabled`)
   and the credential resolution order (`token_ref` → `~/.tokonomix/credentials.json`). The
   per-project config that enables it lives in `.claude/agents-never-sleep.json` (gitignored).
@@ -244,7 +244,7 @@ _Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
   `bin/ans-run` is now a thin shim that delegates to it. Behaviour is unchanged — the launcher
   acceptance suite (`test_launcher.py`) stays GREEN. (A console entry point must point at
   `module:callable`, which the old script-only `bin/ans-run` could not provide.)
-- **`acceptance/test_real_claude.py` (ticket INT-1965): now VERIFIED GREEN against a live
+- **`acceptance/test_real_claude.py`: now VERIFIED GREEN against a live
   `claude -p` session** (it had never actually run before). Four real defects fixed so it passes:
   (1) the child no longer inherits the parent run's `UE_RUN_INCOMPLETE` (which made a nested run's
   Stop-hook guard the *parent* sentinel → a 300s hang) — the parent run-env vars are scrubbed and
@@ -259,9 +259,9 @@ _Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
 
 ### Notes
 - `.gitignore`: added Python packaging artifacts (`build/`, `dist/`, `*.egg-info/`, `*.whl`).
-- **Version stays `0.3.1`** (historical note — superseded by the released **1.0.0** above). Ticket INT-1966's "bump to 0.2.0" was written before the 0.2.0→0.3.x
+- **Version stays `0.3.1`** (historical note — superseded by the released **1.0.0** above). The earlier "bump to 0.2.0" note was written before the 0.2.0→0.3.x
   releases and is now a no-op (a downgrade); the next bump for these [Unreleased] changes is a
-  deliberate **Mes-gated** action (per the policy at the top of this section), not part of this run.
+  deliberate **maintainer-gated** action (per the policy at the top of this section), not part of this run.
 
 ---
 
@@ -283,11 +283,11 @@ _Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
 ### Fixed
 - **Monorepo copy (#2) reconciled with canonical installed copy (#1).**
   The `public/skills/agents-never-sleep/` tree was at 0.1.0-slice1 (24 harness modules, stale
-  acceptance tests). It now mirrors the canonical `/home/claude/.claude/skills/agents-never-sleep/`
+  acceptance tests). It now mirrors the canonical `/ABSOLUTE/PATH/TO/agents-never-sleep/`
   source at v0.3.0 (28 harness modules). Changes versus the old monorepo copy:
   - **Added harness modules:** `agent_clis.py`, `f5.py` (F5 loop recovery), `parked.py`, `trust.py`
   - **Updated harness modules:** `capabilities.py`, `config.py` (includes `TOKONOMIX_API_KEY`
-    fix + `max_tickets_per_run` cap, INT-1935), `council.py`, `decide.py`, `driver.py`,
+    fix + `max_tickets_per_run` cap), `council.py`, `decide.py`, `driver.py`,
     `enforcement.py`, `onboarding.py`, `orchestrator.py`, `preflight.py`, `redact.py`,
     `report.py`, `run.py`, `tickets.py`, `vcs.py`
   - **Added acceptance tests:** `test_agent_clis.py`, `test_classify_narrowing.py`,
@@ -299,8 +299,8 @@ _Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
   - **Removed:** `hooks/install.sh` (stale), `.tar.gz`/`.zip` archives, `BUILD-PLAN.md`,
     `BUGFIX-PLAN-*.md`
   - **Added:** `ARCHITECTURE.md`, `CHANGELOG.public.md`, `bin/ans-run`, `.github/` templates
-  - **#3 (GitHub main) analysis:** GitHub was 1 commit behind canonical (#1 had INT-1935
-    `max_tickets_per_run` + updated `TOKONOMIX_API_KEY` env-var name). No #3-only content
+  - **#3 (GitHub main) analysis:** GitHub was 1 commit behind canonical (#1 had the
+    `max_tickets_per_run` fix + updated `TOKONOMIX_API_KEY` env-var name). No #3-only content
     to port — all #3 differences were superseded by #1.
 
 ## [0.3.0] — 2026-06-17
@@ -316,7 +316,7 @@ _Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
   GitHub URL for updates.
 
 ### Planned (pushed to future release)
-- `pip install agents-never-sleep` (PyPI publish — awaiting Mes decision on name + version)
+- `pip install agents-never-sleep` (PyPI publish — awaiting maintainer decision on name + version)
 - Entry-point console scripts: `ans` / `ans-run`
 - `pyproject.toml` with zero declared dependencies
 
@@ -379,4 +379,4 @@ A v1.0 release required:
 3. **Cross-platform enforcement adapters** — at least Codex and Gemini CLI hooks implemented and
    tested (Claude Code adapter already shipped).
 4. **Public documentation site** — tokonomix.ai/agents-never-sleep or equivalent.
-5. **Mes sign-off** — PyPI publish + GitHub release = explicit human decision, not autonomous.
+5. **Maintainer sign-off** — PyPI publish + GitHub release = explicit human decision, not autonomous.

@@ -57,7 +57,7 @@ about the one seam it doesn't.
 | `complete` council/specialist flags (`--council-verdict`, `--council-cost`, `--review-coverage`, `--specialist-concerns`, `--specialist-cost`, `--council-http-status`) | **Experimental** | Tied to the review-council feature, which is still evolving. |
 | `report` subcommand | **Stable** | Re-emits the morning report. |
 | `reset-attempts`, `reset-spend` | **Stable** | Operator escapes. |
-| `parked protect|restore` | **Experimental** | WIP-protection surface (INT-1735). |
+| `parked protect|restore` | **Experimental** | WIP-protection surface. |
 | `note --ticket --text` | **Experimental** | Revert-surviving per-ticket scratchpad (ticket 04); tied to the flag-gated `autonomy.scratchpad` feature, still evolving. |
 | `resolve-park --ticket-id --attempt-id --resolved/--not-resolved ...` | **Experimental** | F5 grounded-consensus callback for a `PARK_CONSENSUS_ELIGIBLE` offer from `next`; tied to F5, still evolving. |
 | JSON output shapes in ARCHITECTURE.md §1 | **Stable** | Documented keys only; undocumented keys may appear/disappear. |
@@ -119,18 +119,18 @@ MAJOR bump.
 ## 4. Roadmap to v1.0 — what must be true to tag it
 
 This refines the existing "Roadmap to v1.0" in `CHANGELOG.md` into a checkable list. **Tagging 1.0,
-publishing to PyPI, and cutting the GitHub release are explicit Mes decisions — never autonomous.**
+publishing to PyPI, and cutting the GitHub release are explicit maintainer decisions — never autonomous.**
 
 | # | Criterion | Status |
 |---|---|---|
-| 1 | **Stable surface frozen & reviewed** — §2 classifications signed off; "Experimental" items either stabilized or explicitly kept experimental past 1.0. | ◐ drafted + machine-guarded by `acceptance/test_surface_drift.py` (subcommands, core flags, 7 outcome states); ☐ pending Mes sign-off |
-| 2 | **`pip install agents-never-sleep` works** in a fresh venv, both console scripts on PATH. | ✅ built + verified locally (wheel installs offline, `ans-run`/`ans` run from a venv); **PyPI publish is a Mes action** |
-| 3 | **Real-agent E2E proof** — `acceptance/test_real_claude.py` drives real `claude -p` to DRAINED, asserts done≥2 **and** committed work on the run branch. | ✅ test present + collects clean; live run is Mes/credential-gated |
+| 1 | **Stable surface frozen & reviewed** — §2 classifications signed off; "Experimental" items either stabilized or explicitly kept experimental past 1.0. | ◐ drafted + machine-guarded by `acceptance/test_surface_drift.py` (subcommands, core flags, 7 outcome states); ☐ pending maintainer sign-off |
+| 2 | **`pip install agents-never-sleep` works** in a fresh venv, both console scripts on PATH. | ✅ built + verified locally (wheel installs offline, `ans-run`/`ans` run from a venv); **PyPI publish is a maintainer action** |
+| 3 | **Real-agent E2E proof** — `acceptance/test_real_claude.py` drives real `claude -p` to DRAINED, asserts done≥2 **and** committed work on the run branch. | ✅ test present + collects clean; live run is maintainer/credential-gated |
 | 4 | **Package rename** `harness` → `agents_never_sleep` (§2.6 blocker) decided + executed, or explicitly waived. | ✅ done — renamed with a back-compat `harness` shim (decision D1); verified from a fresh-venv wheel install; guarded by `acceptance/test_shim.py` |
-| 5 | **Cross-platform enforcement adapters** — the 6 scaffolded adapters (Claude/Gemini/Codex/Copilot/Cursor/Windsurf) hermetically tested + a recorded hook-contract version each (Aider + Hermes → 1.1). | ◐ hermetic negative tests + hook-version record done; per-platform LIVE-smoke = Mes/credential-gated |
-| 6 | **Public docs** — doc CONTENT consistent (README/SKILL/ARCHITECTURE/SEMVER); the public site at tokonomix.ai/agents-never-sleep (styled HTML + nav + indexed publish) = Mes-gated. | ◐ content ready; ☐ public publish |
+| 5 | **Cross-platform enforcement adapters** — the 6 scaffolded adapters (Claude/Gemini/Codex/Copilot/Cursor/Windsurf) hermetically tested + a recorded hook-contract version each (Aider + Hermes → 1.1). | ◐ hermetic negative tests + hook-version record done; per-platform LIVE-smoke = maintainer/credential-gated |
+| 6 | **Public docs** — doc CONTENT consistent (README/SKILL/ARCHITECTURE/SEMVER); the public site at tokonomix.ai/agents-never-sleep (styled HTML + nav + indexed publish) = maintainer-gated. | ◐ content ready; ☐ public publish |
 | 7 | **CHANGELOG complete** with a `1.0.0` entry + the SemVer commitment statement made final (DRAFT banner removed). | ✅ done — CHANGELOG 1.0.0 dated, DRAFT banner removed, guarantee binding |
-| 8 | **Mes sign-off** — GitHub release + git tag `v1.0.0` (PyPI = optional, deferred). | ✅ GitHub release `v1.0.0` cut (2026-06-27); **PyPI deferred** (GitHub is the distribution channel; PyPI is an optional later add when a token exists) |
+| 8 | **Maintainer sign-off** — GitHub release + git tag `v1.0.0` (PyPI = optional, deferred). | ✅ GitHub release `v1.0.0` cut (2026-06-27); **PyPI deferred** (GitHub is the distribution channel; PyPI is an optional later add when a token exists) |
 
 **v1.0.0 was tagged 2026-06-27** — the guarantee above is binding from that commit. Distribution is
 the public GitHub repo (`github.com/TokonoMix/agents-never-sleep`, `pip install git+…@v1.0.0`); a

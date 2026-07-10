@@ -1,4 +1,5 @@
-"""ANS in-process enforcement for Hermes (hermes-orch-beta, Mes's own orchestrator).
+"""ANS in-process enforcement for Hermes (the maintainer's own self-hosted in-process agent
+orchestrator).
 
 Hermes is an in-process Python orchestrator with a native `pre_tool_call` hook that fires
 BEFORE the clarify / inline special-cases on every dispatch path (run_agent.py:9299/9815,

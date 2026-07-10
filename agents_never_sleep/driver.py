@@ -85,7 +85,7 @@ def _run_start_credits_preflight(balance_eur: float | None,
     ASK the user (interactive) to confirm/select the A/B policy, or log loudly which policy applies
     (unattended). The harness owns the policy decision; the agent supplies the balance.
 
-    Interactive:  shows Mes' exact framing, records the choice into config memory AND persists it to
+    Interactive:  shows the maintainer's exact framing, records the choice into config memory AND persists it to
                   disk via save_config (when repo_dir is given). Persistence matters because each
                   `next`/`complete` is a fresh process — without it an interactive "B" would be lost
                   and later processes would silently fall back to the default policy. Fires ONLY at

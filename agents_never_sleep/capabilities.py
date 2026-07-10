@@ -28,7 +28,7 @@ _MATRIX = {
     "cursor":   {DENY_IRREVERSIBLE: NATIVE, NEVER_STOP: DEGRADED, NEVER_ASK: DEGRADED},
     "windsurf": {DENY_IRREVERSIBLE: NATIVE, NEVER_STOP: DEGRADED, NEVER_ASK: DEGRADED},
     # v1.1 — DIFFERENT adapter SHAPES:
-    # hermes = native in-process plugin (Mes's modifiable orchestrator) → deny + never-ASK
+    # hermes = native in-process plugin (the maintainer's modifiable orchestrator) → deny + never-ASK
     #   NATIVE via the pre_tool_call hook that fires before the clarify special-case (denying
     #   `clarify` preempts the fail-open clarify-timeout that invents consent). never-stop has
     #   no veto hook yet (soft → native via an in-tree patch).

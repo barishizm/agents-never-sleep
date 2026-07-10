@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hermes in-process plugin test — proves agents_never_sleep.hermes_plugin.ans_pre_tool emits
 the correct {"action":"block",...} directive from Hermes's pre_tool_call payload (the achievable
-hermetic bar; a live smoke-test on real Hermes is Mes-side — systemctl --user is unreachable here).
+hermetic bar; a live smoke-test on real Hermes is maintainer-side — systemctl --user is unreachable here).
 
 Hermes is the first IN-PROCESS adapter: it does NOT go through enforce.py's stdin→stdout
 dispatcher, so this test calls the hook callback directly. Exit 0 = GREEN.
@@ -107,7 +107,7 @@ def main() -> int:
     if len(notes) != 1 or "never-stop" not in notes[0]:
         failures.append(f"[hermes] should have exactly one never-stop blind-spot: {notes}")
     if "hermes" in C.LIVE_VERIFIED:
-        failures.append("[hermes] must NOT be live-verified until Mes runs the smoke-test")
+        failures.append("[hermes] must NOT be live-verified until the maintainer runs the smoke-test")
     if "contract" not in C.hook_contract("hermes"):
         failures.append("[hermes] missing a recorded hook-contract version")
 

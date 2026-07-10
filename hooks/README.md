@@ -33,7 +33,9 @@ unless `CLAUDE_UNATTENDED=1` is set (which `claude-run`/cron sets for real unatt
    chmod +x ~/.claude/skills/agents-never-sleep/hooks/*.sh
    ```
 2. Merge `hooks/settings-snippet.json` into the `"hooks"` block of `~/.claude/settings.json`
-   (it is currently `{}`). Keep any existing hooks.
+   (it is currently `{}`). Keep any existing hooks. Before merging, replace every
+   `/ABSOLUTE/PATH/TO/agents-never-sleep/` placeholder with the real absolute path to your
+   skill install.
 3. Restart Claude Code so the hooks load.
 4. Verify they are inert normally (no `CLAUDE_UNATTENDED`) and active under an unattended run.
 

@@ -81,7 +81,7 @@ def main() -> int:
     if len(C.degradation_notes("aider")) != 3:
         failures.append(f"[aider] should have 3 degradation notes (all soft): {C.degradation_notes('aider')}")
     if "aider" in C.LIVE_VERIFIED:
-        failures.append("[aider] must NOT be live-verified until Mes runs the smoke-test")
+        failures.append("[aider] must NOT be live-verified until the maintainer runs the smoke-test")
     if "contract" not in C.hook_contract("aider"):
         failures.append("[aider] missing a recorded behavioral-contract version")
 
