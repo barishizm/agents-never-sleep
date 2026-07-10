@@ -53,6 +53,11 @@ paths, cost figures, internal hostnames, or private endpoints (enforced by
 `site-src/tools/redact_lint.py`, whose org-specific vocabulary lives in a gitignored
 `redact-vocab.local.json`), and no absolute "never/always" outcome claims.
 
+## Code of Conduct
+
+This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md). By
+participating, you are expected to uphold it.
+
 ## Security
 
 Report vulnerabilities privately — see [SECURITY.md](./SECURITY.md).
