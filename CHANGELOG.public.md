@@ -4,6 +4,33 @@ User-facing changes only. No ticket numbers, no internal flags, no internal name
 
 ---
 
+## [1.3.0] — July 2026
+
+- **Keyless first-run onboarding.** The first time you run in a repo, the setup wizard offers a
+  three-way choice for Tokonomix consensus review — begin a keyless onboarding, paste an existing
+  key, or skip — so multi-model review can be enabled without hunting for configuration. Skip stays
+  the default; runs that don't opt in are unchanged.
+
+## [1.2.0] — July 2026
+
+- **Consensus-assisted resolution for hard-PARK categories (opt-in).** For parked tickets in
+  categories you explicitly opt into, the harness can attempt a grounded, evidence-gated multi-model
+  consensus resolution and apply it unattended — always recorded as `DONE_LOW_CONFIDENCE` for your
+  daylight review, with git as the undo. A concrete defect vetoes the resolution; missing grounding
+  evidence keeps the ticket parked. Off by default; configured in the setup wizard.
+- **Setup wizard** gained explicit questions for council/specialist review and per-category
+  consensus opt-in.
+
+## [1.1.0] — July 2026
+
+- **Grounded-consensus PARK resolution.** A parked "what did the requirement mean" ticket (and any
+  opted-in category) can be resolved by a grounded consensus pass instead of waiting for morning —
+  downgrade-only, evidence-gated, one shot per ticket.
+- **More enforcement adapters** for additional agent CLIs, each built to its documented hook
+  contract (only Claude Code is additionally live-verified; the report says which is which).
+- **Reliability:** leaked-process reaping at run end, and a per-run scratchpad so intermediate files
+  never touch your working tree.
+
 ## [1.0.0] — June 2026
 
 - **First stable release.** The command-line interface, configuration, ticket format, and run
