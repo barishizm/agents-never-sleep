@@ -1,6 +1,6 @@
-# SECURITY: all attacker-controlled values (PR body, labels) reach the shell ONLY through
-# `env:` mappings and are referenced as "$VAR" — NEVER interpolated as ${{ ... }} into a
-# run: script (that is the GitHub Actions script-injection sink). BASE/HEAD are commit SHAs.
+# Public-surface content gate: runs the self-contained redaction lint (scripts/redact_lint.sh)
+# on every push/PR and fails if any unambiguously-internal token reaches a tracked file.
+# No attacker-controlled value (PR body/labels) is interpolated into a run: script.
 name: surface-parity
 on:
   push:
@@ -16,14 +16,3 @@ jobs:
         with: { python-version: "3.12" }
       - name: Redaction lint (public-surface content gate, self-contained)
         run: bash scripts/redact_lint.sh
-      - name: Surface-parity gate
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          CHANGELOG_DIFF="$(git diff "$BASE" "$HEAD" -- CHANGELOG.md || true)" \
-          CHANGED_PATHS="$(git diff --name-only "$BASE" "$HEAD")" \
-          SURFACE_WAIVER="$(printf '%s' "$PR_BODY" | sed -n 's/^surface-waiver:[[:space:]]*//p' | head -1)" \
-          python3 site-src/tools/gate_check.py

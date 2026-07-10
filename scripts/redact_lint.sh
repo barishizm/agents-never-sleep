@@ -47,6 +47,9 @@ fail_pattern "internal-server-path" '/home/claude' ''
 fail_pattern "internal-orchestrator-path" '/opt/hermes-orch-beta' ''
 fail_pattern "internal-orchestrator-name" 'hermes-orch-beta' ''
 
+# --- internal InterIP web/publish path (/interip/ and the /internip/ misspelling) --------------
+fail_pattern "internal-web-path" '/intern?ip/' ''
+
 # --- internal ticket IDs -------------------------------------------------------------------------
 # Scoped to the public doc/config surface (CHANGELOG.md, SEMVER.md, README*, docs/, hooks/,
 # pyproject.toml, .gitignore, workflows, this script). `agents_never_sleep/` and `acceptance/` are

@@ -228,7 +228,7 @@ _Earlier 1.0-line groundwork (packaging, SemVer draft, docs) — detail:_
 - **`PIP-INSTALL-PLAN.md`.** Grounded plan for `pip install agents-never-sleep`:
   documents the (verified) install path, the two-track distribution (pip = harness CLI vs the
   Agent Skill = repo/hooks), and the remaining steps (name claim, build+twine, 3.9–3.12 smoke
-  matrix, PyPI publish = maintainer). Also published to `/internip/ans-pip-install-plan-2026-06-20.html`.
+  matrix, PyPI publish = maintainer).
 - **`COUNCIL-SETUP.md`.** Reproducible record of how to make the Tokonomix
   council fire (`cncl>0`): the two gates (`council.enabled` + `integrations.tokonomix.enabled`)
   and the credential resolution order (`token_ref` → `~/.tokonomix/credentials.json`). The
