@@ -24,6 +24,18 @@ python3 acceptance/test_budget.py        # a single suite
 
 Pure standard library, Python 3.9+. No build step.
 
+### Pre-commit redaction check
+
+A committed hook mirrors CI's public-surface redaction gate so an internal identifier is caught
+before it is committed, not after push. Install it once (it symlinks the tracked script into your
+local `.git/hooks/`):
+
+```bash
+ln -sf ../../scripts/hooks/pre-commit .git/hooks/pre-commit
+```
+
+It runs `bash scripts/redact_lint.sh` and blocks the commit if the gate fails.
+
 ## Pull requests
 
 - Keep the two structural guarantees intact: **never ASK in unattended mode**,

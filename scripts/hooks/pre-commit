@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Local mirror of the CI public-surface redaction gate.
+#
+# Runs the SAME `scripts/redact_lint.sh` that CI's surface-parity workflow runs, so an internal
+# identifier is caught BEFORE the commit lands instead of only failing after push. Committed and
+# tracked (not in `.git/hooks/`); install it once — see CONTRIBUTING.md, "Pre-commit redaction
+# check". Plain bash, no framework, no dependencies.
+#
+# Exit 0 = gate passes, commit proceeds. Non-zero = gate failed, commit blocked.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+if ! bash scripts/redact_lint.sh; then
+    echo "pre-commit: redaction gate failed — commit blocked. Fix the flagged line(s) above." >&2
+    exit 1
+fi
